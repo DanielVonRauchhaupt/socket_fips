@@ -10,6 +10,7 @@
     
 #define DEFAULT_PORT 8080 
 #define DEFAULT_LOG "log.txt"
+#define DATE_TIME_SIZE 20
 
 
 void log_message(const char * msg){
@@ -23,12 +24,25 @@ void log_message(const char * msg){
     fclose(logfile);
 
 }
+
+void log_packet_info(const char* addr, int port, int payload){
+
+    FILE * logfile;
+    time_t t;
+    char timebuf[DATE_TIME_SIZE];
+    t = time(NULL);
+    strftime(timebuf, DATE_TIME_SIZE, "%Y-%m-%d %H:%M:%S", localtime(&t));
+    logfile = fopen(DEFAULT_LOG,"a");
+    fprintf(logfile,"Packet Reveived : Datetime = %s, Address = %s, Port = %d, Payload = %d\n", timebuf,addr,port,payload);
+    fclose(logfile);
+
+}
+
     
-int main() { 
+int main(int argc, char ** argv) { 
     int sockfd; 
     char buffer; 
-    struct sockaddr_in servaddr, cliaddr; 
-        
+    struct sockaddr_in servaddr, cliaddr;      
 
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) { 
         perror("Could not open socket"); 
@@ -40,33 +54,26 @@ int main() {
         
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = INADDR_ANY; 
-    servaddr.sin_port = htons(DEFAULT_PORT); 
+    servaddr.sin_port = (argc > 1) ? htons((int)strtol(argv[1],NULL,10)) :  htons(DEFAULT_PORT); 
         
     if ( bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) < 0 ) 
     { 
-        perror("Could not bind socket"); 
-        exit(EXIT_FAILURE); 
+        fprintf(stderr,"Failed to bind at port %d\n", servaddr.sin_port);
+        servaddr.sin_port = htons(DEFAULT_PORT);
+        if (bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) < 0){
+            perror("Could not bind socket"); 
+            exit(EXIT_FAILURE); 
+        }
+        
     } 
         
     __socklen_t len; 
-    time_t t;
-
-    char buf[21];
-    char logstring[128];
-
-    memset(logstring,0,sizeof(logstring));
     
     len = sizeof(cliaddr);
 
     while(1){
-        recvfrom(sockfd, &buffer, 1,  MSG_WAITALL, ( struct sockaddr *) &cliaddr, &len);
-        t = time(NULL);
-        strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&t));
-        printf("Server : Number Received : %d\n",(int)buffer); 
-        printf("Address : %s\n",inet_ntoa(cliaddr.sin_addr));
-        printf("Port : %d\n", (int) ntohs(cliaddr.sin_port));
-        printf("Time : %s\n", buf);
-        log_message("Hello");
+        recvfrom(sockfd, &buffer, 1,  MSG_WAITALL, ( struct sockaddr *) &cliaddr, &len);      
+        log_packet_info(inet_ntoa(cliaddr.sin_addr),(int) ntohs(cliaddr.sin_port),(int)buffer);
         buffer += 1;
         sendto(sockfd, &buffer, 1, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len); 
     }  
