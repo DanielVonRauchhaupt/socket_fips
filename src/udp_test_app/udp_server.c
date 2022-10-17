@@ -7,6 +7,7 @@
 #include <sys/socket.h> 
 #include <arpa/inet.h> 
 #include <netinet/in.h> 
+
     
 #define DEFAULT_PORT 8080 
 #define DEFAULT_LOG "log.txt"
@@ -25,7 +26,7 @@ void log_message(const char * msg){
 
 }
 
-void log_packet_info(const char* addr, int port, int payload){
+void log_packet_info(const char* addr,unsigned int port,char payload){
 
     FILE * logfile;
     time_t t;
@@ -33,7 +34,7 @@ void log_packet_info(const char* addr, int port, int payload){
     t = time(NULL);
     strftime(timebuf, DATE_TIME_SIZE, "%Y-%m-%d %H:%M:%S", localtime(&t));
     logfile = fopen(DEFAULT_LOG,"a");
-    fprintf(logfile,"Packet Reveived : Datetime = %s, Address = %s, Port = %d, Payload = %d\n", timebuf,addr,port,payload);
+    fprintf(logfile,"Packet Reveived : Datetime = %s, Address = %s, Port = %u, Payload = %u\n", timebuf,addr,port,(uint8_t)payload);
     fclose(logfile);
 
 }
@@ -73,7 +74,7 @@ int main(int argc, char ** argv) {
 
     while(1){
         recvfrom(sockfd, &buffer, 1,  MSG_WAITALL, ( struct sockaddr *) &cliaddr, &len);      
-        log_packet_info(inet_ntoa(cliaddr.sin_addr),(int) ntohs(cliaddr.sin_port),(int)buffer);
+        log_packet_info(inet_ntoa(cliaddr.sin_addr),(unsigned int) ntohs(cliaddr.sin_port),(unsigned int)buffer);
         buffer += 1;
         sendto(sockfd, &buffer, 1, MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len); 
     }  
