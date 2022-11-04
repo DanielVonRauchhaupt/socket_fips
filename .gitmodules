@@ -1,0 +1,6 @@
+[submodule "src/simplefail2ban/libbpf"]
+	path = src/libs/libbpf
+	url = https://github.com/libbpf/libbpf/
+[submodule "src/simplefail2ban/hyperscan"]
+	path = src/libs/hyperscan
+	url = https://github.com/intel/hyperscan
