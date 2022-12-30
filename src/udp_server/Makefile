@@ -2,7 +2,6 @@ CC := gcc
 CCFLAGS := -o3 -pthread
 DBGFLAGS := -Wall -Wextra -pedantic -g
 
-
 TARGET := udp_server
 TARGET_DEBUG := udp_server_debug
 SRC := udp_server.c ip_to_str.c ringbuf.c
