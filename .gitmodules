@@ -1,0 +1,6 @@
+[submodule "src/libs/hyperscan"]
+	path = src/libs/hyperscan
+	url = https://github.com/intel/hyperscan.git
+[submodule "ip_blacklist"]
+	path = ip_blacklist
+	url = https://gitup.uni-potsdam.de/maxschro/ip_blacklist.git
