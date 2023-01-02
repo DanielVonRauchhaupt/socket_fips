@@ -1,0 +1,19 @@
+\frametitle{Jail Parameter und Filter}
+
+\begin{Verbatim}[fontsize=\small]
+# Jail Definition
+[udp-testsvr]
+port    = 8080
+logpath = /mnt/scratch/PR/udpsvr.log
+enabled = true
+filter  = udp-testsvr
+findtime = 10
+bantime = 180
+action = xdp
+maxretry = 0
+
+# Filter
+[Definition]
+failregex = Address = <HOST>, Port = \d{1,5}, Payload = 2\d{2}
+datepattern =  %%Y-%%b-%%d %%H:%%M:%%S
+\end{Verbatim}

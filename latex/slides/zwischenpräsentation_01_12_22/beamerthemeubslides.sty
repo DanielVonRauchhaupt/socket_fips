@@ -1,0 +1,231 @@
+\ProvidesPackage{beamerthemeubslides} [My Slides template]
+
+%Mehrfachinclude Verhindern
+\expandafter\ifx\csname UBSLIDESSTY\endcsname\relax\def\UBSLIDESSTY{already bound}\else\endinput\fi
+
+\RequirePackage{babel}
+\RequirePackage{tikz}
+\RequirePackage[printonlyused]{acronym}
+\RequirePackage{amsmath}
+\RequirePackage{amssymb}
+\RequirePackage{pifont}
+\RequirePackage{tabularx}
+\RequirePackage{pdfpages}
+\RequirePackage{ifthen}
+\RequirePackage{calc}
+\RequirePackage{pgfpages}
+\RequirePackage{color}
+\RequirePackage{epsfig}
+\RequirePackage[T1]{fontenc}
+\RequirePackage{graphicx}
+\RequirePackage[utf8]{inputenc}
+\RequirePackage{listings}
+\RequirePackage{makeidx}
+\RequirePackage{prettyref}
+\RequirePackage{pslatex}
+\RequirePackage{relsize}
+\RequirePackage{tabularx}
+\RequirePackage{url}
+\RequirePackage{ifthen}
+\RequirePackage[many]{tcolorbox}
+\RequirePackage{caption}
+\usepackage{fancyvrb}
+\setlength{\fboxrule}{1.5mm}
+
+\definecolor{university100blue}{rgb}{0,0.18825,0.36864}
+\definecolor{university80blue}{rgb}{0.15686,0.2902,0.45882}
+\definecolor{university60blue}{rgb}{0.35294,0.42354,0.57256}
+\definecolor{university40blue}{rgb}{0.55293,0.59216,0.70197}
+\definecolor{university20blue}{rgb}{0.76862,0.78431,0.84705}
+\colorlet{university10blue}{university100blue!10}
+\definecolor{lightgray}{gray}{0.9}
+\definecolor{mathnathblue}{rgb}{0,0.49804,0.70196}
+
+\renewcommand{\comment}[1]{\begin{center}\fcolorbox{university40blue}{university20blue}{\parbox[][][c]{\textwidth-4em}{#1}}\end{center}}
+\newcommand{\degree}{\ensuremath{^\circ}}
+\makeatletter
+\newcommand{\tomonth}{\iflanguage{ngerman}{\month@german\space \number\year}{\ifcase\month\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi\space \number\year}}
+\makeatother
+\newcommand{\toyear}{\number\year}
+
+\useinnertheme{rectangles}
+\useoutertheme{infolines}
+\setbeamercolor{title}{fg=white,bg=university100blue}
+\setbeamertemplate{blocks}[rounded][shadow=true]
+\setbeamerfont{block title}{size={}}
+\setbeamerfont{title}{size=\LARGE}
+\setbeamerfont{institute}{size=\footnotesize}
+\setbeamerfont{date}{size=\footnotesize}
+\setbeamercolor{titlelike}{parent=structure,bg=white}
+\setbeamercolor*{normal text}{fg=black,bg=white}
+\setbeamercolor*{alerted text}{fg=black}
+\setbeamercolor*{example text}{fg=black}
+\setbeamercolor*{structure}{fg=black}
+\setbeamerfont{alerted text}{series=\bfseries}
+\setbeamercolor*{palette primary}{fg=white,bg=university60blue}
+\setbeamercolor*{palette secondary}{fg=black,bg=university20blue}
+\setbeamercolor*{palette tertiary}{fg=white,bg=university100blue}
+\setbeamercolor*{palette quaternary}{fg=white,bg=university100blue}
+\setbeamercolor{sidebar}{bg=university20blue}
+\setbeamercolor*{palette sidebar primary}{fg=black}
+\setbeamercolor*{palette sidebar secondary}{fg=black}
+\setbeamercolor*{palette sidebar tertiary}{fg=black}
+\setbeamercolor*{palette sidebar quaternary}{fg=black}
+\setbeamercolor*{item projected}{fg=black,bg=university20blue}
+\setbeamertemplate{itemize item}[square]
+\setbeamercolor{item}{fg=university80blue}
+\setbeamertemplate{itemize subitem}[circle]
+\setbeamercolor{section in head/foot}{bg=university100blue,fg=white}
+\setbeamercolor{subsection in head/foot}{bg=university20blue,fg=black}
+\setbeamercolor*{block title}{fg=black,bg=university40blue}
+\setbeamercolor*{block title alerted}{fg=white,bg=university80blue}
+\setbeamercolor*{block title example}{fg=black,bg=university60blue}
+\setbeamercolor*{block body}{fg=black,bg=university20blue}
+\setbeamercolor*{block body alerted}{fg=black,bg=university20blue}
+\setbeamercolor*{block body example}{fg=black,bg=university20blue}
+\setbeamercolor*{separation line}{}
+\setbeamercolor*{fine separation line}{}
+%\setbeamercovered{transparent=30}
+\setbeamercovered{invisible}
+\beamertemplatenavigationsymbolsempty
+
+\makeatletter
+\ifdim \beamer@paperwidth=16cm %
+\setbeamersize{text margin left=20mm,text margin right=20mm} %
+\else %
+\setbeamersize{text margin left=10mm,text margin right=10mm} %
+\fi
+
+\defbeamertemplate*{frametitle}{mydefault}[1][left]
+{
+  \ifbeamercolorempty[bg]{frametitle}{}{\nointerlineskip}%
+  \nointerlineskip%
+  \@tempdima=\textwidth%
+  \advance\@tempdima by\beamer@leftmargin%
+  \advance\@tempdima by\beamer@rightmargin%
+  \begin{tcolorbox}[
+  enhanced,
+  outer arc=0pt,
+  arc=0pt,
+  boxrule=0pt,
+  top=0pt,
+  bottom=0pt,
+  enlarge left by=-\beamer@leftmargin,
+  enlarge right by=-\beamer@rightmargin,
+  width=\paperwidth,
+  nobeforeafter,
+  interior style={
+    left color=university20blue,
+    right color=university100blue
+    },
+  shadow={0mm}{-0.4mm}{0mm}{black!60,opacity=0.6},    
+  shadow={0mm}{-0.8mm}{0mm}{black!40,opacity=0.4},    
+  ]
+    \usebeamerfont{frametitle}%
+    \vbox{}\vskip-1ex%
+    \if@tempswa\else\csname beamer@fte#1\endcsname\fi%
+    \insertframetitle\par%
+    {%
+      \ifx\insertframesubtitle\@empty%
+      \else%
+      {\usebeamerfont{framesubtitle}\usebeamercolor[fg]{framesubtitle}\insertframesubtitle\strut\par}%
+      \fi
+    }%
+    \vskip-1ex%
+    \if@tempswa\else\vskip-.3cm\fi% set inside beamercolorbox... evil here...
+  \end{tcolorbox}%
+}
+
+\setbeamertemplate{title page}
+{
+  \vfill%
+  \begin{centering}
+    \hfill
+    \begin{beamercolorbox}[sep=8pt,wd=0.7\paperwidth,center,rounded=true,shadow=true,]{title}
+      \usebeamerfont{title}\inserttitle\par%
+      \ifx\insertsubtitle\@empty%
+      \else%
+        \vskip0.25em%
+        {\usebeamerfont{subtitle}\usebeamercolor[fg]{subtitle}\insertsubtitle\par}%
+      \fi%     
+    \end{beamercolorbox}%
+    \hfill\hfill
+    \vskip0.5em\par
+    \begin{beamercolorbox}[sep=8pt,center]{author}
+      \usebeamerfont{author}\insertauthor
+    \end{beamercolorbox}
+    \begin{beamercolorbox}[sep=8pt,center]{institute}
+      \usebeamerfont{institute}\insertinstitute
+    \end{beamercolorbox}
+    \begin{beamercolorbox}[sep=8pt,center]{date}
+      \usebeamerfont{date}\insertdate
+    \end{beamercolorbox}%\vskip0.5em
+  \end{centering}
+  %\vfill
+}
+
+\setbeamertemplate{sidebar right}
+{
+  \vfill%
+  \llap{
+  \hskip0.1cm}%
+  \vskip2pt%
+  \vfill%
+  \llap{\usebeamertemplate***{navigation symbols}\hskip0.1cm}%
+  \vskip2pt%
+}
+
+\setbeamertemplate{footline}
+{
+  \leavevmode%
+  \hbox{%
+  \begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+    \usebeamerfont{author in head/foot}
+\insertshortauthor
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}%
+    \usebeamerfont{title in head/foot}\insertshorttitle
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,center]{date in head/foot}%  
+\insertframenumber{}~~/~~\inserttotalframenumber\hspace*{26pt}
+    %\iflanguage{ngerman}{Folie}{Frame}~~\insertframenumber{}~~\iflanguage{ngerman}{von}{of}~~\inserttotalframenumber\hspace*{26pt}
+  \end{beamercolorbox}}%
+  \vskip0pt%
+  % logo on every frame in lower right corner
+  \usebeamercolor[bg]{date in head/foot}  
+  \begin{tikzpicture}[remember picture, overlay]
+    \coordinate (bottom-right) at (\paperwidth-22pt,\paperheight-\paperheight+22pt);
+    \fill[color=bg] (bottom-right) circle (26pt);
+    \fill[color=white] (bottom-right) circle (22pt);
+    \fill[color=bg] (bottom-right) circle (21pt); 
+    \fill[color=white] (bottom-right) circle (20pt);
+    \node at (\paperwidth-23pt,\paperheight-\paperheight+22pt) {\bsvsLogoSmall};
+  \end{tikzpicture}
+}
+%\setbeamertemplate{headline}{}
+
+\newcommand{\bsvsLogo}{\includegraphics[width=2cm]{./images/bsvs-logo}}
+\newcommand{\bsvsLogoSmall}{\includegraphics[width=1cm]{./images/bsvs-logo}}
+\logo{\bsvsLogo}
+
+\newcommand{\cmark}{\ding{51}}%
+\newcommand{\xmark}{\ding{55}}%
+\newcommand{\done}{\rlap{$\square$}{\raisebox{2pt}{\large\hspace{1pt}\cmark}}%
+    \hspace{-2.5pt}}
+\newcommand{\almostdone}{\rlap{$\square$}{\raisebox{2pt}{\hspace{-3pt}(\hspace{1pt}\cmark)}}%
+    \hspace{-4.5pt}}
+\newcommand{\wontfix}{\rlap{$\square$}{\large\hspace{1pt}\xmark}}
+\newcommand{\emptyitem}{\rlap{$\square$}{\large\hspace{1pt}\xmark}}
+
+%\setbeameroption{show notes on second screen=right}
+
+
+\def\Put(#1,#2)#3{\leavevmode\makebox(0,0){\put(#1,#2){#3}}}
+
+\newcommand{\backupbegin}{
+   \newcounter{finalframe}
+   \setcounter{finalframe}{\value{framenumber}}\section*{}
+}
+\newcommand{\backupend}{
+   \setcounter{framenumber}{\value{finalframe}}
+}
