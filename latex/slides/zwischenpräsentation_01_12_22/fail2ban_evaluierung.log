@@ -1,10 +1,10 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.21 (TeX Live 2020/Debian) (preloaded format=pdflatex 2023.1.2)  2 JAN 2023 21:58
+This is pdfTeX, Version 3.14159265-2.6-1.40.21 (TeX Live 2020/Debian) (preloaded format=pdflatex 2023.1.5)  5 JAN 2023 17:36
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
  %&-line parsing enabled.
-**/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/main.tex
-(/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/main.tex
+**/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/fail2ban_evaluierung.tex
+(/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/fail2ban_evaluierung.tex
 LaTeX2e <2020-10-01> patch level 4
 L3 programming layer <2021-01-09> xparse <2020-03-03> (/usr/share/texlive/texmf-dist/tex/latex/beamer/beamer.cls
 Document Class: beamer 2020/11/26 v3.60 A class for typesetting presentations
@@ -521,33 +521,18 @@ Package: babel 2021/01/26 3.53 The Babel package
 File: babel.def 2021/01/26 3.53 Babel common definitions
 \babel@savecnt=\count321
 \U@D=\dimen286
-\l@babelnohyphens=\language3
+\l@babelnohyphens=\language8
  (/usr/share/texlive/texmf-dist/tex/generic/babel/txtbabel.def)
 \bbl@readstream=\read3
 )
 LaTeX Info: Redefining \textlatin on input line 716.
 \bbl@dirlevel=\count322
-
-
-/usr/share/texlive/texmf-dist/tex/generic/babel/babel.sty:1120: Package babel Error: Unknown option `german'. Either you misspelled it
-(babel)                or the language definition file german.ldf was not found.
-
-See the babel package documentation for explanation.
-Type  H <return>  for immediate help.
- ...                                              
-                                                  
-l.1120 \ProcessOptions*
-                       
-Valid options are, among others: shorthands=, KeepShorthandsActive,
-activeacute, activegrave, noconfigs, safe=, main=, math=
-headfoot=, strings=, config=, hyphenmap=, or a language name.
-
-Package babel Info: You haven't specified a language. I'll use 'nil'
-(babel)             as the main language. Reported on input line 1159.
-(/usr/share/texlive/texmf-dist/tex/generic/babel/nil.ldf
-Language: nil 2021/01/26 3.53 Nil language
-\l@nil=\language4
-)) (/usr/share/texlive/texmf-dist/tex/latex/pgf/frontendlayer/tikz.sty (/usr/share/texlive/texmf-dist/tex/latex/pgf/basiclayer/pgf.sty
+ (/usr/share/texlive/texmf-dist/tex/generic/babel-german/german.ldf
+Language: german 2020/07/21 v2.12 German support for babel (pre-1996 orthography)
+ (/usr/share/texlive/texmf-dist/tex/generic/babel-german/germanb.ldf
+Language: germanb 2020/07/21 v2.12 German support for babel (pre-1996 orthography)
+Package babel Info: Making " an active character on input line 135.
+))) (/usr/share/texlive/texmf-dist/tex/latex/pgf/frontendlayer/tikz.sty (/usr/share/texlive/texmf-dist/tex/latex/pgf/basiclayer/pgf.sty
 Package: pgf 2020/12/27 v3.1.8b (3.1.8b)
  (/usr/share/texlive/texmf-dist/tex/generic/pgf/modules/pgfmoduleshapes.code.tex
 File: pgfmoduleshapes.code.tex 2020/12/27 v3.1.8b (3.1.8b)
@@ -927,56 +912,72 @@ Package: multicol 2019/12/09 v1.8y multicolumn formatting (FMi)
 \mult@nat@firstbox=\box142
 \colbreak@box=\box143
 \mc@col@check@num=\count381
-) (/usr/share/texlive/texmf-dist/tex/latex/biblatex/biblatex.sty
+) (/usr/share/texlive/texmf-dist/tex/latex/csquotes/csquotes.sty
+Package: csquotes 2021-01-04 v5.2k context-sensitive quotations (JAW)
+\csq@reset=\count382
+\csq@gtype=\count383
+\csq@glevel=\count384
+\csq@qlevel=\count385
+\csq@maxlvl=\count386
+\csq@tshold=\count387
+\csq@ltx@everypar=\toks57
+ (/usr/share/texlive/texmf-dist/tex/latex/csquotes/csquotes.def
+File: csquotes.def 2021-01-04 v5.2k csquotes generic definitions (JAW)
+)
+Package csquotes Info: Trying to load configuration file 'csquotes.cfg'...
+Package csquotes Info: ... configuration file loaded successfully.
+ (/usr/share/texlive/texmf-dist/tex/latex/csquotes/csquotes.cfg
+File: csquotes.cfg 
+)) (/usr/share/texlive/texmf-dist/tex/latex/biblatex/biblatex.sty
 Package: biblatex 2020/12/31 v3.16 programmable bibliographies (PK/MW)
  (/usr/share/texlive/texmf-dist/tex/latex/logreq/logreq.sty
 Package: logreq 2010/08/04 v1.0 xml request logger
-\lrq@indent=\count382
+\lrq@indent=\count388
  (/usr/share/texlive/texmf-dist/tex/latex/logreq/logreq.def
 File: logreq.def 2010/08/04 v1.0 logreq spec v1.0
 ))
-\c@tabx@nest=\count383
-\c@listtotal=\count384
-\c@listcount=\count385
-\c@liststart=\count386
-\c@liststop=\count387
-\c@citecount=\count388
-\c@citetotal=\count389
-\c@multicitecount=\count390
-\c@multicitetotal=\count391
-\c@instcount=\count392
-\c@maxnames=\count393
-\c@minnames=\count394
-\c@maxitems=\count395
-\c@minitems=\count396
-\c@citecounter=\count397
-\c@maxcitecounter=\count398
-\c@savedcitecounter=\count399
-\c@uniquelist=\count400
-\c@uniquename=\count401
-\c@refsection=\count402
-\c@refsegment=\count403
-\c@maxextratitle=\count404
-\c@maxextratitleyear=\count405
-\c@maxextraname=\count406
-\c@maxextradate=\count407
-\c@maxextraalpha=\count408
-\c@abbrvpenalty=\count409
-\c@highnamepenalty=\count410
-\c@lownamepenalty=\count411
-\c@maxparens=\count412
-\c@parenlevel=\count413
-\blx@tempcnta=\count414
-\blx@tempcntb=\count415
-\blx@tempcntc=\count416
-\blx@maxsection=\count417
-\blx@maxsegment@0=\count418
-\blx@notetype=\count419
-\blx@parenlevel@text=\count420
-\blx@parenlevel@foot=\count421
-\blx@sectionciteorder@0=\count422
-\blx@entrysetcounter=\count423
-\blx@biblioinstance=\count424
+\c@tabx@nest=\count389
+\c@listtotal=\count390
+\c@listcount=\count391
+\c@liststart=\count392
+\c@liststop=\count393
+\c@citecount=\count394
+\c@citetotal=\count395
+\c@multicitecount=\count396
+\c@multicitetotal=\count397
+\c@instcount=\count398
+\c@maxnames=\count399
+\c@minnames=\count400
+\c@maxitems=\count401
+\c@minitems=\count402
+\c@citecounter=\count403
+\c@maxcitecounter=\count404
+\c@savedcitecounter=\count405
+\c@uniquelist=\count406
+\c@uniquename=\count407
+\c@refsection=\count408
+\c@refsegment=\count409
+\c@maxextratitle=\count410
+\c@maxextratitleyear=\count411
+\c@maxextraname=\count412
+\c@maxextradate=\count413
+\c@maxextraalpha=\count414
+\c@abbrvpenalty=\count415
+\c@highnamepenalty=\count416
+\c@lownamepenalty=\count417
+\c@maxparens=\count418
+\c@parenlevel=\count419
+\blx@tempcnta=\count420
+\blx@tempcntb=\count421
+\blx@tempcntc=\count422
+\blx@maxsection=\count423
+\blx@maxsegment@0=\count424
+\blx@notetype=\count425
+\blx@parenlevel@text=\count426
+\blx@parenlevel@foot=\count427
+\blx@sectionciteorder@0=\count428
+\blx@entrysetcounter=\count429
+\blx@biblioinstance=\count430
 \labelnumberwidth=\skip71
 \labelalphawidth=\skip72
 \biblabelsep=\skip73
@@ -987,10 +988,10 @@ File: logreq.def 2010/08/04 v1.0 logreq spec v1.0
 \bibhang=\skip78
 \blx@bcfin=\read6
 \blx@bcfout=\write8
-\blx@langwohyphens=\language5
-\c@mincomprange=\count425
-\c@maxcomprange=\count426
-\c@mincompwidth=\count427
+\blx@langwohyphens=\language9
+\c@mincomprange=\count431
+\c@maxcomprange=\count432
+\c@mincompwidth=\count433
 Package biblatex Info: Trying to load biblatex default data model...
 Package biblatex Info: ... file 'blx-dm.def' found.
  (/usr/share/texlive/texmf-dist/tex/latex/biblatex/blx-dm.def
@@ -1000,74 +1001,74 @@ Package biblatex Info: Trying to load biblatex style data model...
 Package biblatex Info: ... file 'numeric-comp.dbx' not found.
 Package biblatex Info: Trying to load biblatex custom data model...
 Package biblatex Info: ... file 'biblatex-dm.cfg' not found.
-\c@afterword=\count428
-\c@savedafterword=\count429
-\c@annotator=\count430
-\c@savedannotator=\count431
-\c@author=\count432
-\c@savedauthor=\count433
-\c@bookauthor=\count434
-\c@savedbookauthor=\count435
-\c@commentator=\count436
-\c@savedcommentator=\count437
-\c@editor=\count438
-\c@savededitor=\count439
-\c@editora=\count440
-\c@savededitora=\count441
-\c@editorb=\count442
-\c@savededitorb=\count443
-\c@editorc=\count444
-\c@savededitorc=\count445
-\c@foreword=\count446
-\c@savedforeword=\count447
-\c@holder=\count448
-\c@savedholder=\count449
-\c@introduction=\count450
-\c@savedintroduction=\count451
-\c@namea=\count452
-\c@savednamea=\count453
-\c@nameb=\count454
-\c@savednameb=\count455
-\c@namec=\count456
-\c@savednamec=\count457
-\c@translator=\count458
-\c@savedtranslator=\count459
-\c@shortauthor=\count460
-\c@savedshortauthor=\count461
-\c@shorteditor=\count462
-\c@savedshorteditor=\count463
-\c@labelname=\count464
-\c@savedlabelname=\count465
-\c@institution=\count466
-\c@savedinstitution=\count467
-\c@lista=\count468
-\c@savedlista=\count469
-\c@listb=\count470
-\c@savedlistb=\count471
-\c@listc=\count472
-\c@savedlistc=\count473
-\c@listd=\count474
-\c@savedlistd=\count475
-\c@liste=\count476
-\c@savedliste=\count477
-\c@listf=\count478
-\c@savedlistf=\count479
-\c@location=\count480
-\c@savedlocation=\count481
-\c@organization=\count482
-\c@savedorganization=\count483
-\c@origlocation=\count484
-\c@savedoriglocation=\count485
-\c@origpublisher=\count486
-\c@savedorigpublisher=\count487
-\c@publisher=\count488
-\c@savedpublisher=\count489
-\c@language=\count490
-\c@savedlanguage=\count491
-\c@origlanguage=\count492
-\c@savedoriglanguage=\count493
-\c@pageref=\count494
-\c@savedpageref=\count495
+\c@afterword=\count434
+\c@savedafterword=\count435
+\c@annotator=\count436
+\c@savedannotator=\count437
+\c@author=\count438
+\c@savedauthor=\count439
+\c@bookauthor=\count440
+\c@savedbookauthor=\count441
+\c@commentator=\count442
+\c@savedcommentator=\count443
+\c@editor=\count444
+\c@savededitor=\count445
+\c@editora=\count446
+\c@savededitora=\count447
+\c@editorb=\count448
+\c@savededitorb=\count449
+\c@editorc=\count450
+\c@savededitorc=\count451
+\c@foreword=\count452
+\c@savedforeword=\count453
+\c@holder=\count454
+\c@savedholder=\count455
+\c@introduction=\count456
+\c@savedintroduction=\count457
+\c@namea=\count458
+\c@savednamea=\count459
+\c@nameb=\count460
+\c@savednameb=\count461
+\c@namec=\count462
+\c@savednamec=\count463
+\c@translator=\count464
+\c@savedtranslator=\count465
+\c@shortauthor=\count466
+\c@savedshortauthor=\count467
+\c@shorteditor=\count468
+\c@savedshorteditor=\count469
+\c@labelname=\count470
+\c@savedlabelname=\count471
+\c@institution=\count472
+\c@savedinstitution=\count473
+\c@lista=\count474
+\c@savedlista=\count475
+\c@listb=\count476
+\c@savedlistb=\count477
+\c@listc=\count478
+\c@savedlistc=\count479
+\c@listd=\count480
+\c@savedlistd=\count481
+\c@liste=\count482
+\c@savedliste=\count483
+\c@listf=\count484
+\c@savedlistf=\count485
+\c@location=\count486
+\c@savedlocation=\count487
+\c@organization=\count488
+\c@savedorganization=\count489
+\c@origlocation=\count490
+\c@savedoriglocation=\count491
+\c@origpublisher=\count492
+\c@savedorigpublisher=\count493
+\c@publisher=\count494
+\c@savedpublisher=\count495
+\c@language=\count496
+\c@savedlanguage=\count497
+\c@origlanguage=\count498
+\c@savedoriglanguage=\count499
+\c@pageref=\count500
+\c@savedpageref=\count501
 \shorthandwidth=\skip79
 \shortjournalwidth=\skip80
 \shortserieswidth=\skip81
@@ -1101,19 +1102,19 @@ Package biblatex Info: Trying to load generic definitions...
 Package biblatex Info: ... file 'biblatex.def' found.
  (/usr/share/texlive/texmf-dist/tex/latex/biblatex/biblatex.def
 File: biblatex.def 2020/12/31 v3.16 biblatex compatibility (PK/MW)
-\c@textcitecount=\count496
-\c@textcitetotal=\count497
-\c@textcitemaxnames=\count498
-\c@biburlbigbreakpenalty=\count499
-\c@biburlbreakpenalty=\count500
-\c@biburlnumpenalty=\count501
-\c@biburlucpenalty=\count502
-\c@biburllcpenalty=\count503
+\c@textcitecount=\count502
+\c@textcitetotal=\count503
+\c@textcitemaxnames=\count504
+\c@biburlbigbreakpenalty=\count505
+\c@biburlbreakpenalty=\count506
+\c@biburlnumpenalty=\count507
+\c@biburlucpenalty=\count508
+\c@biburllcpenalty=\count509
 \biburlbigskip=\muskip18
 \biburlnumskip=\muskip19
 \biburlucskip=\muskip20
 \biburllcskip=\muskip21
-\c@smartand=\count504
+\c@smartand=\count510
 )
 Package biblatex Info: Trying to load natbib compatibility...
 Package biblatex Info: ... file 'blx-natbib.def' found.
@@ -1133,17 +1134,17 @@ Package biblatex Info: Trying to load bibliography style 'standard'...
 Package biblatex Info: ... file 'standard.bbx' found.
  (/usr/share/texlive/texmf-dist/tex/latex/biblatex/bbx/standard.bbx
 File: standard.bbx 2020/12/31 v3.16 biblatex bibliography style (PK/MW)
-\c@bbx:relatedcount=\count505
-\c@bbx:relatedtotal=\count506
+\c@bbx:relatedcount=\count511
+\c@bbx:relatedtotal=\count512
 )))
 Package biblatex Info: Trying to load citation style 'numeric-comp'...
 Package biblatex Info: ... file 'numeric-comp.cbx' found.
  (/usr/share/texlive/texmf-dist/tex/latex/biblatex/cbx/numeric-comp.cbx
 File: numeric-comp.cbx 2020/12/31 v3.16 biblatex citation style (PK/MW)
-\c@cbx@tempcnta=\count507
-\c@cbx@tempcntb=\count508
-\c@cbx@tempcntc=\count509
-\c@cbx@tempcntd=\count510
+\c@cbx@tempcnta=\count513
+\c@cbx@tempcntb=\count514
+\c@cbx@tempcntc=\count515
+\c@cbx@tempcntd=\count516
 Package biblatex Info: Redefining '\cite'.
 Package biblatex Info: Redefining '\parencite'.
 Package biblatex Info: Redefining '\footcite'.
@@ -1161,35 +1162,33 @@ Package biblatex Info: ... file 'biblatex.cfg' found.
  (/usr/share/texlive/texmf-dist/tex/latex/biblatex/biblatex.cfg
 File: biblatex.cfg 
 ))
+Package csquotes Info: Checking for multilingual support...
+Package csquotes Info: ... found 'babel' package.
+Package csquotes Info: Adjusting default style.
+Package csquotes Info: Redefining alias 'default' -> 'german'.
+ (/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/fail2ban_evaluierung.aux)
+\openout1 = `fail2ban_evaluierung.aux'.
 
-Package biblatex Warning: 'babel/polyglossia' detected but 'csquotes' missing.
-(biblatex)                Loading 'csquotes' recommended.
-
-\@quotelevel=\count511
-\@quotereset=\count512
-(/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/main.aux)
-\openout1 = `main.aux'.
-
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 42.
-LaTeX Font Info:    ... okay on input line 42.
-LaTeX Font Info:    Checking defaults for OMS/pzccm/m/n on input line 42.
-LaTeX Font Info:    Trying to load font information for OMS+pzccm on input line 42.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for OMS/pzccm/m/n on input line 44.
+LaTeX Font Info:    Trying to load font information for OMS+pzccm on input line 44.
  (/usr/share/texlive/texmf-dist/tex/latex/psnfss/omspzccm.fd
 File: omspzccm.fd 2000/01/03 Fontinst v1.801 font definitions for OMS/pzccm.
 )
-LaTeX Font Info:    ... okay on input line 42.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 42.
-LaTeX Font Info:    ... okay on input line 42.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 42.
-LaTeX Font Info:    ... okay on input line 42.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 42.
-LaTeX Font Info:    ... okay on input line 42.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 42.
-LaTeX Font Info:    ... okay on input line 42.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 42.
-LaTeX Font Info:    ... okay on input line 42.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 42.
-LaTeX Font Info:    ... okay on input line 42.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
 
 *geometry* driver: auto-detecting
 *geometry* detected driver: pdftex
@@ -1227,17 +1226,17 @@ LaTeX Font Info:    ... okay on input line 42.
 
 (/usr/share/texlive/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
-\scratchcounter=\count513
+\scratchcounter=\count517
 \scratchdimen=\dimen351
 \scratchbox=\box144
-\nofMPsegments=\count514
-\nofMParguments=\count515
-\everyMPshowfont=\toks57
-\MPscratchCnt=\count516
+\nofMPsegments=\count518
+\nofMParguments=\count519
+\everyMPshowfont=\toks58
+\MPscratchCnt=\count520
 \MPscratchDim=\dimen352
-\MPnumerator=\count517
-\makeMPintoPDFobject=\count518
-\everyMPtoPDFconversion=\toks58
+\MPnumerator=\count521
+\makeMPintoPDFobject=\count522
+\everyMPtoPDFconversion=\toks59
 ) (/usr/share/texlive/texmf-dist/tex/latex/epstopdf-pkg/epstopdf-base.sty
 Package: epstopdf-base 2020-01-24 v2.11 Base part for package epstopdf
  (/usr/share/texlive/texmf-dist/tex/latex/grfext/grfext.sty
@@ -1250,7 +1249,7 @@ Package grfext Info: Graphics extension search list:
  (/usr/share/texlive/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Live
 ))
-Package hyperref Info: Link coloring OFF on input line 42.
+Package hyperref Info: Link coloring OFF on input line 44.
  (/usr/share/texlive/texmf-dist/tex/latex/hyperref/nameref.sty
 Package: nameref 2019/09/16 v2.46 Cross-referencing by name of section
  (/usr/share/texlive/texmf-dist/tex/latex/refcount/refcount.sty
@@ -1258,56 +1257,57 @@ Package: refcount 2019/12/15 v3.6 Data extraction from label references (HO)
 ) (/usr/share/texlive/texmf-dist/tex/generic/gettitlestring/gettitlestring.sty
 Package: gettitlestring 2019/12/15 v1.6 Cleanup title references (HO)
 )
-\c@section@level=\count519
+\c@section@level=\count523
 )
-LaTeX Info: Redefining \ref on input line 42.
-LaTeX Info: Redefining \pageref on input line 42.
-LaTeX Info: Redefining \nameref on input line 42.
+LaTeX Info: Redefining \ref on input line 44.
+LaTeX Info: Redefining \pageref on input line 44.
+LaTeX Info: Redefining \nameref on input line 44.
+ (/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/fail2ban_evaluierung.out) (/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/fail2ban_evaluierung.out)
 \@outlinefile=\write9
-\openout9 = `main.out'.
+\openout9 = `fail2ban_evaluierung.out'.
 
 LaTeX Font Info:    Overwriting symbol font `operators' in version `normal'
-(Font)                  OT1/ptmcm/m/n --> OT1/cmss/m/n on input line 42.
+(Font)                  OT1/ptmcm/m/n --> OT1/cmss/m/n on input line 44.
 LaTeX Font Info:    Overwriting symbol font `operators' in version `bold'
-(Font)                  OT1/ptmcm/m/n --> OT1/cmss/b/n on input line 42.
+(Font)                  OT1/ptmcm/m/n --> OT1/cmss/b/n on input line 44.
 \symnumbers=\mathgroup8
 \sympureletters=\mathgroup9
 LaTeX Font Info:    Overwriting math alphabet `\mathrm' in version `normal'
-(Font)                  OT1/cmss/m/n --> T1/ptm/m/n on input line 42.
-LaTeX Font Info:    Redeclaring math alphabet \mathbf on input line 42.
+(Font)                  OT1/cmss/m/n --> T1/ptm/m/n on input line 44.
+LaTeX Font Info:    Redeclaring math alphabet \mathbf on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathbf' in version `normal'
-(Font)                  OT1/ptm/bx/n --> T1/phv/b/n on input line 42.
+(Font)                  OT1/ptm/bx/n --> T1/phv/b/n on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathbf' in version `bold'
-(Font)                  OT1/ptm/bx/n --> T1/phv/b/n on input line 42.
-LaTeX Font Info:    Redeclaring math alphabet \mathsf on input line 42.
+(Font)                  OT1/ptm/bx/n --> T1/phv/b/n on input line 44.
+LaTeX Font Info:    Redeclaring math alphabet \mathsf on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathsf' in version `normal'
-(Font)                  OT1/cmss/m/n --> T1/phv/m/n on input line 42.
+(Font)                  OT1/cmss/m/n --> T1/phv/m/n on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathsf' in version `bold'
-(Font)                  OT1/cmss/bx/n --> T1/phv/m/n on input line 42.
-LaTeX Font Info:    Redeclaring math alphabet \mathit on input line 42.
+(Font)                  OT1/cmss/bx/n --> T1/phv/m/n on input line 44.
+LaTeX Font Info:    Redeclaring math alphabet \mathit on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathit' in version `normal'
-(Font)                  OT1/ptm/m/it --> T1/phv/m/it on input line 42.
+(Font)                  OT1/ptm/m/it --> T1/phv/m/it on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathit' in version `bold'
-(Font)                  OT1/ptm/m/it --> T1/phv/m/it on input line 42.
-LaTeX Font Info:    Redeclaring math alphabet \mathtt on input line 42.
+(Font)                  OT1/ptm/m/it --> T1/phv/m/it on input line 44.
+LaTeX Font Info:    Redeclaring math alphabet \mathtt on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathtt' in version `normal'
-(Font)                  OT1/cmtt/m/n --> T1/pcr/m/n on input line 42.
+(Font)                  OT1/cmtt/m/n --> T1/pcr/m/n on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathtt' in version `bold'
-(Font)                  OT1/cmtt/m/n --> T1/pcr/m/n on input line 42.
+(Font)                  OT1/cmtt/m/n --> T1/pcr/m/n on input line 44.
 LaTeX Font Info:    Overwriting symbol font `numbers' in version `bold'
-(Font)                  T1/phv/m/n --> T1/phv/b/n on input line 42.
+(Font)                  T1/phv/m/n --> T1/phv/b/n on input line 44.
 LaTeX Font Info:    Overwriting symbol font `pureletters' in version `bold'
-(Font)                  T1/phv/m/it --> T1/phv/b/it on input line 42.
+(Font)                  T1/phv/m/it --> T1/phv/b/it on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathrm' in version `bold'
-(Font)                  OT1/cmss/b/n --> T1/ptm/b/n on input line 42.
+(Font)                  OT1/cmss/b/n --> T1/ptm/b/n on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathbf' in version `bold'
-(Font)                  T1/phv/b/n --> T1/phv/b/n on input line 42.
+(Font)                  T1/phv/b/n --> T1/phv/b/n on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathsf' in version `bold'
-(Font)                  T1/phv/m/n --> T1/phv/b/n on input line 42.
+(Font)                  T1/phv/m/n --> T1/phv/b/n on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathit' in version `bold'
-(Font)                  T1/phv/m/it --> T1/phv/b/it on input line 42.
+(Font)                  T1/phv/m/it --> T1/phv/b/it on input line 44.
 LaTeX Font Info:    Overwriting math alphabet `\mathtt' in version `bold'
-(Font)                  T1/pcr/m/n --> T1/pcr/b/n on input line 42.
+(Font)                  T1/pcr/m/n --> T1/pcr/b/n on input line 44.
  (/usr/share/texlive/texmf-dist/tex/latex/translator/translator-basic-dictionary-English.dict
 Dictionary: translator-basic-dictionary, Language: English 
 ) (/usr/share/texlive/texmf-dist/tex/latex/translator/translator-basic-dictionary-German.dict
@@ -1339,16 +1339,14 @@ Package: lscape 2020/05/28 v3.02 Landscape Pages (DPC)
 )
 Package pdflscape Info: Auto-detected driver: pdftex on input line 81.
 )
-\c@lstlisting=\count520
+\c@lstlisting=\count524
 Package caption Info: Begin \AtBeginDocument code.
 Package caption Info: End \AtBeginDocument code.
-Package biblatex Info: Trying to load language 'nil'...
-Package biblatex Info: ... file 'nil.lbx' not found.
-
-
-Package biblatex Warning: Language 'nil' not supported.
-(biblatex)                Using dummy definitions on input line 42.
-
+Package biblatex Info: Trying to load language 'german'...
+Package biblatex Info: ... file 'german.lbx' found.
+ (/usr/share/texlive/texmf-dist/tex/latex/biblatex/lbx/german.lbx
+File: german.lbx 2020/12/31 v3.16 biblatex localization (PK/MW)
+)
 Package biblatex Info: Input encoding 'utf8' detected.
 Package biblatex Info: Automatic encoding selection.
 (biblatex)             Assuming data encoding 'utf8'.
@@ -1360,108 +1358,501 @@ Package biblatex Info: ... and expl3
 (biblatex)             2021-01-09 L3 programming layer (loader) 
 (biblatex)             is new enough (at least 2020/04/06),
 (biblatex)             setting 'casechanger=expl3'.
-(/usr/share/texlive/texmf-dist/tex/latex/biblatex/blx-case-expl3.sty
+ (/usr/share/texlive/texmf-dist/tex/latex/biblatex/blx-case-expl3.sty
 Package: blx-case-expl3 2020/12/31 v3.16 expl3 case changing code for biblatex
 )
-\openout8 = `main-blx.bib'.
+\openout8 = `fail2ban_evaluierung-blx.bib'.
 
 Package biblatex Info: Trying to load bibliographic data...
-Package biblatex Info: ... file 'main.bbl' not found.
-
-No file main.bbl.
-Package biblatex Info: Reference section=0 on input line 42.
-Package biblatex Info: Reference segment=0 on input line 42.
-No file main.nav.
+Package biblatex Info: ... file 'fail2ban_evaluierung.bbl' found.
+ (/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/fail2ban_evaluierung.bbl)
+Package biblatex Info: Reference section=0 on input line 44.
+Package biblatex Info: Reference segment=0 on input line 44.
+ (/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/fail2ban_evaluierung.nav)
 LaTeX Font Info:    Font shape `T1/phv/m/n' will be
-(Font)              scaled to size 5.39996pt on input line 42.
+(Font)              scaled to size 5.39996pt on input line 44.
 Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
 (epstopdf)                    date: 2023-01-02 20:39:50
 (epstopdf)                    size: 248152 bytes
 (epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
 (epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
-(epstopdf)             \includegraphics on input line 42.
-runsystem(repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps)...executed safely (allowed).
-
-Package epstopdf Info: Result file: <./images/bsvs-logo-eps-converted-to.pdf>.
-
-/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/main.tex:42: Package pdftex.def Error: File `./images/bsvs-logo-eps-converted-to.pdf' not found: using draft setting.
-
-See the pdftex.def package documentation for explanation.
-Type  H <return>  for immediate help.
- ...                                              
-                                                  
-l.42 \begin{document}
-                     
-Try typing  <return>  to proceed.
-If that doesn't work, type  X <return>  to quit.
-
+(epstopdf)             \includegraphics on input line 44.
+Package epstopdf Info: Output file is already uptodate.
+<./images/bsvs-logo-eps-converted-to.pdf, id=42, 539.01375pt x 581.17125pt>
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 44.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
 LaTeX Font Info:    Font shape `T1/phv/m/n' will be
-(Font)              scaled to size 15.55188pt on input line 46.
+(Font)              scaled to size 15.55188pt on input line 48.
 LaTeX Font Info:    Font shape `T1/phv/m/n' will be
-(Font)              scaled to size 8.09995pt on input line 46.
+(Font)              scaled to size 8.09995pt on input line 48.
 Package epstopdf Info: Source file: <images/bsvs-logo.eps>
 (epstopdf)                    date: 2023-01-02 20:39:50
 (epstopdf)                    size: 248152 bytes
 (epstopdf)             Output file: <images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
 (epstopdf)             Command: <repstopdf --outfile=images/bsvs-logo-eps-converted-to.pdf images/bsvs-logo.eps>
-(epstopdf)             \includegraphics on input line 46.
-runsystem(repstopdf --outfile=images/bsvs-logo-eps-converted-to.pdf images/bsvs-logo.eps)...executed safely (allowed).
+(epstopdf)             \includegraphics on input line 48.
+Package epstopdf Info: Output file is already uptodate.
+<images/bsvs-logo-eps-converted-to.pdf, id=55, 539.01375pt x 581.17125pt>
+File: images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: images/bsvs-logo-eps-converted-to.pdf  used on input line 48.
+(pdftex.def)             Requested size: 42.67912pt x 46.01578pt.
+ [1
 
-Package epstopdf Info: Result file: <images/bsvs-logo-eps-converted-to.pdf>.
-
-/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/main.tex:46: Package pdftex.def Error: File `images/bsvs-logo-eps-converted-to.pdf' not found: using draft setting.
-
-See the pdftex.def package documentation for explanation.
-Type  H <return>  for immediate help.
- ...                                              
-                                                  
-l.46 \end{frame}
-                
-Try typing  <return>  to proceed.
-If that doesn't work, type  X <return>  to quit.
-
-[1
-
-{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}]
+{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map} </home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/images/bsvs-logo-eps-converted-to.pdf>]
 LaTeX Font Info:    Font shape `T1/phv/m/n' will be
-(Font)              scaled to size 8.99994pt on input line 66.
-LaTeX Font Info:    Trying to load font information for OML+ptmcm on input line 66.
+(Font)              scaled to size 8.99994pt on input line 68.
+LaTeX Font Info:    Trying to load font information for OML+ptmcm on input line 68.
  (/usr/share/texlive/texmf-dist/tex/latex/psnfss/omlptmcm.fd
 File: omlptmcm.fd 2000/01/03 Fontinst v1.801 font definitions for OML/ptmcm.
 )
-LaTeX Font Info:    Trying to load font information for OMX+psycm on input line 66.
+LaTeX Font Info:    Trying to load font information for OMX+psycm on input line 68.
  (/usr/share/texlive/texmf-dist/tex/latex/psnfss/omxpsycm.fd
 File: omxpsycm.fd 2000/01/03 Fontinst v1.801 font definitions for OMX/psycm.
 )
-LaTeX Font Info:    Trying to load font information for U+msa on input line 66.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 68.
  (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 66.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 68.
  (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <10> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 66.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 68.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <7.4> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 66.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 68.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <6> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 66.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 68.
 LaTeX Font Info:    Font shape `T1/phv/m/n' will be
-(Font)              scaled to size 6.65994pt on input line 66.
+(Font)              scaled to size 6.65994pt on input line 68.
 LaTeX Font Info:    Font shape `T1/phv/m/it' in size <10> not available
-(Font)              Font shape `T1/phv/m/sl' tried instead on input line 66.
+(Font)              Font shape `T1/phv/m/sl' tried instead on input line 68.
 LaTeX Font Info:    Font shape `T1/phv/m/sl' will be
-(Font)              scaled to size 8.99994pt on input line 66.
+(Font)              scaled to size 8.99994pt on input line 68.
 LaTeX Font Info:    Font shape `T1/phv/m/it' in size <7.4> not available
-(Font)              Font shape `T1/phv/m/sl' tried instead on input line 66.
+(Font)              Font shape `T1/phv/m/sl' tried instead on input line 68.
 LaTeX Font Info:    Font shape `T1/phv/m/sl' will be
-(Font)              scaled to size 6.65994pt on input line 66.
+(Font)              scaled to size 6.65994pt on input line 68.
 LaTeX Font Info:    Font shape `T1/phv/m/it' in size <6> not available
-(Font)              Font shape `T1/phv/m/sl' tried instead on input line 66.
+(Font)              Font shape `T1/phv/m/sl' tried instead on input line 68.
 LaTeX Font Info:    Font shape `T1/phv/m/sl' will be
-(Font)              scaled to size 5.39996pt on input line 66.
+(Font)              scaled to size 5.39996pt on input line 68.
 LaTeX Font Info:    Font shape `T1/phv/m/n' will be
-(Font)              scaled to size 12.9599pt on input line 66.
+(Font)              scaled to size 12.9599pt on input line 68.
 LaTeX Font Info:    Font shape `T1/phv/m/n' will be
-(Font)              scaled to size
+(Font)              scaled to size 3.59998pt on input line 68.
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 68.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 68.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+ [2
+
+ </home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/./images/bsvs-logo-eps-converted-to.pdf>]
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 81.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 81.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+ [3
+
+]
+\openout4 = `fail2ban_evaluierung.vrb'.
+
+ (/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/fail2ban_evaluierung.vrb)
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 102.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 102.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+ [4
+
+]
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 114.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 114.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+ [5
+
+]
+<images/architektur_ebpfoverall2.png, id=111, 3020.28375pt x 1833.85126pt>
+File: images/architektur_ebpfoverall2.png Graphic file (type png)
+<use images/architektur_ebpfoverall2.png>
+Package pdftex.def Info: images/architektur_ebpfoverall2.png  used on input line 127.
+(pdftex.def)             Requested size: 307.28987pt x 186.55786pt.
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 127.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 127.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+ [6
+
+ </home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/images/architektur_ebpfoverall2.png>]
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <10.95> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 153.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <8> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 153.
+LaTeX Font Info:    Font shape `T1/phv/m/n' will be
+(Font)              scaled to size 7.19995pt on input line 153.
+LaTeX Font Info:    Font shape `T1/phv/m/it' in size <10.95> not available
+(Font)              Font shape `T1/phv/m/sl' tried instead on input line 153.
+LaTeX Font Info:    Font shape `T1/phv/m/sl' will be
+(Font)              scaled to size 9.85492pt on input line 153.
+LaTeX Font Info:    Font shape `T1/phv/m/it' in size <8> not available
+(Font)              Font shape `T1/phv/m/sl' tried instead on input line 153.
+LaTeX Font Info:    Font shape `T1/phv/m/sl' will be
+(Font)              scaled to size 7.19995pt on input line 153.
+LaTeX Font Info:    Font shape `T1/phv/b/n' will be
+(Font)              scaled to size 9.85492pt on input line 153.
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 153.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 153.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+ [7
+
+]
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 165.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 165.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+ [8
+
+]
+<images/udp_10_50_50.png, id=139, 1445.4pt x 867.24pt>
+File: images/udp_10_50_50.png Graphic file (type png)
+<use images/udp_10_50_50.png>
+Package pdftex.def Info: images/udp_10_50_50.png  used on input line 172.
+(pdftex.def)             Requested size: 338.02072pt x 202.80896pt.
+
+Overfull \hbox (30.73085pt too wide) in paragraph at lines 172--172
+ [] 
+ []
+
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 172.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 172.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+[9
+
+ </home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/images/udp_10_50_50.png>]
+<images/udp_10_50_254.png, id=149, 1445.4pt x 867.24pt>
+File: images/udp_10_50_254.png Graphic file (type png)
+<use images/udp_10_50_254.png>
+Package pdftex.def Info: images/udp_10_50_254.png  used on input line 179.
+(pdftex.def)             Requested size: 338.02072pt x 202.80896pt.
+
+Overfull \hbox (30.73085pt too wide) in paragraph at lines 179--179
+ [] 
+ []
+
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 179.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 179.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+[10
+
+ </home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/images/udp_10_50_254.png>]
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 188.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 188.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+ [11
+
+]
+<images/dns_50_1000_50.png, id=168, 1445.4pt x 867.24pt>
+File: images/dns_50_1000_50.png Graphic file (type png)
+<use images/dns_50_1000_50.png>
+Package pdftex.def Info: images/dns_50_1000_50.png  used on input line 197.
+(pdftex.def)             Requested size: 338.02072pt x 202.80896pt.
+
+Overfull \hbox (30.73085pt too wide) in paragraph at lines 197--197
+ [] 
+ []
+
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 197.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 197.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+[12
+
+ </home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/images/dns_50_1000_50.png>]
+<images/dns_50_5000_50.png, id=178, 1445.4pt x 867.24pt>
+File: images/dns_50_5000_50.png Graphic file (type png)
+<use images/dns_50_5000_50.png>
+Package pdftex.def Info: images/dns_50_5000_50.png  used on input line 205.
+(pdftex.def)             Requested size: 338.02072pt x 202.80896pt.
+
+Overfull \hbox (30.73085pt too wide) in paragraph at lines 205--205
+ [] 
+ []
+
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 205.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 205.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+[13
+
+ </home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/images/dns_50_5000_50.png>]
+<images/dns_50_1000_254.png, id=189, 1445.4pt x 867.24pt>
+File: images/dns_50_1000_254.png Graphic file (type png)
+<use images/dns_50_1000_254.png>
+Package pdftex.def Info: images/dns_50_1000_254.png  used on input line 214.
+(pdftex.def)             Requested size: 338.02072pt x 202.80896pt.
+
+Overfull \hbox (30.73085pt too wide) in paragraph at lines 214--214
+ [] 
+ []
+
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 214.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 214.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+[14
+
+ </home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/images/dns_50_1000_254.png>]
+<images/dns_50_5000_254.png, id=199, 1445.4pt x 867.24pt>
+File: images/dns_50_5000_254.png Graphic file (type png)
+<use images/dns_50_5000_254.png>
+Package pdftex.def Info: images/dns_50_5000_254.png  used on input line 223.
+(pdftex.def)             Requested size: 338.02072pt x 202.80896pt.
+
+Overfull \hbox (30.73085pt too wide) in paragraph at lines 223--223
+ [] 
+ []
+
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 223.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 223.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+[15
+
+ </home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/images/dns_50_5000_254.png>]
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 235.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 235.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+ [16
+
+]
+<images/http_50_100.png, id=217, 1445.4pt x 867.24pt>
+File: images/http_50_100.png Graphic file (type png)
+<use images/http_50_100.png>
+Package pdftex.def Info: images/http_50_100.png  used on input line 242.
+(pdftex.def)             Requested size: 338.02072pt x 202.80896pt.
+
+Overfull \hbox (30.73085pt too wide) in paragraph at lines 242--242
+ [] 
+ []
+
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 242.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 242.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+[17
+
+ </home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/images/http_50_100.png>]
+<images/http_50_1000.png, id=227, 1445.4pt x 867.24pt>
+File: images/http_50_1000.png Graphic file (type png)
+<use images/http_50_1000.png>
+Package pdftex.def Info: images/http_50_1000.png  used on input line 249.
+(pdftex.def)             Requested size: 338.02072pt x 202.80896pt.
+
+Overfull \hbox (30.73085pt too wide) in paragraph at lines 249--249
+ [] 
+ []
+
+Package epstopdf Info: Source file: <./images/bsvs-logo.eps>
+(epstopdf)                    date: 2023-01-02 20:39:50
+(epstopdf)                    size: 248152 bytes
+(epstopdf)             Output file: <./images/bsvs-logo-eps-converted-to.pdf>
+(epstopdf)                    date: 2023-01-05 17:34:41
+(epstopdf)                    size: 25249 bytes
+(epstopdf)             Command: <repstopdf --outfile=./images/bsvs-logo-eps-converted-to.pdf ./images/bsvs-logo.eps>
+(epstopdf)             \includegraphics on input line 249.
+Package epstopdf Info: Output file is already uptodate.
+File: ./images/bsvs-logo-eps-converted-to.pdf Graphic file (type pdf)
+<use ./images/bsvs-logo-eps-converted-to.pdf>
+Package pdftex.def Info: ./images/bsvs-logo-eps-converted-to.pdf  used on input line 249.
+(pdftex.def)             Requested size: 28.45274pt x 30.67422pt.
+[18
+
+ </home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/images/http_50_1000.png>]
+\tf@nav=\write10
+\openout10 = `fail2ban_evaluierung.nav'.
+
+\tf@toc=\write11
+\openout11 = `fail2ban_evaluierung.toc'.
+
+\tf@snm=\write12
+\openout12 = `fail2ban_evaluierung.snm'.
+
+ (/home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/fail2ban_evaluierung.aux)
+Package rerunfilecheck Info: File `fail2ban_evaluierung.out' has not changed.
+(rerunfilecheck)             Checksum: C03ADBEE4B6803969EC279A0378D6E5B;362.
+Package logreq Info: Writing requests to 'fail2ban_evaluierung.run.xml'.
+\openout1 = `fail2ban_evaluierung.run.xml'.
+
+ ) 
+Here is how much of TeX's memory you used:
+ 38853 strings out of 481199
+ 779700 string characters out of 5913480
+ 1357579 words of memory out of 5000000
+ 54951 multiletter control sequences out of 15000+600000
+ 458879 words of font info for 101 fonts, out of 8000000 for 9000
+ 16 hyphenation exceptions out of 8191
+ 112i,16n,125p,1912b,1648s stack positions out of 5000i,500n,10000p,200000b,80000s
+{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb>
+Output written on /home/paulr/Uni/BA/bachelorarbeit/latex/slides/zwischenpräsentation_01_12_22/fail2ban_evaluierung.pdf (18 pages, 1151194 bytes).
+PDF statistics:
+ 266 PDF objects out of 1000 (max. 8388607)
+ 200 compressed objects within 2 object streams
+ 44 named destinations out of 1000 (max. 500000)
+ 196 words of extra memory for PDF output out of 10000 (max. 10000000)
+
