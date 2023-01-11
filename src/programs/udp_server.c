@@ -18,8 +18,9 @@
 #include <fcntl.h>
 #include <asm-generic/socket.h>
 
-#include "ip_to_str.h"
-#include "ringbuf.h"
+#include <ip_to_str.h>
+#include <ringbuf.h>
+#include <atomic_hashtable.h>
 
 #define RETURN_SUC 0
 #define RETURN_FAIL 1
@@ -57,7 +58,7 @@ static char global_datetime_buf[DATE_SIZE];
 static volatile sig_atomic_t server_running = true;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_rwlock_t datetime_lock_rw = PTHREAD_RWLOCK_INITIALIZER;
+
 
 static pthread_mutex_t buffer_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -111,9 +112,9 @@ void * time_thread_routine(void * arg){
 
     while (server_running)
     {
-        pthread_rwlock_wrlock(&datetime_lock_rw);
+        //pthread_rwlock_wrlock(&datetime_lock_rw);
         update_datetime(global_datetime_buf);
-        pthread_rwlock_unlock(&datetime_lock_rw);
+        //pthread_rwlock_unlock(&datetime_lock_rw);
         nanosleep((struct timespec *)(arg),NULL);
     }
 
@@ -125,9 +126,9 @@ void * time_thread_routine(void * arg){
 
 int log_packet_info_ipv4(int logfile_fd, char * log_str_buf, char * addr,char payload){
     memset(log_str_buf,BLANK,LOG_BUF_SIZE_IPV4-1);
-    pthread_rwlock_rdlock(&datetime_lock_rw);
+    //pthread_rwlock_rdlock(&datetime_lock_rw);
     memcpy(log_str_buf,global_datetime_buf,DATE_SIZE-1);
-    pthread_rwlock_rdlock(&datetime_lock_rw);
+    //pthread_rwlock_rdlock(&datetime_lock_rw);
     memcpy(log_str_buf+DATE_SIZE,addr,ADDR_SIZE_IPV4-1);
     memcpy(log_str_buf+DATE_SIZE+ADDR_SIZE_IPV4,&payload,1);
 
@@ -140,9 +141,9 @@ int log_packet_info_ipv4(int logfile_fd, char * log_str_buf, char * addr,char pa
 
 int log_packet_info_ipv6(int logfile_fd, char * log_str_buf, char * addr,char payload){
     memset(log_str_buf,BLANK,LOG_BUF_SIZE_IPV6-1);
-    pthread_rwlock_rdlock(&datetime_lock_rw);
+    //pthread_rwlock_rdlock(&datetime_lock_rw);
     memcpy(log_str_buf,global_datetime_buf,DATE_SIZE-1);
-    pthread_rwlock_rdlock(&datetime_lock_rw);
+    //pthread_rwlock_rdlock(&datetime_lock_rw);
     memcpy(log_str_buf+DATE_SIZE,addr,ADDR_SIZE_IPV6-1);
     memcpy(log_str_buf+DATE_SIZE+ADDR_SIZE_IPV6,&payload,1);
 
