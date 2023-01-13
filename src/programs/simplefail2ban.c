@@ -4,8 +4,10 @@
 
 #include <hs.h>
 #include <libbpf.h>
-#include <xdp_ddos01_blacklist.skel.h>
-#include <xdp_ddos01_blacklist_common.h>
+#include <ip_blacklist.skel.h>
+#include <blacklist_common.h>
+
+
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },

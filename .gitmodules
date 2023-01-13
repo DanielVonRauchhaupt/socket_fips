@@ -1,6 +1,9 @@
 [submodule "src/libs/hyperscan"]
 	path = external/hyperscan
 	url = https://github.com/intel/hyperscan.git
-[submodule "ip_blacklist"]
-	path = external/ip_blacklist
-	url = https://gitup.uni-potsdam.de/maxschro/ip_blacklist.git
+[submodule "external/libbpf"]
+	path = external/libbpf
+	url = https://github.com/libbpf/libbpf.git
+[submodule "external/bpftool"]
+	path = external/bpftool
+	url = https://github.com/libbpf/bpftool.git

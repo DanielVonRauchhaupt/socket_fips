@@ -2,12 +2,10 @@ cmake_minimum_required(VERSION 3.18.4)
 
 project(Bacherlorarbeit)
 
-set(FAT_RUNTIME OFF CACHE BOOL "Build a library that supports multiple microarchitectures" FORCE)
-set(BUILD_EXAMPLES OFF CACHE BOOL "Build Hyperscan example code (default TRUE)" FORCE)
+# Tell cmake where to find BpfObject module
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/external/tools/cmake)
 
-add_subdirectory(external/hyperscan)
-
-add_subdirectory(external/ip_blacklist/src)
+add_subdirectory(external)
 
 add_subdirectory(src/lib)
 
@@ -23,25 +21,22 @@ target_link_libraries(udp_server
     PUBLIC ip_to_str
 )
 
-add_executable(simplefail2ban src/programs/simplefail2ban.c)
+# Set BpfObject input parameters -- note this is usually not necessary unless
+# you're in a highly vendored environment (like libbpf-bootstrap)
+set(BPFOBJECT_BPFTOOL_EXE ${CMAKE_CURRENT_BINARY_DIR}/external/bpftool/bootstrap/bpftool)
+set(BPFOBJECT_VMLINUX_H ${CMAKE_CURRENT_SOURCE_DIR}/external/vmlinux/vmlinux.h)
+set(LIBBPF_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/external/libbpf)
+set(LIBBPF_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/external/libbpf/libbpf.a)
+find_package(BpfObject REQUIRED)
 
-set_property(TARGET simplefail2ban PROPERTY ENABLE_EXPORTS 1)
+# Create an executable for each application
 
+  # Build object skeleton and depend skeleton on libbpf build
+bpf_object(ip_blacklist ip_blacklist.bpf.c)
+add_dependencies(ip_blacklist_skel libbpf-build)
+add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)
 target_include_directories(simplefail2ban
-    PUBLIC external/hyperscan/src
-    PUBLIC external/ip_blacklist/src
-    PUBLIC external/ip_blacklist/libbpf/src
-    PUBLIC src/lib/include
-)
-
-
-target_link_libraries(simplefail2ban 
-    PUBLIC hs
-    PUBLIC libbpf
-    PUBLIC ip_to_str
-    PUBLIC ringbuf
-    PUBLIC atomic_hashtable
-)
-
-
-
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/hyperscan/src
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src                          
+) 
+target_link_libraries(simplefail2ban ip_blacklist_skel ringbuf atomic_hashtable ip_to_str hs) 
