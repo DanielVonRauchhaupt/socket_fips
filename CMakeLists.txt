@@ -33,7 +33,7 @@ find_package(BpfObject REQUIRED)
 
   # Build object skeleton and depend skeleton on libbpf build
 bpf_object(ip_blacklist ip_blacklist.bpf.c)
-add_dependencies(ip_blacklist_skel libbpf-build)
+add_dependencies(ip_blacklist_skel libbpf-build bpftool)
 add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)
 target_include_directories(simplefail2ban
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/hyperscan/src
