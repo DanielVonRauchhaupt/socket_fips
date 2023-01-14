@@ -7,8 +7,6 @@
 #include <ip_blacklist.skel.h>
 #include <blacklist_common.h>
 
-
-
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
 	{"add",		no_argument,		NULL, 'a' },

@@ -1,3 +1,5 @@
+#define _GNU_SOURCE 1
+
 #include <stdio.h> 
 #include <stdlib.h> 
 #include <time.h>
@@ -17,10 +19,13 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <asm-generic/socket.h>
+#include <signal.h>
 
+
+// Local includes
 #include <ip_to_str.h>
 #include <ringbuf.h>
-#include <atomic_hashtable.h>
+#include <ip_hashtable.h>
 
 #define RETURN_SUC 0
 #define RETURN_FAIL 1
@@ -50,43 +55,38 @@
 #define DEFAULT_PORT 8080
 #define FALLBACK_PORT 8083
 #define DEFAULT_LOG "test.log"//"/mnt/scratch/PR/udpsvr.log"
-#define IPV4_ADDRESS "10.3.10.131"
+#define IPV4_ADDRESS "127.0.1.1" //"10.3.10.131"
 #define IPV6_ADDRESS "2001:db8::1" 
 
-// Global Variables
+#define RATE_LIMIT 500
+#define INTERVAL 100 * NANOSECONDS_PER_MILLISECOND
+#define NANOSECONDS_PER_MILLISECOND 1000000
+
+// Global Variables1
 static char global_datetime_buf[DATE_SIZE];
 static volatile sig_atomic_t server_running = true;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_rwlock_t datebuf_lock = PTHREAD_RWLOCK_INITIALIZER;
+static struct ip_hashtable_t * ip_htable;
 
+static int logfile_fd = 1;
 
-static pthread_mutex_t buffer_lock = PTHREAD_MUTEX_INITIALIZER;
-
-static FILE * logfile_fd;
-
-
-struct sock_thread_arg_t {
-    int sock_fd;
+struct sock_targ_t {
     int domain;
     in_port_t port;
-    time_t time;
-    struct ringbuf_t rbuf; 
     int return_code;
 };
 
-struct time_thread_arg_t {
-    int interval;
-    int return_code;
-};
-
-struct sig_thread_arg_t {
+struct util_targ_t {
+    size_t interval;
     int return_code;
 };
 
 void info_msg(const char* msg){
-    pthread_mutex_lock(&stderr_lock);
+    pthread_mutex_lock(&stdout_lock);
     fprintf(stdout,"%s\n",msg);
-    pthread_mutex_unlock(&stderr_lock);
+    pthread_mutex_unlock(&stdout_lock);
 }
 
 void error_msg(const char * msg){
@@ -95,83 +95,103 @@ void error_msg(const char * msg){
     pthread_mutex_unlock(&stderr_lock);
 }
 
-void update_datetime(char * datebuf){
+time_t update_datetime(char * datebuf){
     struct tm tm;
     time_t t = time(NULL);
     localtime_r(&t,&tm);
+    pthread_rwlock_wrlock(&datebuf_lock);
     strftime(datebuf,DATE_SIZE,STRFTIME_FMT,&tm);
+    return t;
 }
 
+void block_signals(bool keep){
+    sigset_t set;
+    sigfillset(&set);
 
-void sigint_handler(int signal){
+    if(keep){
+        sigdelset(&set,SIGINT);
+        sigdelset(&set,SIGTERM);
+    }
+
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+}
+
+void sig_handler(int signal){
     UNUSED(signal);
     server_running = false;
 }
 
-void * time_thread_routine(void * arg){
+void * util_thread_routine(void * arg){
+
+    block_signals(false);
+    time_t new, old;
+    old = time(NULL);
+    struct util_targ_t * targs = (struct util_targ_t *) arg;
 
     while (server_running)
     {
-        //pthread_rwlock_wrlock(&datetime_lock_rw);
-        update_datetime(global_datetime_buf);
-        //pthread_rwlock_unlock(&datetime_lock_rw);
-        nanosleep((struct timespec *)(arg),NULL);
+        pthread_rwlock_wrlock(&datebuf_lock);
+        new = update_datetime(global_datetime_buf);
+        pthread_rwlock_unlock(&datebuf_lock);
+
+        if((new - old) > 1){
+            if(ip_hashtable_reset(ip_htable)){
+                targs->return_code = RETURN_FAIL;
+                error_msg("Error while resetting ip connection cache");
+            }
+        }
+
+        nanosleep((struct timespec *)(targs->interval),NULL);
     }
 
-    
-
-    return NULL;
+    targs->return_code = RETURN_SUC;
+    return &targs->return_code;
 }
 
-
-int log_packet_info_ipv4(int logfile_fd, char * log_str_buf, char * addr,char payload){
-    memset(log_str_buf,BLANK,LOG_BUF_SIZE_IPV4-1);
-    //pthread_rwlock_rdlock(&datetime_lock_rw);
+int log_packet_info(int logfile_fd, int domain, char * log_str_buf, void * addr,char payload){
+    int logbufsize = LOG_BUF_SIZE_IPV4, addrsize = ADDR_SIZE_IPV4;
+    int addrlen;  
+    pthread_rwlock_rdlock(&datebuf_lock);
     memcpy(log_str_buf,global_datetime_buf,DATE_SIZE-1);
-    //pthread_rwlock_rdlock(&datetime_lock_rw);
-    memcpy(log_str_buf+DATE_SIZE,addr,ADDR_SIZE_IPV4-1);
-    memcpy(log_str_buf+DATE_SIZE+ADDR_SIZE_IPV4,&payload,1);
-
-    if(write(logfile_fd,log_str_buf,LOG_BUF_SIZE_IPV4) < 0){
-        return RETURN_FAIL;
-    }
-
-    return RETURN_SUC;
-}
-
-int log_packet_info_ipv6(int logfile_fd, char * log_str_buf, char * addr,char payload){
-    memset(log_str_buf,BLANK,LOG_BUF_SIZE_IPV6-1);
-    //pthread_rwlock_rdlock(&datetime_lock_rw);
-    memcpy(log_str_buf,global_datetime_buf,DATE_SIZE-1);
-    //pthread_rwlock_rdlock(&datetime_lock_rw);
-    memcpy(log_str_buf+DATE_SIZE,addr,ADDR_SIZE_IPV6-1);
-    memcpy(log_str_buf+DATE_SIZE+ADDR_SIZE_IPV6,&payload,1);
-
-    if(write(logfile_fd,log_str_buf,LOG_BUF_SIZE_IPV6) < 0){
-        return RETURN_FAIL;
-    }
-
-    return RETURN_SUC;
-}
-
-int bind_socket(int sockfd, struct sockaddr * sockaddr_ptr, in_port_t port, int domain){
-    socklen_t len;
-    in_port_t * port_ptr;
-    in_port_t ports[] = {port,htons(DEFAULT_PORT),htons(FALLBACK_PORT)};
-    size_t i = (port >= htons(1024) && port != htons(DEFAULT_PORT)) ? 0 : 1;
-
-    if(domain == AF_INET){
-        len = sizeof(struct sockaddr_in);
-        port_ptr = &((struct sockaddr_in *)(sockaddr_ptr))->sin_port;
+    pthread_rwlock_rdlock(&datebuf_lock);
+    log_str_buf[DATE_SIZE-1] = BLANK;
+    if (domain == AF_INET6){
+        logbufsize = LOG_BUF_SIZE_IPV6;
+        addrsize = ADDR_SIZE_IPV6;
+        addrlen = ipv6_to_str(addr,(void *)(log_str_buf + DATE_SIZE));
     } else {
-        len = sizeof(struct sockaddr_in6);
-        port_ptr = &((struct sockaddr_in6 *)(sockaddr_ptr))->sin6_port;
+        addrlen = ipv4_to_str(addr,(void *)(log_str_buf + DATE_SIZE));
     }
-    
+    memcpy(log_str_buf+DATE_SIZE,addr,ADDR_SIZE_IPV4-1);
+    log_str_buf[DATE_SIZE+addrsize-1] = BLANK;
+    log_str_buf[DATE_SIZE+addrsize] = payload;
+    log_str_buf[DATE_SIZE+addrsize+1] = NEWLINE_CHAR;
+
+    if(write(logfile_fd,log_str_buf,logbufsize+(addrlen-addrsize+2)) < 0){
+        return RETURN_FAIL;
+    }
+
+    return RETURN_SUC;
+}
+
+int bind_socket(int sockfd, struct sockaddr * sockaddr, in_port_t port, int domain){
+    socklen_t len = (domain == AF_INET6) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+    in_port_t ports[] = {port,DEFAULT_PORT,FALLBACK_PORT};
+    uint8_t i = (port >= 1024 && port != DEFAULT_PORT) ? 0 : 1;
+
     for(; i < sizeof(ports)/sizeof(in_port_t);i++){
-        *port_ptr = ports[i];
-        if(bind(sockfd,sockaddr_ptr,len) < 0 ){
-            fprintf(stderr,"Could not bind at port: %d. %s\n",ntohs(*port_ptr),strerror(errno));
+        
+        if(domain == AF_INET){
+            ((struct sockaddr_in *)sockaddr)->sin_port = htons(ports[i]);
+        } else if (domain == AF_INET6) {
+            ((struct sockaddr_in6 *)sockaddr)->sin6_port = htons(ports[i]);
+        } else {
+            error_msg("Invalid domain");
+            return RETURN_FAIL;
+        }
+
+        if(bind(sockfd,sockaddr,len) < 0 ){
+            error_msg("Could not bind to port");
         } else {
             return RETURN_SUC;
         }
@@ -180,60 +200,58 @@ int bind_socket(int sockfd, struct sockaddr * sockaddr_ptr, in_port_t port, int 
     return RETURN_FAIL;
 }
 
-int listen_and_reply_ipv4(int sockfd, struct sockaddr_in * addr){
+int listen_and_reply_ipv4(int sockfd){
 
     __socklen_t len = sizeof(struct sockaddr_in);
-    void * client_addr_ptr = (void *)&(addr->sin_addr);
+    struct sockaddr_in client_addr;
     char msg_buf = 0;
-    char addr_buf[INET_ADDRSTRLEN];
     char log_str_buf[LOG_BUF_SIZE_IPV4];
-    int logfile_fd;
+    uint32_t con_count;
 
-    if((logfile_fd = open(DEFAULT_LOG,O_CREAT,O_APPEND,O_WRONLY)) < 0){
-        error_msg("Failed to open logfile");
-        return RETURN_FAIL;
-    }
-
-    log_str_buf[LOG_BUF_SIZE_IPV4-1] = NEWLINE_CHAR;
+    memset(&client_addr,0,len);
 
     while(server_running){
-        recvfrom(sockfd, &msg_buf, 1,  MSG_WAITALL, client_addr_ptr, &len);
-        inet_ntop(AF_INET,client_addr_ptr,addr_buf,len);      
-        log_packet_info_ipv4(logfile_fd,log_str_buf,addr_buf,(unsigned int)msg_buf);
-        msg_buf += 1;
-        sendto(sockfd, &msg_buf, 1, MSG_CONFIRM, client_addr_ptr, len); 
-    }  
+        recvfrom(sockfd, &msg_buf, 1, MSG_WAITALL,&client_addr, &len); 
 
-    close(logfile_fd);
+        con_count = ip_hashtable_inc_v4(ip_htable,(uint32_t *)&client_addr.sin_addr);
+
+        if((con_count % RATE_LIMIT) == 0){
+            log_packet_info(logfile_fd,AF_INET,log_str_buf,(void*)&client_addr.sin_addr,msg_buf);
+            continue;
+        }
+    
+        msg_buf += 1;
+
+        sendto(sockfd, &msg_buf, 1, MSG_CONFIRM,&client_addr, len); 
+    }  
 
     return RETURN_SUC;
 }
 
-int listen_and_reply_ipv6(int sockfd, struct sockaddr_in * addr){
+int listen_and_reply_ipv6(int sockfd){
 
-    __socklen_t len = sizeof(struct sockaddr_in);
-    void * client_addr_ptr = (void *)&(addr->sin_addr);
+    __socklen_t len = sizeof(struct sockaddr_in6);
+    struct sockaddr_in6 client_addr;
     char msg_buf = 0;
-    char addr_buf[INET6_ADDRSTRLEN];
     char log_str_buf[LOG_BUF_SIZE_IPV6];
-    int logfile_fd;
+    uint32_t con_count;
 
-    if((logfile_fd = open(DEFAULT_LOG,O_CREAT,O_APPEND,O_WRONLY)) < 0){
-        error_msg("Failed to open logfile");
-        return RETURN_FAIL;
-    }
-
-    log_str_buf[LOG_BUF_SIZE_IPV6-1] = NEWLINE_CHAR;
+    memset(&client_addr,0,len);
 
     while(server_running){
-        recvfrom(sockfd, &msg_buf, 1,  MSG_WAITALL, client_addr_ptr, &len);
-        inet_ntop(AF_INET6,client_addr_ptr,addr_buf,len);      
-        log_packet_info_ipv6(logfile_fd,log_str_buf,addr_buf,(unsigned int)msg_buf);
-        msg_buf += 1;
-        sendto(sockfd, &msg_buf, 1, MSG_CONFIRM, client_addr_ptr, len); 
-    }  
+        recvfrom(sockfd, &msg_buf, 1,  MSG_WAITALL,&client_addr, &len);  
 
-    close(logfile_fd);
+        con_count = ip_hashtable_inc_v6(ip_htable,(__uint128_t *)&client_addr.sin6_addr);
+
+        if((con_count % RATE_LIMIT) == 0){
+            log_packet_info(logfile_fd,AF_INET6,log_str_buf,(void*)&client_addr.sin6_addr,msg_buf);
+            continue;
+        }
+    
+        msg_buf += 1;
+
+        sendto(sockfd, &msg_buf, 1, MSG_CONFIRM,&client_addr, len);
+    }  
 
     return RETURN_SUC;
 }
@@ -242,173 +260,132 @@ void * run_socket(void * args){
 
     int sock_fd;
     int opt = 1;
-    struct sock_thread_arg_t * thread_args = (struct sock_thread_arg_t *) args;
-    struct sockaddr server_addr, client_addr;
+    struct sock_targ_t * targs = (struct sock_targ_t *) args;
+    struct sockaddr_storage server_addr;
 
+    block_signals(false);
 
-    if ((sock_fd = socket(thread_args->domain, SOCK_DGRAM, 0)) < 0) { 
+    if ((sock_fd = socket(targs->domain, SOCK_DGRAM, 0)) < 0) { 
         error_msg("Could not open socket"); 
-        thread_args->return_code = RETURN_FAIL;
-        pthread_exit((void*)&thread_args->return_code);
+        targs->return_code = RETURN_FAIL;
+        pthread_exit((void*)&targs->return_code);
     } 
 
     if(setsockopt(sock_fd,SOL_SOCKET,SO_REUSEPORT,(void*)&opt,sizeof(opt))){
         error_msg("Cant set SO_REUSEPORT");
         close(sock_fd);
-        thread_args->return_code = RETURN_FAIL;
-        pthread_exit((void*)&thread_args->return_code);
+        targs->return_code = RETURN_FAIL;
+        pthread_exit((void*)&targs->return_code);
     }
         
     memset(&server_addr, 0, sizeof(server_addr));
-    memset(&client_addr, 0, sizeof(client_addr));
+    server_addr.ss_family = targs->domain;
     
-    if(thread_args->domain == AF_INET){
-        struct sockaddr_in * ipv4_addr_ptr = (struct sockaddr_in *)&server_addr;
-        if(inet_pton(thread_args->domain,IPV4_ADDRESS,(void *) &ipv4_addr_ptr->sin_addr)!=1){
-            ipv4_addr_ptr->sin_addr.s_addr = INADDR_ANY;
+    if(targs->domain == AF_INET){
+        if(inet_pton(AF_INET,IPV4_ADDRESS,(void *)&((struct sockaddr_in *)&server_addr)->sin_addr)!=1){
+            ((struct sockaddr_in *)&server_addr)->sin_addr.s_addr = INADDR_ANY;
         }      
-        ipv4_addr_ptr->sin_port = thread_args->port;
-        ipv4_addr_ptr->sin_family = AF_INET;
     } 
-    else{
-        struct sockaddr_in6 * ipv6_addr_ptr = (struct sockaddr_in6 *)&server_addr;
-        if(inet_pton(thread_args->domain,IPV6_ADDRESS,(void *) &ipv6_addr_ptr->sin6_addr)!=1){
-            ipv6_addr_ptr->sin6_addr = in6addr_any;
+    else if(targs->domain == AF_INET6){
+        if(inet_pton(AF_INET6,IPV6_ADDRESS,(void *)&((struct sockaddr_in6 *)&server_addr)->sin6_addr)!=1){
+            ((struct sockaddr_in6 *)&server_addr)->sin6_addr = in6addr_any;
         }      
-        ipv6_addr_ptr->sin6_port = thread_args->port;
-        ipv6_addr_ptr->sin6_family = AF_INET6;
+    } else {
+        error_msg("Invalid domain");
+        targs->return_code = RETURN_FAIL;
+        pthread_exit((void*)&targs->return_code);
     }
-    
 
-    if((bind_socket(sock_fd,&server_addr,thread_args->port,thread_args->domain) == RETURN_FAIL) ){
+    if((bind_socket(sock_fd,(struct sockaddr *)&server_addr,targs->port,targs->domain) == RETURN_FAIL) ){
         error_msg("Failed to bind socket");
         close(sock_fd);
-        thread_args->return_code = RETURN_FAIL;
-        pthread_exit((void*)&thread_args->return_code);
+        targs->return_code = RETURN_FAIL;
+        pthread_exit((void*)&targs->return_code);
     }
     
-    if(listen_and_reply_ipv4(sock_fd,(struct sockaddr_in *) &client_addr) < 0){
+    if(listen_and_reply_ipv4(sock_fd) < 0){
         error_msg("Listen and reply failed");
         close(sock_fd);
-        thread_args->return_code = RETURN_FAIL;
-        pthread_exit((void*)&thread_args->return_code);
+        targs->return_code = RETURN_FAIL;
+        pthread_exit((void*)&targs->return_code);
     }
 
     close(sock_fd);
-    thread_args->return_code = RETURN_SUC;
+    targs->return_code = RETURN_SUC;
 
-    return &thread_args->return_code;
-
-}
-
-
-void * test_routine(void * arg){
-
-    struct sock_thread_arg_t * t_arg = (struct sock_thread_arg_t *) arg;
-
-    for(int i = 0; i < 1000*1000; i++){
-        if(ringbuf_write(&t_arg->rbuf,LOG_STR_FMT_IPV4,LOG_BUF_SIZE_IPV4-1)==0){
-            ringbuf_write_to_file(&t_arg->rbuf,logfile_fd);
-        }
-    }
-
-    return NULL;
+    return &targs->return_code;
 
 }
-
 
 int main(int argc, char ** argv) { 
 
-    /*
-    in_port_t serv_port = (argc > 1) ? htons((uint16_t)strtol(argv[1],NULL,10)) : htons(DEFAULT_PORT);
+    in_port_t serv_port = (argc > 1) ? (uint16_t)strtol(argv[1],NULL,10) : DEFAULT_PORT;
     
-    signal(SIGINT,sigint_hanlder);
+    block_signals(true);
+    signal(SIGINT,sig_handler);
+    signal(SIGTERM,sig_handler);
 
-    int thread_count = get_nprocs();
+    int thread_count = 1; //get_nprocs();
     pthread_t * threads;
+    struct sock_targ_t * sock_targs;
+    pthread_t util_thread;
+    struct util_targ_t util_arg = {.interval=INTERVAL};
+    struct sock_targ_t main_targ = {.domain=AF_INET,.port=serv_port};
 
-    if((threads = calloc(sizeof(pthread_t),thread_count-1)) == NULL){
+    if((ip_htable = malloc(sizeof(struct ip_hashtable_t))) == NULL || ip_hashtable_init(ip_htable,AF_INET)){
+        error_msg("Initializing ip connection cache failed");
+        exit(EXIT_FAILURE);
+    }
+
+   if((logfile_fd = open(DEFAULT_LOG,OPEN_MODE,OPEN_PERM)) < 0){
+        error_msg("Open failed");
+        exit(EXIT_FAILURE);
+   }
+
+    if((threads = calloc(sizeof(pthread_t),thread_count-1)) == NULL || (sock_targs = calloc(sizeof(struct sock_targ_t),thread_count-1)) == NULL){
         fprintf(stderr,"Calloc Error: %s\n",strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    for(int i = 0; i < thread_count; i++){
-        pthread_create(&threads[i],NULL,run_socket,&serv_port);
+    update_datetime(global_datetime_buf);
+
+    /*
+    if(pthread_create(&util_thread,NULL,util_thread_routine,(void*)&util_arg)){
+        error_msg("Failed to create utility thread");
+        exit(EXIT_FAILURE);
+    }
+    */
+
+    for(int i = 0; i < thread_count-1; i++){
+        memcpy((void*)&sock_targs[i],&main_targ,sizeof(struct sock_targ_t));
+        if(pthread_create(&threads[i],NULL,run_socket,(void*)&sock_targs[i])){
+            error_msg("Failed to create listener thread");
+        }
     }
 
-   run_socket(&serv_port);
+   run_socket((void *)&main_targ);
 
    for(int i = 0; i < thread_count; i++){
         pthread_join(threads[i],NULL);
    }
 
+   /* 
+   pthread_join(util_thread,NULL);
+   */
+
    free(threads);
-    */
+   close(logfile_fd);
 
-   /*
-   int fd = open(DEFAULT_LOG,OPEN_MODE,OPEN_PERM);
+   struct ip_hashtable_stats_t stats;
 
-   if(fd < 0){
-        error_msg("Open failed");
-        exit(EXIT_FAILURE);
-   }
-
-   char logstrbuf[LOG_BUF_SIZE_IPV4];
-
-   memset(logstrbuf,32,LOG_BUF_SIZE_IPV4-1);
-
-   logstrbuf[LOG_BUF_SIZE_IPV4-1]='\n';
-
-   memset(global_datetime_buf,0,DATE_SIZE);
-
-   update_datetime(global_datetime_buf);
-
-   char ip_buf[INET_ADDRSTRLEN+2];
-
-   ip_buf[INET6_ADDRSTRLEN+1] = (char) 10;
-
-   ip_buf[INET6_ADDRSTRLEN] = (char) 116;
-
-   memset(ip_buf,32,INET6_ADDRSTRLEN);
-
-   struct sockaddr_in6 ip_addr;
-
-   inet_pton(AF_INET6,IPV6_ADDRESS,(void*)&ip_addr.sin6_addr);
-
-   int offset = ipv6_to_str((void *) &ip_addr.sin6_addr,ip_buf);
-
-    write(1,ip_buf,offset);
-    write(1,"\n",1);
-    */
-    /*
-   if(log_packet_info_ipv4(fd,logstrbuf,ip_buf,'A')){
-        close(fd);
-        error_msg("log packet info failed");
-        exit(EXIT_FAILURE);
-   }
-    */
-   //close(fd);
-
-    logfile_fd = fopen(DEFAULT_LOG,"a");
-
-    pthread_t pids[7];
-    struct sock_thread_arg_t args[8];
-
-   clock_t t;
-    t = clock();
-
-    ringbuf_init(&args[0].rbuf,(unsigned int)((LOG_BUF_SIZE_IPV4-1)*100));
-
-    for(int i = 0; i < 8; i++){
-        test_routine((void*)&args[0]);
+   if(ip_hashtable_gather_stats(ip_htable,&stats)){
+        error_msg("Error retreiving ip connection cache stats");
+    } else {
+        printf("Number of Clients serviced : %d, Total Connections : %ld\n",stats.client_count,stats.connection_count);
     }
+
+
+   ip_hashtable_destroy(ip_htable);
     
-    t = clock() - t;
-    double time_taken = ((double)t)/CLOCKS_PER_SEC;
-
-    printf("Time taken: %f\n",time_taken);
-
-    fclose(logfile_fd);
-
    return EXIT_SUCCESS; 
 }

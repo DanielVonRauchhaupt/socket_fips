@@ -155,7 +155,7 @@ endif()
 
 # Public macro
 macro(bpf_object name input)
-  set(BPF_C_FILE ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/${input})
+  set(BPF_C_FILE ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/${input})
   set(BPF_O_FILE ${CMAKE_CURRENT_BINARY_DIR}/${name}.bpf.o)
   set(BPF_SKEL_FILE ${CMAKE_CURRENT_BINARY_DIR}/${name}.skel.h)
   set(OUTPUT_TARGET ${name}_skel)
