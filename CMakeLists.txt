@@ -14,7 +14,7 @@ add_executable(udp_server src/programs/udp_server.c)
 target_compile_options(udp_server PRIVATE -Wall -Wextra -Wpedantic)
 
 target_include_directories(udp_server
-    PUBLIC src/lib/include
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
 )
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -36,6 +36,10 @@ set(LIBBPF_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/external/libbpf/libbpf.a)
 find_package(BpfObject REQUIRED)
 
 # Create an executable for each application
+find_library(hyperscan
+    NAMES hs
+    HINT "/usr/shared/hs"
+    )
 
   # Build object skeleton and depend skeleton on libbpf build
 bpf_object(ip_blacklist ip_blacklist.bpf.c)
@@ -50,7 +54,8 @@ target_compile_options(simplefail2ban PRIVATE -Wall -Wextra -Wpedantic)
 
 add_dependencies(simplefail2ban libbpf-build)
 target_include_directories(simplefail2ban
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/hyperscan/src
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src                       
+    #PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/hyperscan/src
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src      
+    PUBLIC /usr/include/hs              
 ) 
 target_link_libraries(simplefail2ban ip_blacklist_skel ringbuf ip_hashtable ip_to_str hs blacklist_common) 

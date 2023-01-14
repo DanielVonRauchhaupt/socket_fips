@@ -1,3 +1,4 @@
+#define _GNU_SOURCE 1
 #include "include/blacklist_common.h"
 
 uint64_t gettime(void)
