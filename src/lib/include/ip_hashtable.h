@@ -68,13 +68,4 @@ int8_t ip_hashtable_destroy(struct ip_hashtable_t * htable);
 */
 int8_t ip_hashtable_gather_stats(struct ip_hashtable_t * htable, struct ip_hashtable_stats_t * stats);
 
-/*
-    Helper functions: Not meant to be called outside the library
-*/
-void _free_hbins(struct ip_hashtable_t * htable,uint32_t start,uint32_t end);
-
-void _destroy_hbin(struct hashbin_t * hbin);
-
-uint8_t _init_hbin(struct hashbin_t * hbin);
-
 #endif

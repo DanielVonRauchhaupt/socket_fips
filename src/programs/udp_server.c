@@ -58,8 +58,8 @@
 #define IPV4_ADDRESS "127.0.1.1" //"10.3.10.131"
 #define IPV6_ADDRESS "2001:db8::1" 
 
-#define RATE_LIMIT 500
-#define INTERVAL 100 * NANOSECONDS_PER_MILLISECOND
+#define RATE_LIMIT 1
+#define INTERVAL 500 * NANOSECONDS_PER_MILLISECOND
 #define NANOSECONDS_PER_MILLISECOND 1000000
 
 // Global Variables1
@@ -68,7 +68,7 @@ static volatile sig_atomic_t server_running = true;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_rwlock_t datebuf_lock = PTHREAD_RWLOCK_INITIALIZER;
-static struct ip_hashtable_t * ip_htable;
+static struct ip_hashtable_t ip_htable;
 
 static int logfile_fd = 1;
 
@@ -99,8 +99,12 @@ time_t update_datetime(char * datebuf){
     struct tm tm;
     time_t t = time(NULL);
     localtime_r(&t,&tm);
-    pthread_rwlock_wrlock(&datebuf_lock);
+    if(pthread_rwlock_wrlock(&datebuf_lock)){
+        pthread_rwlock_unlock(&datebuf_lock);
+        return -1;
+    }
     strftime(datebuf,DATE_SIZE,STRFTIME_FMT,&tm);
+    pthread_rwlock_unlock(&datebuf_lock);
     return t;
 }
 
@@ -121,27 +125,48 @@ void sig_handler(int signal){
     server_running = false;
 }
 
+void * signal_thread_routine(void * arg){
+    UNUSED(arg);
+    block_signals(true);
+    sigset_t set;
+    int sig;
+
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    sigaddset(&set, SIGQUIT);
+
+    sigprocmask(SIG_BLOCK, &set, NULL);
+
+    sigwait(&set, &sig);
+
+    server_running = false;
+
+    info_msg("Server shutting down");
+
+
+    return NULL;
+}
+
 void * util_thread_routine(void * arg){
 
     block_signals(false);
     time_t new, old;
     old = time(NULL);
     struct util_targ_t * targs = (struct util_targ_t *) arg;
+    struct timespec ts = {.tv_nsec=targs->interval};
 
     while (server_running)
     {
-        pthread_rwlock_wrlock(&datebuf_lock);
         new = update_datetime(global_datetime_buf);
-        pthread_rwlock_unlock(&datebuf_lock);
 
         if((new - old) > 1){
-            if(ip_hashtable_reset(ip_htable)){
+            if(ip_hashtable_reset(&ip_htable)==_IP_HASHTABLE_FAIL_){
                 targs->return_code = RETURN_FAIL;
                 error_msg("Error while resetting ip connection cache");
             }
         }
+        nanosleep(&ts,NULL);
 
-        nanosleep((struct timespec *)(targs->interval),NULL);
     }
 
     targs->return_code = RETURN_SUC;
@@ -153,7 +178,7 @@ int log_packet_info(int logfile_fd, int domain, char * log_str_buf, void * addr,
     int addrlen;  
     pthread_rwlock_rdlock(&datebuf_lock);
     memcpy(log_str_buf,global_datetime_buf,DATE_SIZE-1);
-    pthread_rwlock_rdlock(&datebuf_lock);
+    pthread_rwlock_unlock(&datebuf_lock);
     log_str_buf[DATE_SIZE-1] = BLANK;
     if (domain == AF_INET6){
         logbufsize = LOG_BUF_SIZE_IPV6;
@@ -162,12 +187,11 @@ int log_packet_info(int logfile_fd, int domain, char * log_str_buf, void * addr,
     } else {
         addrlen = ipv4_to_str(addr,(void *)(log_str_buf + DATE_SIZE));
     }
-    memcpy(log_str_buf+DATE_SIZE,addr,ADDR_SIZE_IPV4-1);
-    log_str_buf[DATE_SIZE+addrsize-1] = BLANK;
-    log_str_buf[DATE_SIZE+addrsize] = payload;
-    log_str_buf[DATE_SIZE+addrsize+1] = NEWLINE_CHAR;
+    log_str_buf[DATE_SIZE+addrlen] = BLANK;
+    log_str_buf[DATE_SIZE+addrlen+1] = payload;
+    log_str_buf[DATE_SIZE+addrlen+2] = NEWLINE_CHAR;
 
-    if(write(logfile_fd,log_str_buf,logbufsize+(addrlen-addrsize+2)) < 0){
+    if(write(logfile_fd,log_str_buf,logbufsize+(addrlen-addrsize)) < 0){
         return RETURN_FAIL;
     }
 
@@ -213,7 +237,7 @@ int listen_and_reply_ipv4(int sockfd){
     while(server_running){
         recvfrom(sockfd, &msg_buf, 1, MSG_WAITALL,&client_addr, &len); 
 
-        con_count = ip_hashtable_inc_v4(ip_htable,(uint32_t *)&client_addr.sin_addr);
+        con_count = ip_hashtable_inc_v4(&ip_htable,(uint32_t *)&client_addr.sin_addr);
 
         if((con_count % RATE_LIMIT) == 0){
             log_packet_info(logfile_fd,AF_INET,log_str_buf,(void*)&client_addr.sin_addr,msg_buf);
@@ -241,7 +265,7 @@ int listen_and_reply_ipv6(int sockfd){
     while(server_running){
         recvfrom(sockfd, &msg_buf, 1,  MSG_WAITALL,&client_addr, &len);  
 
-        con_count = ip_hashtable_inc_v6(ip_htable,(__uint128_t *)&client_addr.sin6_addr);
+        con_count = ip_hashtable_inc_v6(&ip_htable,(__uint128_t *)&client_addr.sin6_addr);
 
         if((con_count % RATE_LIMIT) == 0){
             log_packet_info(logfile_fd,AF_INET6,log_str_buf,(void*)&client_addr.sin6_addr,msg_buf);
@@ -263,7 +287,9 @@ void * run_socket(void * args){
     struct sock_targ_t * targs = (struct sock_targ_t *) args;
     struct sockaddr_storage server_addr;
 
-    block_signals(false);
+
+
+    //block_signals(false);
 
     if ((sock_fd = socket(targs->domain, SOCK_DGRAM, 0)) < 0) { 
         error_msg("Could not open socket"); 
@@ -321,18 +347,14 @@ int main(int argc, char ** argv) {
 
     in_port_t serv_port = (argc > 1) ? (uint16_t)strtol(argv[1],NULL,10) : DEFAULT_PORT;
     
-    block_signals(true);
-    signal(SIGINT,sig_handler);
-    signal(SIGTERM,sig_handler);
-
-    int thread_count = 1; //get_nprocs();
+    int thread_count = get_nprocs();
     pthread_t * threads;
     struct sock_targ_t * sock_targs;
     pthread_t util_thread;
-    struct util_targ_t util_arg = {.interval=INTERVAL};
+    struct util_targ_t util_arg = {.interval=(size_t)INTERVAL};
     struct sock_targ_t main_targ = {.domain=AF_INET,.port=serv_port};
 
-    if((ip_htable = malloc(sizeof(struct ip_hashtable_t))) == NULL || ip_hashtable_init(ip_htable,AF_INET)){
+    if(ip_hashtable_init(&ip_htable,AF_INET)){
         error_msg("Initializing ip connection cache failed");
         exit(EXIT_FAILURE);
     }
@@ -344,17 +366,17 @@ int main(int argc, char ** argv) {
 
     if((threads = calloc(sizeof(pthread_t),thread_count-1)) == NULL || (sock_targs = calloc(sizeof(struct sock_targ_t),thread_count-1)) == NULL){
         fprintf(stderr,"Calloc Error: %s\n",strerror(errno));
+        close(logfile_fd);
         exit(EXIT_FAILURE);
     }
 
     update_datetime(global_datetime_buf);
 
-    /*
+    
     if(pthread_create(&util_thread,NULL,util_thread_routine,(void*)&util_arg)){
         error_msg("Failed to create utility thread");
         exit(EXIT_FAILURE);
     }
-    */
 
     for(int i = 0; i < thread_count-1; i++){
         memcpy((void*)&sock_targs[i],&main_targ,sizeof(struct sock_targ_t));
@@ -369,23 +391,21 @@ int main(int argc, char ** argv) {
         pthread_join(threads[i],NULL);
    }
 
-   /* 
+
    pthread_join(util_thread,NULL);
-   */
 
    free(threads);
    close(logfile_fd);
 
    struct ip_hashtable_stats_t stats;
 
-   if(ip_hashtable_gather_stats(ip_htable,&stats)){
+   if(ip_hashtable_gather_stats(&ip_htable,&stats)){
         error_msg("Error retreiving ip connection cache stats");
     } else {
         printf("Number of Clients serviced : %d, Total Connections : %ld\n",stats.client_count,stats.connection_count);
     }
 
-
-   ip_hashtable_destroy(ip_htable);
+   ip_hashtable_destroy(&ip_htable);
     
    return EXIT_SUCCESS; 
 }

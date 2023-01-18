@@ -3,9 +3,13 @@
 #include <getopt.h>
 
 #include <hs.h>
+#include <hs/hs.h>
 #include <libbpf.h>
 #include <ip_blacklist.skel.h>
 #include <blacklist_common.h>
+#include <ini.h>
+
+#include "jail.h"
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
@@ -20,44 +24,50 @@ static const struct option long_options[] = {
 	{0, 0, NULL,  0 }
 };
 
-#define HOST "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?:(?::[0-9a-fA-F]{1,4}){1,6})|:(?:(?::[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(?::[0-9a-fA-F]{0,4}){0,4}%%[0-9a-zA-Z]{1,}|::(?:ffff(?::0{1,4}){0,1}:){0,1}(?:(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])|(?:[0-9a-fA-F]{1,4}:){1,4}:(?:(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9]))"
+#define FAILREGEX_UDPSVR "^([0-9]{2})-([0-9]{2})-([0-9]{4}) ([0-9]{2}):([0-9]{2}):([0-9]{2}) client (<([^ ]+)>) exceeded request rate limit$"
 
-#define content "14-07-2023 20:48:39 Limiting request rate of client"
 
-static int eventHandler(unsigned int id, unsigned long long from,
-                        unsigned long long to, unsigned int flags, void *ctx) {
-    printf("Match for pattern at offset %llu\n", to);
+
+struct jail_t udp_svr_jail = {.bantime=60};
+
+static int onMatch(unsigned int id, unsigned long long from, unsigned long long to, unsigned int flags, void* ctx) {
+    char* matched_string = (char*)ctx + from;
+    size_t matched_length = to - from;
+    printf("Matched string: %.*s\n", (int)matched_length, matched_string);
     return 0;
 }
 
+#define CONTENT "14-07-2023 20:48:39 client <example.com> exceeded request rate limit"
+
 int main(int argc, char * argv[]){
 
-	hs_database_t * database;
-	hs_compile_error_t * compile_error;
-
-	if(hs_compile(HOST,HS_FLAG_DOTALL,HS_MODE_BLOCK,NULL,&database,&compile_error)!=HS_SUCCESS){
-		fprintf(stderr,"ERROR: Unable to compile pattern \n\n%s\n\n %s\n",HOST,compile_error->message);
-		hs_free_compile_error(compile_error);
-		exit(EXIT_FAILURE);
-	}
+	hs_database_t *database;
+    hs_compile_error_t *compile_err;
+    if (hs_compile(FAILREGEX_UDPSVR, HS_FLAG_DOTALL, HS_MODE_BLOCK, NULL, &database,
+                   &compile_err) != HS_SUCCESS) {
+        fprintf(stderr, "ERROR: Unable to compile pattern \"%s\": %s\n",
+                FAILREGEX_UDPSVR, compile_err->message);
+        hs_free_compile_error(compile_err);
+        return -1;
+    }
 
 	hs_scratch_t *scratch = NULL;
     if (hs_alloc_scratch(database, &scratch) != HS_SUCCESS) {
         fprintf(stderr, "ERROR: Unable to allocate scratch space. Exiting.\n");
         hs_free_database(database);
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
-	if (hs_scan(database, content, sizeof(content), 0, scratch, eventHandler,
-                HOST) != HS_SUCCESS) {
+	if (hs_scan(database, CONTENT, sizeof(CONTENT), 0, scratch, onMatch,
+                "hallo") != HS_SUCCESS) {
         fprintf(stderr, "ERROR: Unable to scan input buffer. Exiting.\n");
         hs_free_scratch(scratch);
         hs_free_database(database);
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
-	hs_free_scratch(scratch);
-    hs_free_database(database);
-    return 0;
 
+
+	hs_free_scratch(scratch);
+	hs_free_database(database);
 }

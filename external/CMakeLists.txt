@@ -35,6 +35,19 @@ ExternalProject_Add(bpftool
   STEP_TARGETS build
 )
 
+add_library(inih STATIC ${CMAKE_CURRENT_SOURCE_DIR}/inih/ini.c)
+
+add_library(llist STATIC
+   ${CMAKE_CURRENT_SOURCE_DIR}/list/src/list.c
+   ${CMAKE_CURRENT_SOURCE_DIR}/list/src/list_iterator.c
+   ${CMAKE_CURRENT_SOURCE_DIR}/list/src/list_node.c
+)
+
+target_include_directories(llist PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/list/src/list.h)
+
+target_include_directories(inih PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inih/)
+
+
 #[[
 ExternalProject_Add(hyperscan
   PREFIX hyperscan

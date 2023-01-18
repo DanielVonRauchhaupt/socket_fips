@@ -35,13 +35,7 @@ set(LIBBPF_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/external/libbpf)
 set(LIBBPF_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/external/libbpf/libbpf.a)
 find_package(BpfObject REQUIRED)
 
-# Create an executable for each application
-find_library(hyperscan
-    NAMES hs
-    HINT "/usr/shared/hs"
-    )
-
-  # Build object skeleton and depend skeleton on libbpf build
+# Build object skeleton and depend skeleton on libbpf build
 bpf_object(ip_blacklist ip_blacklist.bpf.c)
 add_dependencies(ip_blacklist_skel libbpf-build bpftool)
 add_library(blacklist_common STATIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/blacklist_common.c)
@@ -53,9 +47,12 @@ add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefai
 target_compile_options(simplefail2ban PRIVATE -Wall -Wextra -Wpedantic)
 
 add_dependencies(simplefail2ban libbpf-build)
+add_dependencies(simplefail2ban inih)
+add_dependencies(simplefail2ban llist)
 target_include_directories(simplefail2ban
     #PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/hyperscan/src
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src      
-    PUBLIC /usr/include/hs              
+    PUBLIC /usr/include/hs          
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/list/src  
 ) 
-target_link_libraries(simplefail2ban ip_blacklist_skel ringbuf ip_hashtable ip_to_str hs blacklist_common) 
+target_link_libraries(simplefail2ban ip_blacklist_skel ringbuf ip_hashtable ip_to_str hs blacklist_common inih llist) 

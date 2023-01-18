@@ -1,5 +1,54 @@
 #include "include/ip_hashtable.h"
 
+
+static void _destroy_hbin(struct hashbin_t * hbin){
+
+    if(hbin->next != NULL){
+        _destroy_hbin(hbin->next);
+    }
+    if(hbin->key != NULL){
+        free(hbin->key);
+    }
+    pthread_mutex_destroy(&hbin->lock);
+    free(hbin);
+}
+
+struct hashbin_t * create_hbin(void){
+
+    struct hashbin_t * hbin;
+    
+    if((hbin = (struct hashbin_t *) calloc(1,sizeof(struct hashbin_t))) == NULL){
+        return NULL;
+    }
+
+    if(pthread_mutex_init(&hbin->lock,NULL)){
+
+        _destroy_hbin(hbin);
+
+        return NULL;
+
+    }
+
+    hbin->counter = 0;
+
+    return hbin;
+
+}
+
+static void _free_hbins(struct ip_hashtable_t * htable,uint32_t start, uint32_t end){
+
+    if(htable == NULL){
+        return;
+    }
+
+    for(;start < end; start++){
+
+        _destroy_hbin(htable->bins[start]);
+
+    }
+
+}
+
 int8_t ip_hashtable_init(struct ip_hashtable_t * htable,int domain){
 
     if(htable == NULL){
@@ -8,24 +57,12 @@ int8_t ip_hashtable_init(struct ip_hashtable_t * htable,int domain){
 
     for(uint32_t i = 0; i < NUM_BINS; i++){
 
-        struct hashbin_t * hbin = htable->bins[i];
-
-        if((hbin = (struct hashbin_t *) malloc(sizeof(struct hashbin_t))) == NULL){
+        if((htable->bins[i] = create_hbin()) == NULL){
             
             _free_hbins(htable,0,i);
 
             return _IP_HASHTABLE_FAIL_;
         }
-
-        if(pthread_mutex_init(&hbin->lock,NULL)){
-
-            _free_hbins(htable,0,i+1);
-
-            return _IP_HASHTABLE_FAIL_;
-
-        }
-
-        hbin->counter = 0;
 
     }
 
@@ -41,7 +78,7 @@ uint32_t ip_hashtable_inc_v4(struct ip_hashtable_t * htable, uint32_t * key){
         return 0;
     }
 
-    struct hashbin_t * hbin = htable->bins[*key & 0x0000FFFF];
+    struct hashbin_t * hbin = htable->bins[*key >> 16];
 
     if(hbin == NULL){
         return 0;
@@ -52,7 +89,7 @@ uint32_t ip_hashtable_inc_v4(struct ip_hashtable_t * htable, uint32_t * key){
     }
 
     if(hbin->key == NULL){
-        if((hbin->key = malloc(sizeof(uint32_t))) == NULL){
+        if((hbin->key = calloc(1,sizeof(uint32_t))) == NULL){
             pthread_mutex_unlock(&hbin->lock);
             return 0;
         }
@@ -82,7 +119,7 @@ uint32_t ip_hashtable_inc_v4(struct ip_hashtable_t * htable, uint32_t * key){
         }
 
         if(!match){
-            if(_init_hbin(nextbin)){
+            if((nextbin = create_hbin())==NULL){
                 pthread_mutex_unlock(&hbin->lock);
                 return 0;
             }
@@ -112,7 +149,7 @@ uint32_t ip_hashtable_inc_v6(struct ip_hashtable_t * htable, __uint128_t * key){
         return 0;
     }
 
-    struct hashbin_t * hbin = htable->bins[*key & 0x00000000000000000000FFFF];
+    struct hashbin_t * hbin = htable->bins[*key >> 112];
 
     if(hbin == NULL){
         return 0;
@@ -153,7 +190,7 @@ uint32_t ip_hashtable_inc_v6(struct ip_hashtable_t * htable, __uint128_t * key){
         }
 
         if(!match){
-            if(_init_hbin(nextbin)){
+            if((nextbin = create_hbin())==NULL){
                 pthread_mutex_unlock(&hbin->lock);
                 return 0;
             }
@@ -259,52 +296,4 @@ int8_t ip_hashtable_destroy(struct ip_hashtable_t * htable){
     _free_hbins(htable,0,NUM_BINS);
 
     return _IP_HASHTABLE_SUCC_;
-}
-
-
-
-uint8_t _init_hbin(struct hashbin_t * hbin){
-    
-    if((hbin = (struct hashbin_t *) malloc(sizeof(struct hashbin_t))) == NULL){
-        return _IP_HASHTABLE_FAIL_;
-    }
-
-    if(pthread_mutex_init(&hbin->lock,NULL)){
-
-        _destroy_hbin(hbin);
-
-        return _IP_HASHTABLE_FAIL_;
-
-    }
-
-    hbin->counter = 0;
-
-    return _IP_HASHTABLE_SUCC_;
-
-}
-
-void _free_hbins(struct ip_hashtable_t * htable,uint32_t start, uint32_t end){
-
-    if(htable == NULL){
-        return;
-    }
-
-    for(;start < end; start++){
-
-        _destroy_hbin(htable->bins[start]);
-
-    }
-
-}
-
-void _destroy_hbin(struct hashbin_t * hbin){
-
-    if(hbin->next != NULL){
-        _destroy_hbin(hbin->next);
-    }
-    if(hbin->key != NULL){
-        free(hbin->key);
-    }
-    pthread_mutex_destroy(&hbin->lock);
-    free(hbin);
 }
