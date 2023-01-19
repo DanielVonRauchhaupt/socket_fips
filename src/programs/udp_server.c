@@ -37,6 +37,7 @@
 #define COLON_CHAR (char) 58
 #define BLANK 32
 
+#define INVALID_PAYLOAD 'B'
 
 #define DATE_FMT "YYYY-MM-DD HH:MM:SS"
 #define STRFTIME_FMT "%Y-%m-%d %H:%M:%S"
@@ -44,9 +45,9 @@
 #define ADDR_SIZE_IPV4 sizeof("DDD.DDD.DDD.DDD")
 #define ADDR_SIZE_IPV6 sizeof("DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD")
 
-#define LOG_STR_FMT_IPV4 "YYYY-MM-DD HH:MM:SS DDD.DDD.DDD.DDD C\n"
+#define LOG_STR_FMT_IPV4 "YYYY-MM-DD HH:MM:SS client DDD.DDD.DDD.DDD exeeded request rate limit\n"
 #define LOG_BUF_SIZE_IPV4 sizeof(LOG_STR_FMT_IPV4)
-#define LOG_STR_FMT_IPV6 "YYYY-MM-DD HH:MM:SS DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD C\n"
+#define LOG_STR_FMT_IPV6 "YYYY-MM-DD HH:MM:SS client DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD exeeded request rate limit\n"
 #define LOG_BUF_SIZE_IPV6 sizeof(LOG_STR_FMT_IPV6)
 
 #define OPEN_MODE O_WRONLY | O_CREAT | O_APPEND 
@@ -54,11 +55,11 @@
 
 #define DEFAULT_PORT 8080
 #define FALLBACK_PORT 8083
-#define DEFAULT_LOG "test.log"//"/mnt/scratch/PR/udpsvr.log"
-#define IPV4_ADDRESS "127.0.1.1" //"10.3.10.131"
+#define DEFAULT_LOG "/mnt/scratch/PR/logs/udpsvr.log"
+#define IPV4_ADDRESS "10.3.10.131"
 #define IPV6_ADDRESS "2001:db8::1" 
 
-#define RATE_LIMIT 1
+#define RATE_LIMIT 500
 #define INTERVAL 500 * NANOSECONDS_PER_MILLISECOND
 #define NANOSECONDS_PER_MILLISECOND 1000000
 
@@ -143,7 +144,6 @@ void * signal_thread_routine(void * arg){
 
     info_msg("Server shutting down");
 
-
     return NULL;
 }
 
@@ -173,23 +173,43 @@ void * util_thread_routine(void * arg){
     return &targs->return_code;
 }
 
-int log_packet_info(int logfile_fd, int domain, char * log_str_buf, void * addr,char payload){
+int log_warn_short(int logfile_fd, int domain, char * log_str_buf, void * addr){
+    int logbufsize = ADDR_SIZE_IPV4;
+    int addrlen;  
+    if (domain == AF_INET6){
+        logbufsize = ADDR_SIZE_IPV4;
+        addrlen = ipv6_to_str(addr,(void *)(log_str_buf));
+    } else {
+        addrlen = ipv4_to_str(addr,(void *)(log_str_buf));
+    }
+    log_str_buf[addrlen] = NEWLINE_CHAR;
+
+    if(write(logfile_fd,log_str_buf,logbufsize+(addrlen-logbufsize)) < 0){
+        return RETURN_FAIL;
+    }
+
+    return RETURN_SUC;
+
+}
+
+int log_warn_long(int logfile_fd, int domain, char * log_str_buf, void * addr){
+
     int logbufsize = LOG_BUF_SIZE_IPV4, addrsize = ADDR_SIZE_IPV4;
     int addrlen;  
     pthread_rwlock_rdlock(&datebuf_lock);
     memcpy(log_str_buf,global_datetime_buf,DATE_SIZE-1);
     pthread_rwlock_unlock(&datebuf_lock);
     log_str_buf[DATE_SIZE-1] = BLANK;
+    memcpy(log_str_buf+DATE_SIZE,"client ",sizeof("client ")-1);
     if (domain == AF_INET6){
         logbufsize = LOG_BUF_SIZE_IPV6;
         addrsize = ADDR_SIZE_IPV6;
-        addrlen = ipv6_to_str(addr,(void *)(log_str_buf + DATE_SIZE));
+        addrlen = ipv6_to_str(addr,(void *)(log_str_buf + DATE_SIZE + sizeof("client")));
     } else {
-        addrlen = ipv4_to_str(addr,(void *)(log_str_buf + DATE_SIZE));
+        addrlen = ipv4_to_str(addr,(void *)(log_str_buf + DATE_SIZE + sizeof("client")));
     }
-    log_str_buf[DATE_SIZE+addrlen] = BLANK;
-    log_str_buf[DATE_SIZE+addrlen+1] = payload;
-    log_str_buf[DATE_SIZE+addrlen+2] = NEWLINE_CHAR;
+    log_str_buf[DATE_SIZE+sizeof("client")+addrlen] = BLANK;
+    memcpy(log_str_buf+DATE_SIZE+sizeof("client")+addrlen+1,"exeeded request rate limit\n",sizeof("exeeded request rate limit\n"));
 
     if(write(logfile_fd,log_str_buf,logbufsize+(addrlen-addrsize)) < 0){
         return RETURN_FAIL;
@@ -239,11 +259,11 @@ int listen_and_reply_ipv4(int sockfd){
 
         con_count = ip_hashtable_inc_v4(&ip_htable,(uint32_t *)&client_addr.sin_addr);
 
-        if((con_count % RATE_LIMIT) == 0){
-            log_packet_info(logfile_fd,AF_INET,log_str_buf,(void*)&client_addr.sin_addr,msg_buf);
+        if(((con_count % RATE_LIMIT) == 0) && (msg_buf == INVALID_PAYLOAD)){
+            log_warn_long(logfile_fd,AF_INET,log_str_buf,(void*)&client_addr.sin_addr);
             continue;
         }
-    
+
         msg_buf += 1;
 
         sendto(sockfd, &msg_buf, 1, MSG_CONFIRM,&client_addr, len); 
@@ -268,7 +288,7 @@ int listen_and_reply_ipv6(int sockfd){
         con_count = ip_hashtable_inc_v6(&ip_htable,(__uint128_t *)&client_addr.sin6_addr);
 
         if((con_count % RATE_LIMIT) == 0){
-            log_packet_info(logfile_fd,AF_INET6,log_str_buf,(void*)&client_addr.sin6_addr,msg_buf);
+            log_warn_long(logfile_fd,AF_INET6,log_str_buf,(void*)&client_addr.sin6_addr);
             continue;
         }
     
