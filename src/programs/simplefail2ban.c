@@ -1,14 +1,15 @@
 
+#define _GNU_SOURCE
 #include <linux/if_link.h>
 #include <getopt.h>
-
+#include <ifaddrs.h>
 #include <hs.h>
 #include <hs/hs.h>
 #include <libbpf.h>
 #include <ip_blacklist.skel.h>
 #include <blacklist_common.h>
 #include <ini.h>
-
+#include <net/if.h>
 #include "jail.h"
 
 static const struct option long_options[] = {
@@ -41,6 +42,26 @@ static int onMatch(unsigned int id, unsigned long long from, unsigned long long 
 
 int main(int argc, char * argv[]){
 
+    struct if_nameindex *if_ni, *i;
+
+    if_ni = if_nameindex();
+    if (if_ni == NULL) {
+        perror("if_nameindex");
+        return 1;
+    }
+
+    for (i = if_ni; !(i->if_index == 0 && i->if_name == NULL); i++) {
+        printf("%u: %s\n", i->if_index, i->if_name);
+    }
+
+    if_freenameindex(if_ni);
+    return 0;
+
+
+
+
+
+    /*
 	hs_database_t *database;
     hs_compile_error_t *compile_err;
     if (hs_compile(FAILREGEX_UDPSVR, HS_FLAG_DOTALL, HS_MODE_BLOCK, NULL, &database,
@@ -70,4 +91,5 @@ int main(int argc, char * argv[]){
 
 	hs_free_scratch(scratch);
 	hs_free_database(database);
+    */
 }

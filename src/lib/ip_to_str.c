@@ -43,7 +43,7 @@ int ipv6_to_str(void * src,void * dst){
 
     int offset = 0;
 
-    for(int i = 0; i < 8; i+=2){
+    for(int i = 0; i < 16; i+=2){
         const char * str = hex_map[(uint8_t)((char *)(src))[i]];
         ((char * )(dst))[offset] = str[0];
         ((char * )(dst))[offset+1] = str[1];
@@ -51,7 +51,7 @@ int ipv6_to_str(void * src,void * dst){
         ((char * )(dst))[offset+2] = str[0];
         ((char * )(dst))[offset+3] = str[1];
 
-        if(i < 6){
+        if(i < 14){
             ((char * )(dst))[offset+4] = (char) 58;
             offset += 5;
         } else {
