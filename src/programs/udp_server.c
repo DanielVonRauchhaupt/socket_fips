@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <netinet/ip6.h>
 #include <sys/sysinfo.h>
+#include <sys/uio.h>
 #include <pthread.h>
 #include <errno.h>
 #include <signal.h>
@@ -30,7 +31,7 @@
 #define RETURN_SUC (0)
 #define RETURN_FAIL (-1)
 
-#define UNUSED(x) (void)(x)
+#define UNUSED(x)(void)(x)
 
 #define NEWLINE_CHAR (char) (10)
 #define BLANK (char) (32)
@@ -39,24 +40,27 @@
 #define DATE_FMT "YYYY-MM-DD HH:MM:SS"
 #define STRFTIME_FMT "%Y-%m-%d %H:%M:%S"
 #define DATE_SIZE (sizeof(DATE_FMT) - 1)
-#define ADDR_SIZE_IPV4 (sizeof("DDD.DDD.DDD.DDD") - 1)
-#define ADDR_SIZE_IPV6 (sizeof("DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD") - 1)
+#define STR_SIZE_IP4 (sizeof("DDD.DDD.DDD.DDD") - 1)
+#define STR_SIZE_IP6 (sizeof("DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD") - 1)
 
-#define LOG_STR_FMT_IPV4 "YYYY-MM-DD HH:MM:SS client DDD.DDD.DDD.DDD exeeded request rate limit\n"
-#define LOG_BUF_SIZE_IPV4 (sizeof(LOG_STR_FMT_IPV4) - 1)
-#define LOG_STR_FMT_IPV6 "YYYY-MM-DD HH:MM:SS client DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD exeeded request rate limit\n" 
-#define LOG_BUF_SIZE_IPV6 (sizeof(LOG_STR_FMT_IPV6) - 1)
+#define LOG_STR_FMT_IP4 "YYYY-MM-DD HH:MM:SS client DDD.DDD.DDD.DDD exeeded request rate limit\n"
+#define LOG_BUF_SIZE_IP4 (sizeof(LOG_STR_FMT_IP4) - 1)
+#define LOG_STR_FMT_IP6 "YYYY-MM-DD HH:MM:SS client DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD exeeded request rate limit\n" 
+#define LOG_BUF_SIZE_IP6 (sizeof(LOG_STR_FMT_IP6) - 1)
 #define HOST_PREFIX " client "
 #define HOST_PREFIX_SIZE (sizeof(HOST_PREFIX)-1)
 #define MSG_STR " exeeded request rate limit\n"
 #define MSG_STR_SIZE (sizeof(MSG_STR)-1)
 
 #define OPEN_MODE O_WRONLY | O_CREAT | O_APPEND 
-#define OPEN_PERM S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH
+#define OPEN_PERM 0644
 
 #define NANOSECONDS_PER_MILLISECOND 1000000
 #define INTERVAL 500 * NANOSECONDS_PER_MILLISECOND
 
+#define RECV_TIMEOUT 100 * NANOSECONDS_PER_MILLISECOND
+#define MAX_MSG 512
+#define MTU_SIZE 1500
 
 // Global Variables
 static char global_datetime_buf[DATE_SIZE+1];
@@ -64,18 +68,26 @@ static volatile sig_atomic_t server_running = true;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_rwlock_t datebuf_lock = PTHREAD_RWLOCK_INITIALIZER;
-static int logfile_fd;
+static int logfilefd;
 
 // Structs
+struct paketbuf_t {
+    struct mmsghdr msgs[MAX_MSG];
+    struct iovec iovecs[MAX_MSG];
+    unsigned char payload_buf[MAX_MSG];
+} __attribute__((aligned(64)));
+
+
 struct socktarg_t {
     int domain;
+    uint8_t cpu;
     in_port_t port;
     uint64_t pkt_in;
     uint64_t pkt_out;
     int return_code;
-};
+} __attribute__((aligned(64)));
 
-struct util_targ_t {
+struct utiltarg_t {
     size_t interval;
     int return_code;
 };
@@ -120,16 +132,23 @@ time_t update_datetime(char * datebuf){
 }
 
 /* Blocks all blockable signals with the option to keep SIGINT and SIGTERM unblocked */
-void block_signals(bool keep){
+int8_t block_signals(bool keep){
     sigset_t set;
-    sigfillset(&set);
-
-    if(keep){
-        sigdelset(&set,SIGINT);
-        sigdelset(&set,SIGTERM);
+    if(sigfillset(&set)){
+        return RETURN_FAIL;
     }
 
-    pthread_sigmask(SIG_BLOCK, &set, NULL);
+    if(keep){
+        if(sigdelset(&set,SIGINT) || sigdelset(&set,SIGTERM)){
+            return RETURN_FAIL;
+        }
+    }
+
+    if(pthread_sigmask(SIG_BLOCK, &set, NULL)){
+        return RETURN_FAIL;
+    }
+
+    return RETURN_SUC;
 }
 
 /* Hander for SIGINT and SIGTERM, sets running global to false */
@@ -146,7 +165,7 @@ void * util_thread_routine(void * arg){
     signal(SIGINT,sig_handler);
     signal(SIGTERM,sig_handler);
 
-    struct util_targ_t * targs = (struct util_targ_t *) arg;
+    struct utiltarg_t * targs = (struct utiltarg_t *) arg;
     struct timespec ts = {.tv_nsec=targs->interval};
 
     while (server_running)
@@ -163,20 +182,20 @@ void * util_thread_routine(void * arg){
     return &targs->return_code;
 }
 
-/* Copies the string form of addr to the log_str_buf */
-uint8_t log_str_short(int domain, char * log_str_buf, void * addr){
+/* Copies the string form of addr to the logstr_buf */
+uint8_t logstr_short(int domain, char * logstr_buf, void * addr){
     int addrlen;  
     if (domain == AF_INET6){
-        addrlen = ipv6_to_str(addr,(void *)(log_str_buf));
+        addrlen = ipv6_to_str(addr,(void *)(logstr_buf));
     } else {
-        addrlen = ipv4_to_str(addr,(void *)(log_str_buf));
+        addrlen = ipv4_to_str(addr,(void *)(logstr_buf));
     }
-    log_str_buf[addrlen] = NEWLINE_CHAR;
+    logstr_buf[addrlen] = NEWLINE_CHAR;
     return addrlen + 1;
 }
 
-/* Writes a logstring to to log_str_addr */
-uint8_t log_str_long(int domain, char * log_str_buf, void * addr){
+/* Writes a logstring to to logstr_addr */
+uint8_t logstr_long(int domain, char * logstr_buf, void * addr){
 
     int logbufsize, max_addrlen, addrlen;
       
@@ -186,7 +205,7 @@ uint8_t log_str_long(int domain, char * log_str_buf, void * addr){
         return 0;
     }
 
-    if(memcpy(log_str_buf,global_datetime_buf,DATE_SIZE) == NULL){
+    if(memcpy(logstr_buf,global_datetime_buf,DATE_SIZE) == NULL){
         pthread_rwlock_unlock(&datebuf_lock);
         return 0;
     }
@@ -195,29 +214,29 @@ uint8_t log_str_long(int domain, char * log_str_buf, void * addr){
         return 0;
     }
 
-    if(memcpy(log_str_buf+DATE_SIZE,HOST_PREFIX,HOST_PREFIX_SIZE) == NULL){
+    if(memcpy(logstr_buf+DATE_SIZE,HOST_PREFIX,HOST_PREFIX_SIZE) == NULL){
         return 0;
     }
 
     switch (domain)
     {
     case AF_INET:
-        logbufsize = LOG_BUF_SIZE_IPV4;
-        max_addrlen = ADDR_SIZE_IPV4;
-        addrlen = ipv4_to_str(addr,(void *)(log_str_buf + DATE_SIZE + HOST_PREFIX_SIZE));
+        logbufsize = LOG_BUF_SIZE_IP4;
+        max_addrlen = STR_SIZE_IP4;
+        addrlen = ipv4_to_str(addr,(void *)(logstr_buf + DATE_SIZE + HOST_PREFIX_SIZE));
         break;
     
     case AF_INET6:
-        logbufsize = LOG_BUF_SIZE_IPV6;
-        max_addrlen = ADDR_SIZE_IPV6;
-        addrlen = ipv6_to_str(addr,(void *)(log_str_buf + DATE_SIZE + HOST_PREFIX_SIZE));
+        logbufsize = LOG_BUF_SIZE_IP6;
+        max_addrlen = STR_SIZE_IP6;
+        addrlen = ipv6_to_str(addr,(void *)(logstr_buf + DATE_SIZE + HOST_PREFIX_SIZE));
         break;
 
     default:
         return 0;
     }
 
-    if(memcpy(log_str_buf+DATE_SIZE+HOST_PREFIX_SIZE+addrlen,MSG_STR,MSG_STR_SIZE) == NULL){
+    if(memcpy(logstr_buf+DATE_SIZE+HOST_PREFIX_SIZE+addrlen,MSG_STR,MSG_STR_SIZE) == NULL){
         return 0;
     }
 
@@ -225,7 +244,7 @@ uint8_t log_str_long(int domain, char * log_str_buf, void * addr){
 }
 
 /* Binds a socket to the provided address and port for a given domain */
-int bind_socket(int sock_fd, struct sockaddr * sockaddr, in_port_t port, int domain){
+int bind_socket(int sockfd, struct sockaddr * sockaddr, in_port_t port, int domain){
 
     socklen_t len;
 
@@ -247,7 +266,7 @@ int bind_socket(int sock_fd, struct sockaddr * sockaddr, in_port_t port, int dom
         return RETURN_FAIL;
     }
 
-    if(bind(sock_fd,sockaddr,len)){
+    if(bind(sockfd,sockaddr,len)){
         return RETURN_FAIL;
     }
 
@@ -255,46 +274,102 @@ int bind_socket(int sock_fd, struct sockaddr * sockaddr, in_port_t port, int dom
 }
 
 /* Listen for ipv4 udp connections. Replies to valid requests and logs invalid requests */
-int listen_and_reply_ipv4(int sock_fd,struct socktarg_t * args){
+int listen_and_reply_ipv4(int sockfd,struct socktarg_t * args){
 
-    socklen_t len = sizeof(struct sockaddr_in);
-    struct sockaddr_in client_addr;
-    char msg_buf = 0;
-    char log_str_buf[LOG_BUF_SIZE_IPV4];
-    uint8_t log_str_len;
+    struct paketbuf_t recvbuf;
+    struct paketbuf_t sendbuf;
+    char logstr_buf[LOG_BUF_SIZE_IP4][MAX_MSG] __attribute__((aligned(64)));
+    struct sockaddr_in recv_ipbuf[MAX_MSG] __attribute__((aligned(64)));
+    struct sockaddr_in send_ipbuf[MAX_MSG] __attribute__((aligned(64)));
+    struct iovec write_iovecs[MAX_MSG] __attribute__((aligned(64)));
+    struct timespec timeout = {.tv_sec=0,.tv_nsec=RECV_TIMEOUT};
+    int retval_rcv, retval_snd, i, send_count = 0, invalid_count;
+    uint8_t logstr_len;
 
-    memset(&client_addr,0,len);
+    if(memset(&recvbuf.msgs,0,sizeof(recvbuf.msgs)) == NULL || memset(&write_iovecs,0,sizeof(write_iovecs)) == NULL || memset(&sendbuf.msgs,0,sizeof(sendbuf.msgs)) == NULL){
+        error_msg("Memset error : errno = %d\n",errno);
+    }
+
+    for(i = 0; i < MAX_MSG; i++){
+        recvbuf.iovecs[i].iov_base = &recvbuf.payload_buf[i];
+        recvbuf.iovecs[i].iov_len = 1;
+        recvbuf.msgs[i].msg_hdr.msg_iov = &recvbuf.iovecs[i];
+        recvbuf.msgs[i].msg_hdr.msg_iovlen = 1;
+        recvbuf.msgs[i].msg_hdr.msg_name = &recv_ipbuf[i];
+        recvbuf.msgs[i].msg_hdr.msg_namelen = sizeof(recv_ipbuf[i]);
+        sendbuf.iovecs[i].iov_base = &sendbuf.payload_buf[i];
+        sendbuf.iovecs[i].iov_len = 1;
+        sendbuf.msgs[i].msg_hdr.msg_iov = &sendbuf.iovecs[i];
+        sendbuf.msgs[i].msg_hdr.msg_iovlen = 1;
+        sendbuf.msgs[i].msg_hdr.msg_name = &send_ipbuf[i];
+        sendbuf.msgs[i].msg_hdr.msg_namelen = sizeof(send_ipbuf[i]);
+        write_iovecs[i].iov_base = logstr_buf[i];
+        write_iovecs[i].iov_len = LOG_BUF_SIZE_IP4;
+    }
 
     while(server_running){
 
-        recvfrom(sock_fd, &msg_buf, 1, MSG_WAITALL,&client_addr, &len); 
+        retval_rcv = recvmmsg(sockfd,recvbuf.msgs,MAX_MSG,MSG_WAITFORONE,&timeout);
 
-        args->pkt_in++;
-
-        if(msg_buf == INVALID_PAYLOAD){
-            if(LOG_SHORT){
-                if((log_str_len = log_str_short(AF_INET,log_str_buf,(void*)&client_addr.sin_addr)) == 0){
-                    error_msg("Could not create logstring\n");
-                    memset(log_str_buf,0,sizeof(log_str_buf));
-                } else {
-                    write(1,log_str_buf,log_str_len);
-                }
-
-            } else {
-                if((log_str_len = log_str_long(AF_INET,log_str_buf,(void*)&client_addr.sin_addr)) == 0){
-                    error_msg("Could not create logstring\n");
-                    memset(log_str_buf,0,sizeof(log_str_buf));
-                } else {
-                     write(1,log_str_buf,log_str_len);
-                }
+        if (retval_rcv < 1) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                continue;
+			} else {
+                error_msg("Error in recvmmsg : errno = %d\n",errno);
+                return RETURN_FAIL;
             }
-            continue;
+			
+		}
+
+        args->pkt_in += retval_rcv;
+
+        for(i = 0; i < retval_rcv; i++){
+
+            if(recvbuf.payload_buf[i] == INVALID_PAYLOAD){
+                if((logstr_len = logstr_long(AF_INET,logstr_buf[invalid_count],&recv_ipbuf[i].sin_addr)) == 0){
+                    error_msg("Error writing logstring\n");
+                    continue;
+                }
+
+                write_iovecs[invalid_count++].iov_len = logstr_len;
+                
+                continue;
+            }
+
+            sendbuf.msgs[send_count].msg_hdr.msg_name = recvbuf.msgs[i].msg_hdr.msg_name;
+            sendbuf.payload_buf[send_count] = recvbuf.payload_buf[i] + 1;
+
+            send_count++;
+
+        }   
+
+        if(invalid_count){
+
+            if(writev(logfilefd,write_iovecs,invalid_count) < 0){
+                error_msg("Error in writev : %d\n",errno);
+                return RETURN_FAIL;
+            }
+
         }
 
-        msg_buf++;
+        if(send_count){
 
-        sendto(sock_fd, &msg_buf, 1, MSG_CONFIRM,&client_addr, len); 
-        args->pkt_out++;
+            retval_snd = sendmmsg(sockfd,recvbuf.msgs,send_count,0);
+
+            if(retval_snd < 1){
+
+                if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                    error_msg("Error in sendmmsg : errno = %d\n",errno);
+                    return RETURN_FAIL;
+                }
+            } else {
+                args->pkt_out += retval_snd;
+            }
+
+        }
+     
+        send_count = 0;
+        invalid_count = 0;
     }  
 
     return RETURN_SUC;
@@ -303,44 +378,102 @@ int listen_and_reply_ipv4(int sock_fd,struct socktarg_t * args){
 /* Listen for ipv6 udp connections. Replies to valid requests and logs invalid requests */
 int listen_and_reply_ipv6(int sockfd, struct socktarg_t * args){
 
-    socklen_t len = sizeof(struct sockaddr_in6);
-    struct sockaddr_in6 client_addr;
-    char msg_buf = 0;
-    char log_str_buf[LOG_BUF_SIZE_IPV6];
-    uint8_t log_str_len;
+    struct paketbuf_t recvbuf;
+    struct paketbuf_t sendbuf;
+    char logstr_buf[LOG_BUF_SIZE_IP6][MAX_MSG] __attribute__((aligned(64)));
+    struct sockaddr_in6 recv_ipbuf[MAX_MSG] __attribute__((aligned(64)));
+    struct sockaddr_in6 send_ipbuf[MAX_MSG] __attribute__((aligned(64)));
+    struct iovec write_iovecs[MAX_MSG] __attribute__((aligned(64)));
+    struct timespec timeout = {.tv_sec=0,.tv_nsec=RECV_TIMEOUT};
+    int retval_rcv, retval_snd, i, send_count = 0, invalid_count;
+    uint8_t logstr_len;
 
-    memset(&client_addr,0,len);
+    if(memset(&recvbuf.msgs,0,sizeof(recvbuf.msgs)) == NULL
+        || memset(&write_iovecs,0,sizeof(write_iovecs)) == NULL
+        || memset(&sendbuf.msgs,0,sizeof(sendbuf.msgs)) == NULL){
+        error_msg("Memset error\n");
+    }
+
+    for(i = 0; i < MAX_MSG; i++){
+        recvbuf.iovecs[i].iov_base = &recvbuf.payload_buf[i];
+        recvbuf.iovecs[i].iov_len = 1;
+        recvbuf.msgs[i].msg_hdr.msg_iov = &recvbuf.iovecs[i];
+        recvbuf.msgs[i].msg_hdr.msg_iovlen = 1;
+        recvbuf.msgs[i].msg_hdr.msg_name = &recv_ipbuf[i];
+        recvbuf.msgs[i].msg_hdr.msg_namelen = sizeof(recv_ipbuf[i]);
+        sendbuf.iovecs[i].iov_base = &sendbuf.payload_buf[i];
+        sendbuf.iovecs[i].iov_len = 1;
+        sendbuf.msgs[i].msg_hdr.msg_iov = &sendbuf.iovecs[i];
+        sendbuf.msgs[i].msg_hdr.msg_iovlen = 1;
+        sendbuf.msgs[i].msg_hdr.msg_name = &send_ipbuf[i];
+        sendbuf.msgs[i].msg_hdr.msg_namelen = sizeof(send_ipbuf[i]);
+        write_iovecs[i].iov_base = logstr_buf[i];
+        write_iovecs[i].iov_len = LOG_BUF_SIZE_IP6;
+    }
 
     while(server_running){
-        recvfrom(sockfd, &msg_buf, 1,  MSG_WAITALL,&client_addr, &len);  
 
-        args->pkt_in++;
+        retval_rcv = recvmmsg(sockfd,recvbuf.msgs,MAX_MSG,MSG_WAITFORONE,&timeout);
 
-        if(msg_buf == INVALID_PAYLOAD){
-            if(LOG_SHORT){
-                if((log_str_len = log_str_short(AF_INET6,log_str_buf,(void*)&client_addr.sin6_addr)) == 0){
-                    error_msg("Could not create logstring\n");
-                    memset(log_str_buf,0,sizeof(log_str_buf));
-                } else {
-                    write(1,log_str_buf,log_str_len);
-                }
-
-            } else {
-                if((log_str_len = log_str_long(AF_INET6,log_str_buf,(void*)&client_addr.sin6_addr)) == 0){
-                    error_msg("Could not create logstring\n");
-                    memset(log_str_buf,0,sizeof(log_str_buf));
-                } else {
-                     write(1,log_str_buf,log_str_len);
-                }
+        if (retval_rcv < 1) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                continue;
+			} else {
+                error_msg("Error in recvmmsg : errno = %d\n",errno);
+                return RETURN_FAIL;
             }
-            continue;
+			
+		}
+
+        args->pkt_in += retval_rcv;
+
+        for(i = 0; i < retval_rcv; i++){
+
+            if(recvbuf.payload_buf[i] == INVALID_PAYLOAD){
+                if((logstr_len = logstr_long(AF_INET6,logstr_buf[invalid_count],&recvbuf.msgs[i].msg_hdr.msg_name)) == 0){
+                    error_msg("Error writing logstring\n");
+                    continue;
+                }
+
+                write_iovecs[invalid_count++].iov_len = logstr_len;
+                
+                continue;
+            }
+
+            sendbuf.msgs[send_count].msg_hdr.msg_name = recvbuf.msgs[i].msg_hdr.msg_name;
+            sendbuf.payload_buf[send_count] = recvbuf.payload_buf[i] + 1;
+
+            send_count++;
+
+        }   
+
+        if(invalid_count){
+
+            if(writev(logfilefd,write_iovecs,invalid_count) < 0){
+                error_msg("Error in writev : %d\n",errno);
+                return RETURN_FAIL;
+            }
+
         }
-    
-        msg_buf++;
 
-        sendto(sockfd, &msg_buf, 1, MSG_CONFIRM,&client_addr, len);
+        if(send_count){
 
-        args->pkt_out++;
+            retval_snd = sendmmsg(sockfd,recvbuf.msgs,send_count,0);
+
+            if(retval_snd < 1){
+
+                if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                    error_msg("Error in sendmmsg : errno = %d\n",errno);
+                    return RETURN_FAIL;
+                }
+            } else {
+                args->pkt_out += retval_snd;
+            }
+
+        }
+     
+        send_count = 0;
+        invalid_count = 0;
     }  
 
     return RETURN_SUC;
@@ -349,27 +482,41 @@ int listen_and_reply_ipv6(int sockfd, struct socktarg_t * args){
 /* Routine for socket threads. Opens a socket and listens for incoming pakets */
 void * run_socket(void * args){
 
-    int sock_fd;
+    int sockfd;
     int opt = 1;
     struct socktarg_t * targs = (struct socktarg_t *) args;
     struct sockaddr_storage server_addr;
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(targs->cpu,&cpuset);
 
-    block_signals(false);
+    if(pthread_setaffinity_np(pthread_self(),sizeof(cpuset),&cpuset)){
+        error_msg("Failed to set cpu affinity of thread %d to cpu %d\n",pthread_self(),targs->cpu);
+    }
 
-    if ((sock_fd = socket(targs->domain, SOCK_DGRAM, 0)) < 0) { 
-        error_msg("Could not open socket : %s\n",strerror(errno)); 
+    /*
+    if(block_signals(false)){
+        error_msg("Failed to block signals\n");
+    }
+    */
+
+    if ((sockfd = socket(targs->domain, SOCK_DGRAM, IPPROTO_UDP)) < 0) { 
+        error_msg("Could not open socket : errno = %d\n",errno); 
         targs->return_code = RETURN_FAIL;
         return &targs->return_code;
     } 
 
-    if(setsockopt(sock_fd,SOL_SOCKET,SO_REUSEPORT,(void*)&opt,sizeof(opt))){
+    if(setsockopt(sockfd,SOL_SOCKET,SO_REUSEPORT,(void*)&opt,sizeof(opt))){
         error_msg("Cant set socket option : SO_REUSEPORT\n");
-        close(sock_fd);
+        close(sockfd);
         targs->return_code = RETURN_FAIL;
         return &targs->return_code;
     }
         
-    memset(&server_addr, 0, sizeof(server_addr));
+    if(memset(&server_addr, 0, sizeof(server_addr)) == NULL){
+        error_msg("Memset error\n");
+    }
+
     server_addr.ss_family = targs->domain;
     
     switch (targs->domain)
@@ -393,30 +540,30 @@ void * run_socket(void * args){
     }
 
 
-    if((bind_socket(sock_fd,(struct sockaddr *)&server_addr,targs->port,targs->domain) == RETURN_FAIL) ){
-        error_msg("Failed to bind socket : %s\n",strerror(errno));
-        close(sock_fd);
+    if((bind_socket(sockfd,(struct sockaddr *)&server_addr,targs->port,targs->domain) == RETURN_FAIL) ){
+        error_msg("Failed to bind socket : errno = %d\n",errno);
+        close(sockfd);
         targs->return_code = RETURN_FAIL;
         return &targs->return_code;
     }
     
     if(server_addr.ss_family == AF_INET){
-        if(listen_and_reply_ipv4(sock_fd,targs)){
+        if(listen_and_reply_ipv4(sockfd,targs)){
             error_msg("Listen and reply failed\n");
-            close(sock_fd);
+            close(sockfd);
             targs->return_code = RETURN_FAIL;
             return &targs->return_code;
         }  
     } else {
-        if(listen_and_reply_ipv6(sock_fd,targs)){
+        if(listen_and_reply_ipv6(sockfd,targs)){
             error_msg("Listen and reply failed\n");
-            close(sock_fd);
+            close(sockfd);
             targs->return_code = RETURN_FAIL;
             return &targs->return_code;
         } 
     }
 
-    close(sock_fd);
+    close(sockfd);
     targs->return_code = RETURN_SUC;
 
     return &targs->return_code;
@@ -430,31 +577,31 @@ int main(int argc, char ** argv) {
     pthread_t * threads;
     pthread_t util_thread;
     struct socktarg_t * sock_targs;
-    struct util_targ_t util_arg = {.interval=(size_t)INTERVAL};
+    struct utiltarg_t util_arg = {.interval=(size_t)INTERVAL};
     struct socktarg_t main_targ = {.domain=DOMAIN,.port=serv_port};
 
 
-   if((logfile_fd = open(DEFAULT_LOG,OPEN_MODE,OPEN_PERM)) < 0){
+   if((logfilefd = open(DEFAULT_LOG,OPEN_MODE,OPEN_PERM)) < 0){
         perror("Opening logfile failed");
         exit(EXIT_FAILURE);
    }
 
     if((threads = calloc(sizeof(pthread_t),thread_count-1)) == NULL || (sock_targs = calloc(sizeof(struct socktarg_t),thread_count-1)) == NULL){
         perror("Calloc failed");
-        close(logfile_fd);
+        close(logfilefd);
         exit(EXIT_FAILURE);
     }
 
     if(update_datetime(global_datetime_buf) == RETURN_FAIL){
         fprintf(stderr,"Initializing the global datetime buffer failed\n");
-        close(logfile_fd);
+        close(logfilefd);
         exit(EXIT_FAILURE);
     }
 
     
     if(pthread_create(&util_thread,NULL,util_thread_routine,(void*)&util_arg)){
         perror("Creating util thread failed");
-        close(logfile_fd);
+        close(logfilefd);
         exit(EXIT_FAILURE);
     }
 
@@ -463,6 +610,9 @@ int main(int argc, char ** argv) {
             perror("Memcopy failed");
             exit(EXIT_FAILURE);
         }
+
+        sock_targs[i].cpu = i+1;
+
         if(pthread_create(&threads[i],NULL,run_socket,(void*)&sock_targs[i])){
             perror("Could not create listener thread");
             exit(EXIT_FAILURE);
@@ -471,14 +621,14 @@ int main(int argc, char ** argv) {
 
    run_socket((void *)&main_targ);
 
-   for(int i = 0; i < thread_count; i++){
+   for(int i = 0; i < thread_count-1; i++){
         pthread_join(threads[i],NULL);
    }
 
    pthread_join(util_thread,NULL);
 
    free(threads);
-   close(logfile_fd);
+   close(logfilefd);
     
    return EXIT_SUCCESS; 
 }
