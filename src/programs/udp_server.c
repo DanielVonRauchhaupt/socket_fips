@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 
 // Local includes
@@ -21,10 +22,10 @@
 // Configuration Options
 #define DEFAULT_PORT 8080
 #define DEFAULT_LOG "test.log" //"/mnt/scratch/PR/logs/udpsvr.log"
-#define IPV4_ADDRESS "127.0.0.1"//"10.3.10.131"
-#define IPV6_ADDRESS "::1"//"2001:db8::1" 
+#define IP4_ADDRESS "127.0.0.1"//"10.3.10.131"
+#define IP6_ADDRESS "::1"//"2001:db8::1" 
 #define DOMAIN AF_INET
-#define MT true
+#define MT false
 #define LOG_SHORT false
 
 // Definitions
@@ -56,11 +57,11 @@
 #define OPEN_PERM 0644
 
 #define NANOSECONDS_PER_MILLISECOND 1000000
-#define INTERVAL 500 * NANOSECONDS_PER_MILLISECOND
+#define UTIL_TIMEOUT 500 * NANOSECONDS_PER_MILLISECOND
 
-#define RECV_TIMEOUT 100 * NANOSECONDS_PER_MILLISECOND
+#define RECV_TIMEOUT 200
 #define MAX_MSG 512
-#define MTU_SIZE 1500
+
 
 // Global Variables
 static char global_datetime_buf[DATE_SIZE+1];
@@ -84,6 +85,8 @@ struct socktarg_t {
     in_port_t port;
     uint64_t pkt_in;
     uint64_t pkt_out;
+    uint64_t log_count;
+    char strerror_buf[256];
     int return_code;
 } __attribute__((aligned(64)));
 
@@ -95,26 +98,26 @@ struct utiltarg_t {
 // Helper functions
 
 /* Prints a formatted string to a mutex locked file descriptor */
-void sync_message(const char * fmt, pthread_mutex_t * lock, FILE * fp, va_list args){
+void sync_message(const char * fmt, pthread_mutex_t * lock, FILE * fp, va_list targs){
     pthread_mutex_lock(lock);
-    vfprintf(fp, fmt, args);
+    vfprintf(fp, fmt, targs);
     pthread_mutex_unlock(lock);
 }
 
 /* Prints a formatted message to stdout (Thread safe) */
 void info_msg(const char* fmt,...){
-    va_list args;
-    va_start(args, fmt);
-    sync_message(fmt,&stdout_lock,stdout,args);
-    va_end(args);
+    va_list targs;
+    va_start(targs, fmt);
+    sync_message(fmt,&stdout_lock,stdout,targs);
+    va_end(targs);
 }
 
 /* Prints a formatted message to stderr (Thread safe) */
 void error_msg(const char * fmt,...){
-    va_list args;
-    va_start(args, fmt);
-    sync_message(fmt,&stderr_lock,stderr,args);
-    va_end(args);
+    va_list targs;
+    va_start(targs, fmt);
+    sync_message(fmt,&stderr_lock,stderr,targs);
+    va_end(targs);
 }
 
 /* Updates the global datetime buffer and returns timestamp (Thread safe) */
@@ -165,8 +168,8 @@ void * util_thread_routine(void * arg){
     signal(SIGINT,sig_handler);
     signal(SIGTERM,sig_handler);
 
-    struct utiltarg_t * targs = (struct utiltarg_t *) arg;
-    struct timespec ts = {.tv_nsec=targs->interval};
+    struct utiltarg_t * ttargs = (struct utiltarg_t *) arg;
+    struct timespec ts = {.tv_nsec=ttargs->interval};
 
     while (server_running)
     {
@@ -178,8 +181,8 @@ void * util_thread_routine(void * arg){
 
     }
 
-    targs->return_code = RETURN_SUC;
-    return &targs->return_code;
+    ttargs->return_code = RETURN_SUC;
+    return &ttargs->return_code;
 }
 
 /* Copies the string form of addr to the logstr_buf */
@@ -240,7 +243,7 @@ uint8_t logstr_long(int domain, char * logstr_buf, void * addr){
         return 0;
     }
 
-    return logbufsize - (addrlen-max_addrlen);
+    return logbufsize - (max_addrlen-addrlen);
 }
 
 /* Binds a socket to the provided address and port for a given domain */
@@ -274,7 +277,7 @@ int bind_socket(int sockfd, struct sockaddr * sockaddr, in_port_t port, int doma
 }
 
 /* Listen for ipv4 udp connections. Replies to valid requests and logs invalid requests */
-int listen_and_reply_ipv4(int sockfd,struct socktarg_t * args){
+int listen_and_reply_ip4(int sockfd,struct socktarg_t * targs){
 
     struct paketbuf_t recvbuf;
     struct paketbuf_t sendbuf;
@@ -282,12 +285,11 @@ int listen_and_reply_ipv4(int sockfd,struct socktarg_t * args){
     struct sockaddr_in recv_ipbuf[MAX_MSG] __attribute__((aligned(64)));
     struct sockaddr_in send_ipbuf[MAX_MSG] __attribute__((aligned(64)));
     struct iovec write_iovecs[MAX_MSG] __attribute__((aligned(64)));
-    struct timespec timeout = {.tv_sec=0,.tv_nsec=RECV_TIMEOUT};
     int retval_rcv, retval_snd, i, send_count = 0, invalid_count;
     uint8_t logstr_len;
 
     if(memset(&recvbuf.msgs,0,sizeof(recvbuf.msgs)) == NULL || memset(&write_iovecs,0,sizeof(write_iovecs)) == NULL || memset(&sendbuf.msgs,0,sizeof(sendbuf.msgs)) == NULL){
-        error_msg("Memset error : errno = %d\n",errno);
+        error_msg("Memset error\n");
     }
 
     for(i = 0; i < MAX_MSG; i++){
@@ -309,19 +311,19 @@ int listen_and_reply_ipv4(int sockfd,struct socktarg_t * args){
 
     while(server_running){
 
-        retval_rcv = recvmmsg(sockfd,recvbuf.msgs,MAX_MSG,MSG_WAITFORONE,&timeout);
+        retval_rcv = recvmmsg(sockfd,recvbuf.msgs,MAX_MSG,MSG_WAITFORONE,NULL);
 
         if (retval_rcv < 1) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
                 continue;
 			} else {
-                error_msg("Error in recvmmsg : errno = %d\n",errno);
+                error_msg("Error in recvmmsg : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                 return RETURN_FAIL;
             }
 			
 		}
 
-        args->pkt_in += retval_rcv;
+        targs->pkt_in += retval_rcv;
 
         for(i = 0; i < retval_rcv; i++){
 
@@ -345,10 +347,12 @@ int listen_and_reply_ipv4(int sockfd,struct socktarg_t * args){
 
         if(invalid_count){
 
-            if(writev(logfilefd,write_iovecs,invalid_count) < 0){
-                error_msg("Error in writev : %d\n",errno);
+            if(pwritev2(logfilefd,write_iovecs,invalid_count,-1,RWF_APPEND) < 0){
+                error_msg("Error in pwritev2 : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                 return RETURN_FAIL;
             }
+
+            targs->log_count += invalid_count;
 
         }
 
@@ -359,11 +363,11 @@ int listen_and_reply_ipv4(int sockfd,struct socktarg_t * args){
             if(retval_snd < 1){
 
                 if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-                    error_msg("Error in sendmmsg : errno = %d\n",errno);
+                    error_msg("Error in sendmmsg : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                     return RETURN_FAIL;
                 }
             } else {
-                args->pkt_out += retval_snd;
+                targs->pkt_out += retval_snd;
             }
 
         }
@@ -376,7 +380,7 @@ int listen_and_reply_ipv4(int sockfd,struct socktarg_t * args){
 }
 
 /* Listen for ipv6 udp connections. Replies to valid requests and logs invalid requests */
-int listen_and_reply_ipv6(int sockfd, struct socktarg_t * args){
+int listen_and_reply_ip6(int sockfd, struct socktarg_t * targs){
 
     struct paketbuf_t recvbuf;
     struct paketbuf_t sendbuf;
@@ -419,13 +423,13 @@ int listen_and_reply_ipv6(int sockfd, struct socktarg_t * args){
 			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
                 continue;
 			} else {
-                error_msg("Error in recvmmsg : errno = %d\n",errno);
+                error_msg("Error in recvmmsg : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                 return RETURN_FAIL;
             }
 			
 		}
 
-        args->pkt_in += retval_rcv;
+        targs->pkt_in += retval_rcv;
 
         for(i = 0; i < retval_rcv; i++){
 
@@ -450,7 +454,7 @@ int listen_and_reply_ipv6(int sockfd, struct socktarg_t * args){
         if(invalid_count){
 
             if(writev(logfilefd,write_iovecs,invalid_count) < 0){
-                error_msg("Error in writev : %d\n",errno);
+                error_msg("Error in writev : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                 return RETURN_FAIL;
             }
 
@@ -463,11 +467,11 @@ int listen_and_reply_ipv6(int sockfd, struct socktarg_t * args){
             if(retval_snd < 1){
 
                 if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-                    error_msg("Error in sendmmsg : errno = %d\n",errno);
+                    error_msg("Error in sendmmsg : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                     return RETURN_FAIL;
                 }
             } else {
-                args->pkt_out += retval_snd;
+                targs->pkt_out += retval_snd;
             }
 
         }
@@ -480,10 +484,11 @@ int listen_and_reply_ipv6(int sockfd, struct socktarg_t * args){
 }
 
 /* Routine for socket threads. Opens a socket and listens for incoming pakets */
-void * run_socket(void * args){
+void * run_socket(void *args){
 
     int sockfd;
     int opt = 1;
+    struct timeval timeout = {.tv_sec=0,.tv_usec=RECV_TIMEOUT};
     struct socktarg_t * targs = (struct socktarg_t *) args;
     struct sockaddr_storage server_addr;
     cpu_set_t cpuset;
@@ -494,20 +499,25 @@ void * run_socket(void * args){
         error_msg("Failed to set cpu affinity of thread %d to cpu %d\n",pthread_self(),targs->cpu);
     }
 
-    /*
     if(block_signals(false)){
         error_msg("Failed to block signals\n");
     }
-    */
 
     if ((sockfd = socket(targs->domain, SOCK_DGRAM, IPPROTO_UDP)) < 0) { 
-        error_msg("Could not open socket : errno = %d\n",errno); 
+        error_msg("Could not open socket : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
         targs->return_code = RETURN_FAIL;
         return &targs->return_code;
     } 
 
     if(setsockopt(sockfd,SOL_SOCKET,SO_REUSEPORT,(void*)&opt,sizeof(opt))){
-        error_msg("Cant set socket option : SO_REUSEPORT\n");
+        error_msg("Cant set socket option SO_REUSEPORT : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
+        close(sockfd);
+        targs->return_code = RETURN_FAIL;
+        return &targs->return_code;
+    }
+
+    if(setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,(void*)&timeout,sizeof(timeout))){
+        error_msg("Cant set socket option SO_RCVTIMEO : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
         close(sockfd);
         targs->return_code = RETURN_FAIL;
         return &targs->return_code;
@@ -522,13 +532,15 @@ void * run_socket(void * args){
     switch (targs->domain)
     {
     case AF_INET:
-        if(inet_pton(AF_INET,IPV4_ADDRESS,(void *)&((struct sockaddr_in *)&server_addr)->sin_addr)!=1){
+        if(inet_pton(AF_INET,IP4_ADDRESS,(void *)&((struct sockaddr_in *)&server_addr)->sin_addr)!=1){
+            error_msg("Could not set %s as address, default to INADDR_ANY\n",IP4_ADDRESS);
             ((struct sockaddr_in *)&server_addr)->sin_addr.s_addr = INADDR_ANY;
         }    
         break;
 
     case AF_INET6:
-        if(inet_pton(AF_INET6,IPV6_ADDRESS,(void *)&((struct sockaddr_in6 *)&server_addr)->sin6_addr)!=1){
+        if(inet_pton(AF_INET6,IP6_ADDRESS,(void *)&((struct sockaddr_in6 *)&server_addr)->sin6_addr)!=1){
+            error_msg("Could not set %s as address, default to IN6ADDR_ANY\n",IP6_ADDRESS);
             ((struct sockaddr_in6 *)&server_addr)->sin6_addr = in6addr_any;
         }
         break;
@@ -541,21 +553,21 @@ void * run_socket(void * args){
 
 
     if((bind_socket(sockfd,(struct sockaddr *)&server_addr,targs->port,targs->domain) == RETURN_FAIL) ){
-        error_msg("Failed to bind socket : errno = %d\n",errno);
+        error_msg("Failed to bind socket : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
         close(sockfd);
         targs->return_code = RETURN_FAIL;
         return &targs->return_code;
     }
     
     if(server_addr.ss_family == AF_INET){
-        if(listen_and_reply_ipv4(sockfd,targs)){
+        if(listen_and_reply_ip4(sockfd,targs)){
             error_msg("Listen and reply failed\n");
             close(sockfd);
             targs->return_code = RETURN_FAIL;
             return &targs->return_code;
         }  
     } else {
-        if(listen_and_reply_ipv6(sockfd,targs)){
+        if(listen_and_reply_ip6(sockfd,targs)){
             error_msg("Listen and reply failed\n");
             close(sockfd);
             targs->return_code = RETURN_FAIL;
@@ -573,11 +585,11 @@ void * run_socket(void * args){
 int main(int argc, char ** argv) { 
 
     in_port_t serv_port = (argc > 1) ? (uint16_t)strtol(argv[1],NULL,10) : DEFAULT_PORT;
-    int thread_count = (MT) ? get_nprocs() : 0;
+    int i, thread_count = (MT) ? get_nprocs() : 0;
     pthread_t * threads;
     pthread_t util_thread;
     struct socktarg_t * sock_targs;
-    struct utiltarg_t util_arg = {.interval=(size_t)INTERVAL};
+    struct utiltarg_t util_arg = {.interval=(size_t)UTIL_TIMEOUT};
     struct socktarg_t main_targ = {.domain=DOMAIN,.port=serv_port};
 
 
@@ -605,9 +617,9 @@ int main(int argc, char ** argv) {
         exit(EXIT_FAILURE);
     }
 
-    for(int i = 0; i < thread_count-1; i++){
+    for(i = 0; i < thread_count-1; i++){
         if(memcpy((void*)&sock_targs[i],&main_targ,sizeof(struct socktarg_t))==NULL){
-            perror("Memcopy failed");
+            fprintf(stderr,"Memcopy failed\n");
             exit(EXIT_FAILURE);
         }
 
@@ -615,17 +627,50 @@ int main(int argc, char ** argv) {
 
         if(pthread_create(&threads[i],NULL,run_socket,(void*)&sock_targs[i])){
             perror("Could not create listener thread");
-            exit(EXIT_FAILURE);
         }
     }
 
    run_socket((void *)&main_targ);
 
-   for(int i = 0; i < thread_count-1; i++){
-        pthread_join(threads[i],NULL);
+   for(i = 0; i < thread_count-1; i++){
+        if(pthread_join(threads[i],NULL)){
+            perror("Pthread join failed");
+        }
    }
 
-   pthread_join(util_thread,NULL);
+   if(pthread_join(util_thread,NULL)){
+        perror("Pthread join failed");
+   }
+
+    unsigned long long int total_in_count = 0 ,total_out_count = 0, total_log_count = 0;
+
+    if(main_targ.return_code == RETURN_FAIL){
+        fprintf(stderr,"Main thread returned an error\n");
+   }
+
+   printf("\nMain thread : pakets received  : %lu, pakets sent  : %lu, messages logged : %lu\n",main_targ.pkt_in,main_targ.pkt_out,main_targ.log_count);
+
+    total_in_count += main_targ.pkt_in;
+    total_out_count += main_targ.pkt_out;
+    total_log_count += main_targ.log_count;
+
+   for(i = 0; i < thread_count-1; i++){
+        if(sock_targs[i].return_code == RETURN_FAIL){
+            fprintf(stderr,"Thread %d returned an error\n",i+1);
+        }
+
+        printf("Thread %d : pakets received  : %lu, pakets sent  : %lu, messages logged : %lu\n",i+1,sock_targs[i].pkt_in,sock_targs[i].pkt_out,sock_targs[i].log_count);
+
+        total_in_count += sock_targs[i].pkt_in;
+        total_out_count += sock_targs[i].pkt_out;
+        total_out_count += sock_targs[i].pkt_out;
+   }
+
+    printf("Total pakets received : %llu, total pakets sent : %llu, total messages logged : %llu\n",total_in_count,total_out_count,total_log_count);
+
+   if(util_arg.return_code == RETURN_FAIL){
+        fprintf(stderr,"Util thread returned an error\n");
+   }
 
    free(threads);
    close(logfilefd);
