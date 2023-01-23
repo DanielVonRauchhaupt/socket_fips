@@ -2,7 +2,7 @@
 from socket import socket, AF_INET, SOCK_DGRAM
 from typing import List
 
-UDP_IP = "127.0.0.1" # specify the destination IP address here
+UDP_IP = "10.3.10.131" # specify the destination IP address here
 UDP_PORT = 8080 # specify the destination port here
 MESSAGE = "B" # specify the payload here
 

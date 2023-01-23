@@ -1,168 +1,6 @@
-#define _GNU_SOURCE
-#include <argp.h>
-#include <errno.h>
-#include <net/if.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/resource.h>
-#include <bpf/libbpf.h>
-#include <bpf/bpf.h>
-#include "ip_blacklist.skel.h"
-#include <linux/if_link.h> /* Need XDP flags */
-#include <list.h>
-#include <string.h>
-#include <pthread.h>
-#include <hs.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <time.h>
-#include <bpf/libbpf.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <errno.h>
-#include <netinet/in.h>
-#include <stdlib.h>
+#define _GNU_SOURCE 1
 #include "blacklist_common.h"
-#define RETURN_FAIL (-1)
-#define RETURN_SUCC (0)
 
-static bool verbose = false;
-static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
-
-const char *argp_program_version = "ip_blacklist 0.0";
-static const char argp_program_doc[] =
-
-"BPF xdp_ddos01 application.\n"
-"\n"
-"eBPF program is loaded into the kernel and attached at the given device."
-"It parses Ethernet packets and drops them in case of finding the source IP"
-"address in either an IPv4 or IPv6 blacklist in form of maps or based on the destination"
-"port for TCP/UDP  (another map). Blocked addresses are either added by Fail2Ban or another userspace"
-"program: ip_blacklist_cmdline. The latter can also be used to add destination ports\n"
-"or have a look at packet statistics"
-"\n"
-"USAGE: ./ip_blacklist [v|d|c] DEVICE\n";
-static char args_doc[] = "DEVICE";
-static const struct argp_option opts[] = {
-	{ "verbose", 'v', NULL, 0, "Verbose libbpf debug output. Errors will be printed regardless", 0},
-	{ "reload", 'r', NULL, 0, "unload eBPF program, clean filesystem and reload program into chosen device",0},
-	{ "detach",'d',NULL,0, "detach eBPF program from chosen device",0},
-	{ "clean", 'c',NULL,0, "detach eBPF program from chosen device and clean up mounted eBPF file system",0},
-	{0},
-};
-struct arguments
-{
-  char* device;
-  bool verbose;
-  //int load;               
-};
-static error_t parse_arg(int key, char *arg, struct argp_state *state)
-{
-	struct arguments *arguments = state->input;
-	switch (key) {
-	case 'v':
-		verbose = 1;
-		arguments->verbose = 1;
-		break;
-	case ARGP_KEY_ARG:
-      if (state->arg_num >=2 ){
-        /* Too many arguments. */
-        fprintf(stderr, "Too many arguments. See usage\n");
-		argp_usage (state);
-	  	}
-		arguments->device = arg;
-		break;
-	case ARGP_KEY_END:
-      if (state->arg_num < 1){
-        /* Not enough arguments. */
-	    fprintf(stderr, "Not enough arguments. See usage\n");
-        argp_usage (state);
-        return ARGP_ERR_UNKNOWN;
-	  }
-	  else{
-      break;
-	  }
-	default:
-		return ARGP_ERR_UNKNOWN;
-	}
-	return 0;
-}
-static const struct argp argp = {
-	.options = opts,
-	.parser = parse_arg,
-	.args_doc = args_doc,
-	.doc = argp_program_doc,
-};
-
-static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
-{
-	if (level == LIBBPF_DEBUG && !verbose)
-		return 0;
-	return vfprintf(stderr, format, args);
-}
-
-
-static void bump_memlock_rlimit(void)
-{
-	struct rlimit rlim_new = {
-		.rlim_cur	= RLIM_INFINITY,
-		.rlim_max	= RLIM_INFINITY,
-	};
-
-	if (setrlimit(RLIMIT_MEMLOCK, &rlim_new)) {
-		fprintf(stderr, "Failed to increase RLIMIT_MEMLOCK limit!\n");
-		exit(1);
-	}
-}
-
-int ebpf_cleanup(const char * device,bool unpin,bool verbose){
-
-    struct ip_blacklist_bpf * skel;
-
-    //printf("device is %s\n",arguments.device);
-	/* Check if device exists */
-	int ifindex = if_nametoindex(device);
-	if (ifindex == 0){
- 		fprintf(stderr,"Looking up device index for device %s failed: %s\n",device,strerror(errno));
-		return EXIT_FAILURE;
-	}
-
-    /* Detach, indpendent of program. Call succeeds even on an empty device */
-	int xdp_flags = 0;
-	xdp_flags |= XDP_FLAGS_DRV_MODE;
-	int err = bpf_set_link_xdp_fd(ifindex,-1,xdp_flags);
-	if (err) {
-		fprintf(stderr, "Failed to detach eBPF program in xdp driver mode from device: %s. See libbpf error. Doing skb mode instead.\n",device);
-
-	}
-	xdp_flags = 0;
-	xdp_flags |= XDP_FLAGS_SKB_MODE;
-	err = bpf_set_link_xdp_fd(ifindex,-1,xdp_flags);
-	if (err) {
-		fprintf(stderr, "Failed to detach eBPF program in xdp skb mode from device: %s. See libbpf error. Exiting.\n",device);
-		return RETURN_FAIL;
-	}
-	if(verbose){printf("Detached eBPF program from device %s.\n",device);}
-	
-    if(unpin){
-
-        skel = ip_blacklist_bpf__open();
-        if (!skel) {
-            fprintf(stderr, "Failed to open BPF skeleton\n");
-        return RETURN_FAIL;
-        }
-        err = bpf_object__unpin_maps(skel->obj,NULL);
-        if (err) {
-            fprintf(stderr, "Failed to unpin maps in /sys/fs/bpf: %s\n",strerror(errno));
-        }
-        if(verbose){printf("Clean up successful. Maps unlinked.\n");}
-
-    }
-    
-    return RETURN_SUCC;
-		
-}
 
 /* Prints a formatted string to a mutex locked file descriptor */
 void sync_message(const char * fmt, pthread_mutex_t * lock, FILE * fp, va_list targs){
@@ -219,7 +57,7 @@ int blacklist_subnet_modify(int fd_cache,int fd_subnetblacklist, char *ip_string
 		error_msg("Memset error in blacklist_subnet_modify : Line %d\n",__LINE__);
 	}
 
-	__uint128_t key6;
+	unsigned __int128 key6;
 	__u64 subnet_key;
 
 	int res;
@@ -309,7 +147,7 @@ int blacklist_subnet_modify(int fd_cache,int fd_subnetblacklist, char *ip_string
 
 	 
 	if (verbose){
-		error_msg(
+		error_msg(stderr,
 		"%s() IP:%s key:0x%016llX\n", __func__, ip_string, subnet_key);
 		}
 	res = bpf_map_lookup_elem(fd_cache, &subnet_key,&value_next);
@@ -322,7 +160,7 @@ int blacklist_modify(int fd, char *ip_string, unsigned int action, unsigned int 
 {
 	__u64 values[nr_cpus];
 	__u32 key4;
-	__uint128_t key6;
+	unsigned __int128 key6;
 	int res;
 
 	if(memset(values, 0, sizeof(__u64) * nr_cpus) == NULL || memset(&key4, 0, sizeof(__u32)) == NULL){
@@ -404,7 +242,7 @@ int blacklist_modify(int fd, char *ip_string, unsigned int action, unsigned int 
 
 		if (errno == 17) {
 			#ifndef LONGTERM
-			error_msg(": Already in blacklist\n");
+			error_msg(stderr, ": Already in blacklist\n");
 			#endif 
 			return EXIT_OK;
 		}
@@ -480,7 +318,7 @@ int blacklist_port_modify(int fd, int countfd, int dport, unsigned int action, i
 	res = bpf_map_update_elem(fd, &key, &curr_values, BPF_EXIST);
 
 	if (res != 0) { /* 0 == success */
-		error_msg(
+		error_msg(stderr,
 			"%s() dport:%d key:0x%X value errno(%d/%s)",
 			__func__, dport, key, errno, strerror_r(errno,strerror_buf,strerror_size));
 
@@ -514,136 +352,3 @@ int blacklist_port_modify(int fd, int countfd, int dport, unsigned int action, i
 			"%s() dport:%d key:0x%X\n", __func__, dport, key);
 	return EXIT_OK;
 }
-
-static int ebpf_setup(const char * device, bool verbose){
-
-    struct ip_blacklist_bpf *skel;
-
-    /* Set up libbpf errors and debug info callback */
-	libbpf_set_print(libbpf_print_fn);
-
-	/* Bump RLIMIT_MEMLOCK to create BPF maps */
-	bump_memlock_rlimit();
-
-    //printf("device is %s\n",arguments.device);
-	/* Check if device exists */
-	int ifindex = if_nametoindex(device);
-	if (ifindex == 0){
- 		fprintf(stderr,"Looking up device index for device %s failed: %s\n",device,strerror(errno));
-		return EXIT_FAILURE;
-	}
-
-    int xdp_fd;
-
-	unsigned int ptr = 0;
-
-    if((xdp_fd = bpf_get_link_xdp_id(ifindex, &ptr, 0))!=-1){
-        
-        ebpf_cleanup(device,false,verbose);
-    }
-
-    skel = ip_blacklist_bpf__open();
-	if (!skel) {
-		fprintf(stderr, "Failed to open BPF skeleton\n");
-		return EXIT_FAILURE;
-	}
-
-
-	/* Load & verify BPF programs */
-	int err = ip_blacklist_bpf__load(skel);
-	if (err) {
-		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
-		
-	}
-	/* Attach xdp */
-	int xdp_flags = 0;
-	xdp_flags |= XDP_FLAGS_DRV_MODE;
-	err = bpf_set_link_xdp_fd(ifindex,bpf_program__fd(skel->progs.xdp_prog),xdp_flags);
-	if (err) {
-	  if (err == -17){
-	    fprintf(stderr, "Failed to attach eBPF program in xdp driver mode for device: %s. See libbpf error: %s. Device already in use in different mode. Trying skb mode.\n",device, strerror(errno));
-		}
-	  else if(err ==-22){
-	    fprintf(stderr, "Failed to attach eBPF program in xdp driver mode for device %s. See libbpf error: %s. Check device MTU. Jumboframes are not supported and throw this error\n",device, strerror(errno));
-	  }
-	  fprintf(stderr, "Failed to attach eBPF program in xdp driver mode for device: %s. See libbpf error: %s. Doing skb mode instead.\n",device, strerror(errno));
-		xdp_flags = 0;
-		xdp_flags |= XDP_FLAGS_SKB_MODE;
-		err = bpf_set_link_xdp_fd(ifindex,bpf_program__fd(skel->progs.xdp_prog),xdp_flags);
-		if (err) {
-			if (err == -17){
-				fprintf(stderr, "Failed to attach eBPF program in xdp driver mode for device: %s. See libbpf error. Device already in use.\n",device);
-				ip_blacklist_bpf__destroy(skel);
-                return RETURN_FAIL;
-		}
-			fprintf(stderr, "Failed to attach eBPF program in xdp skb mode for device: %s. See libbpf error. Exiting.\n",device);
-			ip_blacklist_bpf__destroy(skel);
-            return RETURN_FAIL;
-		}
-	if(verbose){printf("Attached program onto device %s in skb mode. Maps pinned to /sys/fs/bpf/.\n",device);}
-	return 0;
-	}
-
-	if(verbose){printf("Attached program onto device %s in driver mode. Maps pinned to /sys/fs/bpf/	.\n",device);}
-	return 0;
-
-
-}
-
-
-
-int open_bpf_map(const char *file,char * strerror_buf, int strerror_size)
-{
-	int fd;
-
-	fd = bpf_obj_get(file);
-	if (fd < 0) {
-		error_msg("ERR: Failed to open bpf map file:%s err(%d):%s\n",
-		       file, errno, strerror_r(errno,strerror_buf,strerror_size));
-		return RETURN_FAIL;
-	}
-	return fd;
-}
-
-
-
-
-
-
-
-int main(int argc, char **argv){
-	
-    struct arguments arguments;
-	arguments.verbose = 0;
-	arguments.device = "";
-	int err;
-
-	char strerror_buf[64];
-
-	/* Parse command line arguments */
-	err = argp_parse(&argp, argc, argv, 0, NULL, &arguments);
-	if (err)
-		return err;
-
-    printf("Device %s\n",arguments.device);
-
-    ebpf_setup(arguments.device,true);
-
-	int nr_cpus = libbpf_num_possible_cpus();
-
-	int fd_blacklist_ip4 = open_bpf_map(file_blacklist_ipv4,strerror_buf,sizeof(strerror_buf));
-
-	int fd_blacklist_ip6 = open_bpf_map(file_blacklist_ipv6,strerror_buf,sizeof(strerror_buf));
-
-	//blacklist_modify(fd_blacklist_ip6,"2a01:598:d009:ab46:4ecc:6aff:fe08:271e",ACTION_DEL,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
-
-	close(fd_blacklist_ip4);
-	close(fd_blacklist_ip6);
-
-    ebpf_cleanup(arguments.device,true,true);
-    
-
-	
-
-
-}	

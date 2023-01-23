@@ -38,9 +38,7 @@ find_package(BpfObject REQUIRED)
 # Build object skeleton and depend skeleton on libbpf build
 bpf_object(ip_blacklist ip_blacklist.bpf.c)
 add_dependencies(ip_blacklist_skel libbpf-build bpftool)
-add_library(blacklist_common STATIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/blacklist_common.c)
-target_include_directories(blacklist_common PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/external/libbpf)
-add_dependencies(blacklist_common libbpf-build)
+
 
 add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)
 
@@ -50,9 +48,9 @@ add_dependencies(simplefail2ban libbpf-build)
 add_dependencies(simplefail2ban inih)
 add_dependencies(simplefail2ban llist)
 target_include_directories(simplefail2ban
-    #PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/hyperscan/src
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src      
     PUBLIC /usr/include/hs          
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/list/src  
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
 ) 
-target_link_libraries(simplefail2ban ip_blacklist_skel ringbuf ip_hashtable ip_to_str hs blacklist_common inih llist) 
+target_link_libraries(simplefail2ban ip_blacklist_skel ringbuf ip_hashtable ip_to_str hs inih llist Threads::Threads) 

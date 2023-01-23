@@ -5,14 +5,6 @@
 //#define SUBNET
 #define SUBNET_THRESHOLD 3
 
-#include <time.h>
-#include <bpf/libbpf.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <errno.h>
-#include <netinet/in.h>
-#include <stdlib.h>
-
 /* Exit return codes */
 #define	EXIT_OK			0
 #define EXIT_FAIL		1
@@ -27,8 +19,6 @@
 #define EXIT_FAIL_BPF		40
 #define EXIT_FAIL_BPF_ELF	41
 #define EXIT_FAIL_BPF_RELOCATE	42
-
-static int verbose = 0;
 
 /* Export eBPF map for IPv4 blacklist as a file
  * Gotcha need to mount:
@@ -64,7 +54,6 @@ static const char *file_blacklist_ipv6_subnet_nodelete   = "/sys/fs/bpf/blacklis
  *       clock_gettime (ns) =>  9ns (CLOCK_MONOTONIC_COARSE)
  */
 #define NANOSEC_PER_SEC 1000000000 /* 10^9 */
-uint64_t gettime(void);
 
 /* Blacklist operations */
 #define ACTION_ADD	1
@@ -75,17 +64,5 @@ enum {
 	DDOS_FILTER_UDP,
 	DDOS_FILTER_MAX
 };
-
-static int blacklist_modify(int fd, char *ip_string, unsigned int action, unsigned int iptype);
-
-
-static int blacklist_port_modify(int fd, int countfd, int dport, unsigned int action, int proto);
-
-// Subnet blocking V1
-/*
-static int blacklist_subnet_modify(int fd, char *ip_string, unsigned int action)
-*/
-// Subnet blocking V2
-static int blacklist_subnet_modify(int fd_cache,int fd_subnetblacklist, char *ip_string, unsigned int action);
 
 #endif

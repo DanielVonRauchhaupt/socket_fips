@@ -43,7 +43,7 @@ add_library(llist STATIC
    ${CMAKE_CURRENT_SOURCE_DIR}/list/src/list_node.c
 )
 
-target_include_directories(llist PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/list/src/list.h)
+target_include_directories(llist PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/list/src/)
 
 target_include_directories(inih PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inih/)
 
