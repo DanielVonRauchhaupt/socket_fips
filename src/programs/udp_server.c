@@ -284,7 +284,7 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
     void * recv_ipbuf = NULL;
     void * send_ipbuf = NULL;
     struct iovec * write_iovecs  = NULL;
-    int retval_rcv, retval_snd, i, send_count = 0, invalid_count, logbuf_size, ip_bufsize;
+    int retval_rcv, retval_snd, i, send_count = 0, invalid_count = 0, logbuf_size, ip_bufsize;
     uint8_t logstr_len;
 
     if(targs->domain == AF_INET){
