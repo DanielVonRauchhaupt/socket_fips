@@ -13,3 +13,7 @@
 [submodule "external/libbpf"]
 	path = external/libbpf
 	url = https://github.com/libbpf/libbpf.git
+[submodule "libbpf"]
+	path = external/libbpf
+	url = https://github.com/libbpf/libbpf.git
+	branch = master

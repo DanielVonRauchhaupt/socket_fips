@@ -26,6 +26,8 @@
 #define RETURN_FAIL (-1)
 #define RETURN_SUCC (0)
 
+
+
 static bool verbose = false;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -131,14 +133,14 @@ int ebpf_cleanup(const char * device,bool unpin,bool verbose){
     /* Detach, indpendent of program. Call succeeds even on an empty device */
 	int xdp_flags = 0;
 	xdp_flags |= XDP_FLAGS_DRV_MODE;
-	int err = bpf_set_link_xdp_fd(ifindex,-1,xdp_flags);
+	int err = bpf_xdp_attach(ifindex,-1,xdp_flags,NULL);
 	if (err) {
 		fprintf(stderr, "Failed to detach eBPF program in xdp driver mode from device: %s. See libbpf error. Doing skb mode instead.\n",device);
 
 	}
 	xdp_flags = 0;
 	xdp_flags |= XDP_FLAGS_SKB_MODE;
-	err = bpf_set_link_xdp_fd(ifindex,-1,xdp_flags);
+	err = bpf_xdp_attach(ifindex,-1,xdp_flags,NULL);
 	if (err) {
 		fprintf(stderr, "Failed to detach eBPF program in xdp skb mode from device: %s. See libbpf error. Exiting.\n",device);
 		return RETURN_FAIL;
@@ -533,11 +535,9 @@ static int ebpf_setup(const char * device, bool verbose){
 		return EXIT_FAILURE;
 	}
 
-    int xdp_fd;
+    unsigned int xdp_fd;
 
-	unsigned int ptr = 0;
-
-    if((xdp_fd = bpf_get_link_xdp_id(ifindex, &ptr, 0))!=-1){
+    if((bpf_xdp_query_id(ifindex,0,&xdp_fd))!=-1){
         
         ebpf_cleanup(device,false,verbose);
     }
@@ -558,7 +558,7 @@ static int ebpf_setup(const char * device, bool verbose){
 	/* Attach xdp */
 	int xdp_flags = 0;
 	xdp_flags |= XDP_FLAGS_DRV_MODE;
-	err = bpf_set_link_xdp_fd(ifindex,bpf_program__fd(skel->progs.xdp_prog),xdp_flags);
+	err = bpf_xdp_attach(ifindex,bpf_program__fd(skel->progs.xdp_prog),xdp_flags,NULL);
 	if (err) {
 	  if (err == -17){
 	    fprintf(stderr, "Failed to attach eBPF program in xdp driver mode for device: %s. See libbpf error: %s. Device already in use in different mode. Trying skb mode.\n",device, strerror(errno));
@@ -569,7 +569,7 @@ static int ebpf_setup(const char * device, bool verbose){
 	  fprintf(stderr, "Failed to attach eBPF program in xdp driver mode for device: %s. See libbpf error: %s. Doing skb mode instead.\n",device, strerror(errno));
 		xdp_flags = 0;
 		xdp_flags |= XDP_FLAGS_SKB_MODE;
-		err = bpf_set_link_xdp_fd(ifindex,bpf_program__fd(skel->progs.xdp_prog),xdp_flags);
+		err = bpf_xdp_attach(ifindex,bpf_program__fd(skel->progs.xdp_prog),xdp_flags,NULL);
 		if (err) {
 			if (err == -17){
 				fprintf(stderr, "Failed to attach eBPF program in xdp driver mode for device: %s. See libbpf error. Device already in use.\n",device);
