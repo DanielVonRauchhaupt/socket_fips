@@ -22,11 +22,15 @@
 #include <errno.h>
 #include <netinet/in.h>
 #include <stdlib.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include "blacklist_common.h"
 #define RETURN_FAIL (-1)
 #define RETURN_SUCC (0)
 
+#define HUGH_PAGE_SIZE 2048 * 1000
 
+#define SHMKEY "/mnt/scratch/PR/bachelorarbeit/shmkey"
 
 static bool verbose = false;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -625,20 +629,42 @@ int main(int argc, char **argv){
 	if (err)
 		return err;
 
-    printf("Device %s\n",arguments.device);
-
     ebpf_setup(arguments.device,true);
 
-	int nr_cpus = libbpf_num_possible_cpus();
+	key_t shmkey;
+	int shmid;
+	void * shm_ptr;
+	
+	if((shmkey = ftok(SHMKEY,'A')) < 0){
+		perror("ftok error");
+		ebpf_cleanup(arguments.device,true,true);
+		exit(EXIT_FAILURE);
+	}
 
-	int fd_blacklist_ip4 = open_bpf_map(file_blacklist_ipv4,strerror_buf,sizeof(strerror_buf));
+	if((shmid = shmget(shmkey,HUGH_PAGE_SIZE,IPC_CREAT | SHM_HUGETLB | 0666)) < 0){
+		perror("shmget error");
+		ebpf_cleanup(arguments.device,true,true);
+		exit(EXIT_FAILURE);
+	}
+	
+	if(*((int *)(shm_ptr = shmat(shmid,NULL,0))) == -1)
+	{
+		perror("shmat error");
+		ebpf_cleanup(arguments.device,true,true);
+		exit(EXIT_FAILURE);
+	}
 
-	int fd_blacklist_ip6 = open_bpf_map(file_blacklist_ipv6,strerror_buf,sizeof(strerror_buf));
+	if(shmdt(shm_ptr) < 0){
+		perror("shmdt error");
+		ebpf_cleanup(arguments.device,true,true);
+		exit(EXIT_FAILURE);
+	}
 
-	//blacklist_modify(fd_blacklist_ip6,"2a01:598:d009:ab46:4ecc:6aff:fe08:271e",ACTION_DEL,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
-
-	close(fd_blacklist_ip4);
-	close(fd_blacklist_ip6);
+	if(shmctl(shmid,IPC_RMID,0) < 0 ){
+		perror("shmctl error");
+		ebpf_cleanup(arguments.device,true,true);
+		exit(EXIT_FAILURE);
+	}
 
     ebpf_cleanup(arguments.device,true,true);
     
