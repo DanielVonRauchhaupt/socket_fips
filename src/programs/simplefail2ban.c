@@ -25,10 +25,11 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include "blacklist_common.h"
+#include "ipc.h"
 #define RETURN_FAIL (-1)
 #define RETURN_SUCC (0)
 
-#define HUGH_PAGE_SIZE 2048 * 1000
+#define HUGHE_PAGE_SIZE 2048 * 1000
 
 #define SHMKEY "/mnt/scratch/PR/bachelorarbeit/shmkey"
 
@@ -622,8 +623,6 @@ int main(int argc, char **argv){
 	arguments.device = "";
 	int err;
 
-	char strerror_buf[64];
-
 	/* Parse command line arguments */
 	err = argp_parse(&argp, argc, argv, 0, NULL, &arguments);
 	if (err)
@@ -634,6 +633,7 @@ int main(int argc, char **argv){
 	key_t shmkey;
 	int shmid;
 	void * shm_ptr;
+	struct shm_header_t * shm_hdr;
 	
 	if((shmkey = ftok(SHMKEY,'A')) < 0){
 		perror("ftok error");
@@ -641,23 +641,20 @@ int main(int argc, char **argv){
 		exit(EXIT_FAILURE);
 	}
 
-	if((shmid = shmget(shmkey,HUGH_PAGE_SIZE,IPC_CREAT | SHM_HUGETLB | 0666)) < 0){
+	if((shmid = shmget(shmkey,HUGHE_PAGE_SIZE,IPC_CREAT | SHM_HUGETLB | 0666)) < 0){
 		perror("shmget error");
 		ebpf_cleanup(arguments.device,true,true);
 		exit(EXIT_FAILURE);
 	}
 	
-	if(*((int *)(shm_ptr = shmat(shmid,NULL,0))) == -1)
-	{
-		perror("shmat error");
-		ebpf_cleanup(arguments.device,true,true);
-		exit(EXIT_FAILURE);
+	if(shm_attach(shmid,&shm_hdr,HUGHE_PAGE_SIZE,true)){
+		fprintf(stderr,"Failed to detach shared memory segment\n");
 	}
 
-	if(shmdt(shm_ptr) < 0){
-		perror("shmdt error");
-		ebpf_cleanup(arguments.device,true,true);
-		exit(EXIT_FAILURE);
+	printf("%p\n",shm_hdr->shm_start);
+
+	if(shm_detach(shm_hdr)){
+		fprintf(stderr,"Failed to detach shared memory segment\n");
 	}
 
 	if(shmctl(shmid,IPC_RMID,0) < 0 ){
