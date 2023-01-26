@@ -28,10 +28,10 @@
 #define IP4_ADDRESS "10.3.10.131"
 #define IP6_ADDRESS "2001:db8:db8::1" 
 #define DOMAIN AF_INET
-#define MT true
+#define MT false
 #define LOG_SHORT false
 
-#define HUGHE_PAGE_SIZE 2048 * 1000
+#define HUGE_PAGE_SIZE 2048 * 1000
 
 #define SHMKEY "/mnt/scratch/PR/bachelorarbeit/shmkey"
 
@@ -76,7 +76,7 @@ static volatile sig_atomic_t server_running = true;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_rwlock_t datebuf_lock = PTHREAD_RWLOCK_INITIALIZER;
-static int logfilefd;
+struct shm_header_t * shm_hdr = NULL;
 
 // Structs
 struct packetbuf_t {
@@ -287,12 +287,11 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
 
     struct packetbuf_t * recvbuf = NULL;
     struct packetbuf_t * sendbuf = NULL;
-    char * logstr_buf = NULL;
     void * recv_ipbuf = NULL;
     void * send_ipbuf = NULL;
-    struct iovec * write_iovecs  = NULL;
-    int retval_rcv, retval_snd, i, send_count = 0, invalid_count = 0, logbuf_size, ip_bufsize;
+    int retval_rcv, retval_snd, i, send_count = 0, logbuf_size, ip_bufsize;
     uint8_t logstr_len;
+    char * logstr_buf;
 
     if(targs->domain == AF_INET){
         ip_bufsize = sizeof(struct sockaddr_in);
@@ -304,16 +303,13 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
 
     if((recvbuf = (struct packetbuf_t *) aligned_alloc(64,sizeof(struct packetbuf_t))) == NULL
         || (sendbuf = (struct packetbuf_t *) aligned_alloc(64,sizeof(struct packetbuf_t))) == NULL
-        || (logstr_buf = (char *) aligned_alloc(64,logbuf_size*MAX_MSG)) == NULL 
         || (recv_ipbuf = aligned_alloc(64,ip_bufsize*MAX_MSG)) == NULL
         || (send_ipbuf = aligned_alloc(64,ip_bufsize*MAX_MSG)) == NULL
-        || (write_iovecs = (struct iovec *) aligned_alloc(64,sizeof(struct iovec)*MAX_MSG)) == NULL) {
+        || (logstr_buf = (char *) calloc(logbuf_size,1)) == NULL) {
             error_msg("Memory allocation failed : %s",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
             free(sendbuf);
-            free(logstr_buf);
             free(recv_ipbuf);
             free(send_ipbuf);
-            free(write_iovecs);
             return RETURN_FAIL;
         }
 
@@ -335,8 +331,6 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
         sendbuf->msgs[i].msg_hdr.msg_iovlen = 1;
         sendbuf->msgs[i].msg_hdr.msg_name = (void *)((char *)(send_ipbuf)+i*ip_bufsize);
         sendbuf->msgs[i].msg_hdr.msg_namelen = ip_bufsize;
-        write_iovecs[i].iov_base = &logstr_buf[i*logbuf_size];
-        write_iovecs[i].iov_len = logbuf_size;
     }
 
     while(server_running){
@@ -349,10 +343,8 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
 			} else {
                 error_msg("Error in recvmmsg : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                 free(sendbuf);
-                free(logstr_buf);
                 free(recv_ipbuf);
                 free(send_ipbuf);
-                free(write_iovecs);
                 return RETURN_FAIL;
             }
 			
@@ -363,12 +355,16 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
         for(i = 0; i < retval_rcv; i++){
 
             if(recvbuf->payload_buf[i] == INVALID_PAYLOAD){
-                if((logstr_len = logstr_long(targs->domain,&logstr_buf[invalid_count*logbuf_size],(struct sockaddr *)recvbuf->msgs[i].msg_hdr.msg_name)) == 0){
+                if((logstr_len = logstr_long(targs->domain,logstr_buf,(struct sockaddr *)recvbuf->msgs[i].msg_hdr.msg_name)) == 0){
                     error_msg("Error writing logstring\n");
                     continue;
                 }
 
-                write_iovecs[invalid_count++].iov_len = logstr_len;
+                if(shm_put(shm_hdr,logstr_buf,logbuf_size)){
+                    error_msg("shp_put failed\n");
+                } else {
+                    targs->log_count++;
+                }
                 
                 continue;
             }
@@ -379,22 +375,6 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
             send_count++;
 
         }   
-
-        if(invalid_count){
-
-            if(pwritev2(logfilefd,write_iovecs,invalid_count,-1,RWF_APPEND) < 0){
-                error_msg("Error in writev : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
-                free(sendbuf);
-                free(logstr_buf);
-                free(recv_ipbuf);
-                free(send_ipbuf);
-                free(write_iovecs);
-                return RETURN_FAIL;
-            }
-
-            targs->log_count += invalid_count;
-
-        }
 
         if(send_count){
 
@@ -408,7 +388,6 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
                     free(logstr_buf);
                     free(recv_ipbuf);
                     free(send_ipbuf);
-                    free(write_iovecs);
                     return RETURN_FAIL;
                 }
             } else {
@@ -418,7 +397,6 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
         }
      
         send_count = 0;
-        invalid_count = 0;
     }  
 
     return RETURN_SUC;
@@ -536,44 +514,34 @@ int main(int argc, char ** argv) {
 
     key_t shmkey;
 	int shmid;
-	struct shm_header_t * shm_hdr;
 	
 	if((shmkey = ftok(SHMKEY,'A')) < 0){
 		perror("ftok error");
 		exit(EXIT_FAILURE);
 	}
 
-	if((shmid = shmget(shmkey,HUGHE_PAGE_SIZE,IPC_CREAT | SHM_HUGETLB | 0666)) < 0){
+	if((shmid = shmget(shmkey,HUGE_PAGE_SIZE,IPC_CREAT | SHM_HUGETLB | 0666)) < 0){
 		perror("shmget error");
 		exit(EXIT_FAILURE);
 	}
 	
-	if(shm_attach(shmid,&shm_hdr,HUGHE_PAGE_SIZE,true)){
+	if(shm_attach(shmid,&shm_hdr,HUGE_PAGE_SIZE,true)){
 		fprintf(stderr,"Failed to attach shared memory segment\n");
-	}
-
-	printf("%p\n",shm_hdr->shm_start);
-
-	if(shm_detach(shm_hdr)){
-		fprintf(stderr,"Failed to detach shared memory segment\n");
 	}
 
     if((threads = calloc(sizeof(pthread_t),thread_count)) == NULL || (sock_targs = aligned_alloc(64,sizeof(struct socktarg_t)*thread_count)) == NULL){
         perror("Calloc failed");
-        close(logfilefd);
         exit(EXIT_FAILURE);
     }
 
     if(update_datetime(global_datetime_buf) == RETURN_FAIL){
         fprintf(stderr,"Initializing the global datetime buffer failed\n");
-        close(logfilefd);
         exit(EXIT_FAILURE);
     }
 
     
     if(pthread_create(&util_thread,NULL,util_thread_routine,(void*)&util_arg)){
         perror("Creating util thread failed");
-        close(logfilefd);
         exit(EXIT_FAILURE);
     }
 
@@ -632,8 +600,11 @@ int main(int argc, char ** argv) {
         fprintf(stderr,"Util thread returned an error\n");
    }
 
+   if(shm_detach(shm_hdr)){
+		fprintf(stderr,"Failed to detach shared memory segment\n");
+	}
+
    free(threads);
-   close(logfilefd);
     
    return EXIT_SUCCESS; 
 }

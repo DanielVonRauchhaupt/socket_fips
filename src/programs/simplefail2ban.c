@@ -9,7 +9,6 @@
 #include <bpf/bpf.h>
 #include "ip_blacklist.skel.h"
 #include <linux/if_link.h> /* Need XDP flags */
-#include <list.h>
 #include <string.h>
 #include <pthread.h>
 #include <hs.h>
@@ -23,23 +22,34 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <sys/ipc.h>
+#include <signal.h>
 #include <sys/shm.h>
+#include <sys/sysinfo.h>
+#include <ip_hashtable.h>
 #include "blacklist_common.h"
 #include "ipc.h"
 #define RETURN_FAIL (-1)
 #define RETURN_SUCC (0)
 
-#define HUGHE_PAGE_SIZE 2048 * 1000
+
+#define MT false
+#define HUGE_PAGE_SIZE 2048 * 1000
 
 #define SHMKEY "/mnt/scratch/PR/bachelorarbeit/shmkey"
 
-static bool verbose = false;
+#define UNUSED(x)(void)(x)
+
+static volatile sig_atomic_t server_running = true;
+static bool verbose = true;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
+static struct ip_hashtable_t * htable;
+
+#define NANOSECONDS_PER_MILLISECOND 1000000
+#define TIMEOUT 500 * NANOSECONDS_PER_MILLISECOND
 
 const char *argp_program_version = "ip_blacklist 0.0";
 static const char argp_program_doc[] =
-
 "BPF xdp_ddos01 application.\n"
 "\n"
 "eBPF program is loaded into the kernel and attached at the given device."
@@ -58,6 +68,13 @@ static const struct argp_option opts[] = {
 	{ "clean", 'c',NULL,0, "detach eBPF program from chosen device and clean up mounted eBPF file system",0},
 	{0},
 };
+
+struct targs_t{
+	uint32_t interval;
+	int retval;
+};
+
+
 struct arguments
 {
   char* device;
@@ -595,6 +612,10 @@ static int ebpf_setup(const char * device, bool verbose){
 
 }
 
+void sig_handler(int signal){
+    UNUSED(signal);
+    server_running = false;
+}
 
 
 int open_bpf_map(const char *file,char * strerror_buf, int strerror_size)
@@ -610,25 +631,73 @@ int open_bpf_map(const char *file,char * strerror_buf, int strerror_size)
 	return fd;
 }
 
+int8_t block_signals(bool keep){
+    sigset_t set;
+    if(sigfillset(&set)){
+        return RETURN_FAIL;
+    }
+
+    if(keep){
+        if(sigdelset(&set,SIGINT) || sigdelset(&set,SIGTERM)){
+            return RETURN_FAIL;
+        }
+    }
+
+    if(pthread_sigmask(SIG_BLOCK, &set, NULL)){
+        return RETURN_FAIL;
+    }
+
+    return RETURN_SUCC;
+}
 
 
+void * unban_thread_routine(void * args){
+
+}
+
+void * ban_thread_routine(void * args){
+
+}
 
 
 
 
 int main(int argc, char **argv){
+
+	UNUSED(file_port_blacklist);
+	UNUSED(file_port_blacklist_count);
+	UNUSED(file_blacklist_ipv6_subnet);
+	UNUSED(file_blacklist_ipv6_subnetcache);
+	UNUSED(file_verdict);
+	UNUSED(file_blacklist_ipv6);
 	
     struct arguments arguments;
+	struct targs_t main_targs = {.interval=TIMEOUT};
+	struct targs_t unban_targs = {.interval=TIMEOUT};
+	struct targs_t * thread_args;
+	pthread_t unban_thread_id;
+	pthread_t * thread_ids;
 	arguments.verbose = 0;
 	arguments.device = "";
 	int err;
+	int i, thread_count, n_procs = get_nprocs();
+    thread_count = (MT && n_procs > 0) ? n_procs -1  : 0;
 
 	/* Parse command line arguments */
 	err = argp_parse(&argp, argc, argv, 0, NULL, &arguments);
 	if (err)
 		return err;
 
-    ebpf_setup(arguments.device,true);
+    if(ebpf_setup(arguments.device,true)){
+		fprintf(stderr,"ebpf setup failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if((thread_ids = calloc(sizeof(pthread_t),thread_count)) == NULL || (thread_args= calloc(sizeof(struct targs_t),thread_count)) == NULL){
+		perror("Calloc failed");
+		ebpf_cleanup(arguments.device,true,true);
+		exit(EXIT_FAILURE);
+	}
 
 	key_t shmkey;
 	int shmid;
@@ -641,17 +710,38 @@ int main(int argc, char **argv){
 		exit(EXIT_FAILURE);
 	}
 
-	if((shmid = shmget(shmkey,HUGHE_PAGE_SIZE,IPC_CREAT | SHM_HUGETLB | 0666)) < 0){
+	if((shmid = shmget(shmkey,HUGE_PAGE_SIZE,IPC_CREAT | SHM_HUGETLB | 0666)) < 0){
 		perror("shmget error");
 		ebpf_cleanup(arguments.device,true,true);
 		exit(EXIT_FAILURE);
 	}
 	
-	if(shm_attach(shmid,&shm_hdr,HUGHE_PAGE_SIZE,true)){
+	if(shm_attach(shmid,&shm_hdr,HUGE_PAGE_SIZE,true)){
 		fprintf(stderr,"Failed to detach shared memory segment\n");
 	}
 
-	printf("%p\n",shm_hdr->shm_start);
+	if(pthread_create(&unban_thread_id,NULL,unban_thread_routine,&unban_targs)){
+		perror("pthread create failed for unban thread");
+	} else {
+
+		for(i = 0; i < thread_count; i++){
+			thread_args[i].interval = TIMEOUT;
+			if(pthread_create(&thread_ids[i],NULL,ban_thread_routine,&thread_args[i])){
+				perror("pthread create failed");
+			}
+		}
+
+		ban_thread_routine(&main_targs);
+
+		for(i = 0; i < thread_count; i++){
+			thread_args[i].interval = TIMEOUT;
+			if(pthread_join(thread_ids[i],NULL)){
+				perror("pthread join failed");
+			}
+		}
+
+	}
+	
 
 	if(shm_detach(shm_hdr)){
 		fprintf(stderr,"Failed to detach shared memory segment\n");
@@ -663,7 +753,10 @@ int main(int argc, char **argv){
 		exit(EXIT_FAILURE);
 	}
 
-    ebpf_cleanup(arguments.device,true,true);
+    if(ebpf_cleanup(arguments.device,true,true)){
+		fprintf(stderr,"ebpf cleanup failed\n");
+		exit(EXIT_FAILURE);
+	}
     
 
 	

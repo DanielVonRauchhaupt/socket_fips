@@ -40,6 +40,7 @@ int shm_attach(int shmid, struct shm_header_t **hdr_ptr, uint32_t size, bool ini
 
 int shm_detach(struct shm_header_t * hdr);
 
+int shm_put(struct shm_header_t * shm_hdr, void * src, uint32_t wsize);
 
 int64_t shm_get(struct shm_header_t * shm_hdr, void * rbuf, uint32_t bufsize);
 
