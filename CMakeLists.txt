@@ -30,14 +30,14 @@ find_package(Threads REQUIRED)
 
 target_link_libraries(udp_server 
     PUBLIC ringbuf
-    PUBLIC ip_hashtable
+    PUBLIC ip_llist
     PUBLIC ip_to_str
     PUBLIC Threads::Threads
 )
 
 target_link_libraries(udp_server_shm
     PUBLIC ringbuf
-    PUBLIC ip_hashtable
+    PUBLIC ip_llist
     PUBLIC ip_to_str
     PUBLIC Threads::Threads
 )
@@ -71,4 +71,4 @@ target_include_directories(simplefail2ban
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/
 ) 
-target_link_libraries(simplefail2ban ip_blacklist_skel ringbuf ip_hashtable ip_to_str hs inih llist Threads::Threads) 
+target_link_libraries(simplefail2ban ip_blacklist_skel ringbuf ip_llist ip_to_str hs inih llist Threads::Threads) 
