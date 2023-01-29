@@ -1,5 +1,5 @@
-#ifndef IP_LLIST_H
-#define IP_LLIST_H
+#ifndef _IP_LLIST_H
+#define _IP_LLIST_H
 #include <stdlib.h>
 #include <stdint.h>
 #include <pthread.h>
@@ -8,53 +8,58 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define IP_LLIST_FAIL (-1)
-#define IP_LLIST_SUCC (0)
+/**
+ *  Small and simple linked list to store IPv4 and IPv6 addresses with a correspoding timestamp
+ * 
+ *  
+ * 
+*/
 
-#define NBINS 256
+#define IP_LLIST_SUCCESS (0) // Success return code
+#define IP_LLIST_ARG_ERR (-1) // Error type for invalid argument errors
+#define IP_LLIST_NULLPTR_ERR (-2) // Error type for nullpointer error
+#define IP_LLIST_MEM_ERR (-3) // Error type for memory allocation failures 
+#define IP_LLIST_MUTEX_ERR (-4) // Error type for mutex failures
 
 
-struct listnode_t
+
+// Struct for a single node in the list
+struct ip_listnode_t
 {
-    pthread_mutex_t lock;
     void * key;
     time_t timestamp;
-    struct listnode_t * next;
+    int domain;
+    struct ip_listnode_t * next;
 };
 
+// Struct for the linked list
 struct ip_llist_t
 {
-    struct listnode_t bins[NBINS];
+    struct ip_listnode_t * head;
+    struct ip_listnode_t * tail;
+    pthread_mutex_t tail_lock;
 };
 
-/*
-    Initialises memory for the llist. Returns _IP_llist_FAIL on error and _IP_llist_SUCC on success.
-*/
-int8_t ip_llist_init(struct ip_llist_t ** htable);
 
 /*
-    Increments or initializes the counter for "key" and returns
-    the counter after incrementation. Returns 0 on error.
+    Initialises memory for the ip_llist_t struct (Should be called before entering the multi-threaded context)
 */
-int8_t ip_llist_insert(struct ip_llist_t * htable, void * key, int domain);
+int ip_llist_init(struct ip_llist_t ** htable);
 
 /*
-    Increments or initializes the counter for "key" and returns
-    the counter after incrementation. Returns 0 on error
+    Appends a new node with addr and timestamp to the end of the list
 */
-int8_t ip_llist_remove(struct ip_llist_t * htable, void * key, int domain);
+int ip_llist_append(struct ip_llist_t * htable, void * addr, time_t * timestamp, int domain);
 
 /*
-    Frees memory for the llist. Returns -1 on error
-    WARNING: Should only be called once all mutex locks are unlocked
-    and no other thread is accessing the table anymore
+    Removes a node from the list (Not MT safe if called on the tail node)
 */
-int8_t ip_llist_destroy(struct ip_llist_t * htable);
-
+int ip_llist_remove(struct ip_listnode_t * node, struct ip_listnode_t * prev);
 
 /*
-    Gathers number of clients and total connections and saves them to stats
-    Returns _IP_llist_FAIL on error and _IP_llist_SUCC on success.
+    Frees memory for the ip_llist_t struct (Should be called after exeting the multi-threaded context)
 */
+int ip_llist_destroy(struct ip_llist_t * htable);
+
 
 #endif

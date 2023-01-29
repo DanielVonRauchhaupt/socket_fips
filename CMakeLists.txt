@@ -9,19 +9,12 @@ add_subdirectory(external)
 
 add_subdirectory(src/lib)
 
-add_executable(udp_server ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/udp_server.c ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/ipc.c)
-
-add_executable(udp_server_shm ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/udp_server_shm.c ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/ipc.c)
+add_executable(udp_server ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/udp_server.c)
 
 target_compile_options(udp_server PRIVATE -Wall -Wextra -Wpedantic)
 
-target_compile_options(udp_server_shm PRIVATE -Wall -Wextra -Wpedantic)
 
 target_include_directories(udp_server
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
-)
-
-target_include_directories(udp_server_shm
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
 )
 
@@ -29,14 +22,6 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 target_link_libraries(udp_server 
-    PUBLIC ringbuf
-    PUBLIC ip_llist
-    PUBLIC ip_to_str
-    PUBLIC Threads::Threads
-)
-
-target_link_libraries(udp_server_shm
-    PUBLIC ringbuf
     PUBLIC ip_llist
     PUBLIC ip_to_str
     PUBLIC Threads::Threads
@@ -55,8 +40,7 @@ bpf_object(ip_blacklist ip_blacklist.bpf.c)
 add_dependencies(ip_blacklist_skel libbpf-build bpftool)
 
 
-add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c
-                              ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/ipc.c)                                                         
+add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)                                                         
 
 
 target_compile_options(simplefail2ban PRIVATE -Wall -Wextra -Wpedantic)
@@ -71,4 +55,4 @@ target_include_directories(simplefail2ban
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/
 ) 
-target_link_libraries(simplefail2ban ip_blacklist_skel ringbuf ip_llist ip_to_str hs inih llist Threads::Threads) 
+target_link_libraries(simplefail2ban ip_blacklist_skel ip_hashtable ip_llist ip_to_str hs Threads::Threads) 

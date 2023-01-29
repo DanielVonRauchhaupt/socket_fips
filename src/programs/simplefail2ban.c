@@ -27,7 +27,6 @@
 #include <sys/sysinfo.h>
 #include <ip_hashtable.h>
 #include "blacklist_common.h"
-#include "ipc.h"
 #define RETURN_FAIL (-1)
 #define RETURN_SUCC (0)
 
@@ -699,26 +698,6 @@ int main(int argc, char **argv){
 		exit(EXIT_FAILURE);
 	}
 
-	key_t shmkey;
-	int shmid;
-	void * shm_ptr;
-	struct shm_header_t * shm_hdr;
-	
-	if((shmkey = ftok(SHMKEY,'A')) < 0){
-		perror("ftok error");
-		ebpf_cleanup(arguments.device,true,true);
-		exit(EXIT_FAILURE);
-	}
-
-	if((shmid = shmget(shmkey,HUGE_PAGE_SIZE,IPC_CREAT | SHM_HUGETLB | 0666)) < 0){
-		perror("shmget error");
-		ebpf_cleanup(arguments.device,true,true);
-		exit(EXIT_FAILURE);
-	}
-	
-	if(shm_attach(shmid,&shm_hdr,HUGE_PAGE_SIZE,true)){
-		fprintf(stderr,"Failed to detach shared memory segment\n");
-	}
 
 	if(pthread_create(&unban_thread_id,NULL,unban_thread_routine,&unban_targs)){
 		perror("pthread create failed for unban thread");
@@ -742,16 +721,6 @@ int main(int argc, char **argv){
 
 	}
 	
-
-	if(shm_detach(shm_hdr)){
-		fprintf(stderr,"Failed to detach shared memory segment\n");
-	}
-
-	if(shmctl(shmid,IPC_RMID,0) < 0 ){
-		perror("shmctl error");
-		ebpf_cleanup(arguments.device,true,true);
-		exit(EXIT_FAILURE);
-	}
 
     if(ebpf_cleanup(arguments.device,true,true)){
 		fprintf(stderr,"ebpf cleanup failed\n");

@@ -20,21 +20,10 @@ enum ipc_type_t
 {
     SHM,
     SOCKET,
-    PIPE,
     QUEUE,
     DISK,
 };
 
-struct shm_header_t {
-    uint32_t size;
-    atomic_uint_fast32_t read_upper;
-    atomic_uint_fast32_t read_lower;
-    atomic_uint_fast32_t write_upper;
-    atomic_uint_fast32_t write_lower;
-    pthread_mutex_t write_lock;
-    pthread_mutex_t read_lock;
-    void * shm_start;
-};
 
 int shm_attach(int shmid, struct shm_header_t **hdr_ptr, uint32_t size, bool init);
 
