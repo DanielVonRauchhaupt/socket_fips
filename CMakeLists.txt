@@ -9,22 +9,25 @@ add_subdirectory(external)
 
 add_subdirectory(src/lib)
 
-add_executable(udp_server ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/udp_server.c)
+find_library(uring NAMES liburing PATHS /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
+add_executable(udp_server ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/udp_server.c)
 target_compile_options(udp_server PRIVATE -Wall -Wextra -Wpedantic)
 
 
 target_include_directories(udp_server
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include/io_ipc
 )
-
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
 
 target_link_libraries(udp_server 
     PUBLIC ip_llist
     PUBLIC ip_to_str
     PUBLIC Threads::Threads
+    PUBLIC shm_ringbuf
+    PUBLIC uring
 )
 
 # Set BpfObject input parameters -- note this is usually not necessary unless
@@ -41,18 +44,14 @@ add_dependencies(ip_blacklist_skel libbpf-build bpftool)
 
 
 add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)                                                         
-
-
 target_compile_options(simplefail2ban PRIVATE -Wall -Wextra -Wpedantic)
 
-add_dependencies(simplefail2ban libbpf-build)
-add_dependencies(simplefail2ban inih)
-add_dependencies(simplefail2ban llist)
 target_include_directories(simplefail2ban
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src      
     PUBLIC /usr/include/hs          
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/list/src  
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include/io_ipc
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/
 ) 
-target_link_libraries(simplefail2ban ip_blacklist_skel ip_hashtable ip_llist ip_to_str hs Threads::Threads) 
+target_link_libraries(simplefail2ban ip_blacklist_skel ip_hashtable ip_llist ip_to_str shm_ringbuf hs Threads::Threads) 

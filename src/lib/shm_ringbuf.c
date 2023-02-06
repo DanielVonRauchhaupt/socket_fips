@@ -1,4 +1,4 @@
-#include "include/ipc/shm_ringbuf.h"
+#include "include/io_ipc/shm_ringbuf.h"
 
 static void shm_cleanup(struct shm_rbuf_arg_t * args){
 
@@ -18,7 +18,7 @@ static uint32_t init_seg_hdr(struct shm_rbuf_seg_hdr_t * hdr,uint32_t base_size,
 }
 
 
-int shm_rbuf_init(struct shm_rbuf_arg_t * args, char flag, bool create){
+int shm_rbuf_init(struct shm_rbuf_arg_t * args){
 
     if(args == NULL){
         return IO_IPC_NULLPTR_ERR;
@@ -36,7 +36,7 @@ int shm_rbuf_init(struct shm_rbuf_arg_t * args, char flag, bool create){
 
     uint8_t shm_flag = 0;
 
-    if(create){
+    if(args->create){
 
         shm_flag |= IPC_CREAT | IPC_EXCL;
 
@@ -82,7 +82,6 @@ int shm_rbuf_init(struct shm_rbuf_arg_t * args, char flag, bool create){
     uint32_t prior_size;
 
     args->segment_heads[0] = (struct shm_rbuf_seg_hdr_t *) ((char *)(args->head)+sizeof(struct shm_rbuf_global_hdr_t));
-    args->segment = args->segment_heads[0];
 
     if(args->create){
         prior_size = init_seg_hdr(args->segment_heads[0],base_size,&padding);
@@ -111,7 +110,7 @@ int shm_rbuf_init(struct shm_rbuf_arg_t * args, char flag, bool create){
 }
 
 
-int shm_rbuf_detach(struct shm_rbuf_arg_t * args){
+int shm_rbuf_finalize(struct shm_rbuf_arg_t * args){
 
     if(args == NULL){
         return IO_IPC_NULLPTR_ERR;
@@ -136,35 +135,37 @@ int shm_rbuf_detach(struct shm_rbuf_arg_t * args){
 
 }
 
-int shm_rbuf_put(struct shm_rbuf_arg_t * args, void * src, uint8_t wsize){
+int shm_rbuf_write(struct shm_rbuf_arg_t * args, void * src, uint8_t wsize, uint32_t segment_id){
 
-    if(args == NULL || args->segment == NULL || src == NULL){
+    struct shm_rbuf_seg_hdr_t * segment;
+
+    if(args == NULL || segment_id < args->segment_count  || src == NULL || (segment == args->segment_heads[segment_id]) == NULL){
         return IO_IPC_NULLPTR_ERR;
     }
 
-    uint32_t free_bytes, read_index = atomic_load(&args->segment->read_index);
+    uint32_t free_bytes, read_index = atomic_load(&segment->read_index);
 
-    if(read_index == args->segment->write_index){
+    if(read_index == segment->write_index){
         free_bytes = args->size;
     } 
 
-    else if(read_index < args->segment->write_index){
-        free_bytes = args->segment->write_index - read_index;
+    else if(read_index < segment->write_index){
+        free_bytes = segment->write_index - read_index;
     }
 
     else {
-        free_bytes = (args->segment->size - read_index) + args->segment->write_index;
+        free_bytes = (segment->size - read_index) + segment->write_index;
     }
 
     if(free_bytes < wsize + 2){
         return IO_IPC_SIZE_ERR;
     }
 
-    char * base_ptr = (((char *) args->segment) + sizeof(struct shm_rbuf_seg_hdr_t) + args->segment->write_index);
+    char * base_ptr = (((char *) segment) + sizeof(struct shm_rbuf_seg_hdr_t) + segment->write_index);
     *(base_ptr++) = wsize;
     
 
-    uint8_t overlap = (read_index + wsize + 1) % args->segment->size;
+    uint8_t overlap = (read_index + wsize + 1) % segment->size;
 
     if(overlap){
 
@@ -172,11 +173,11 @@ int shm_rbuf_put(struct shm_rbuf_arg_t * args, void * src, uint8_t wsize){
             return IO_IPC_MEM_ERR;
         }
 
-        if(memcpy((void *)((char *)args->segment+sizeof(struct shm_rbuf_seg_hdr_t)),(void *)((char *)src + (wsize-overlap)),overlap) == NULL){
+        if(memcpy((void *)((char *)segment+sizeof(struct shm_rbuf_seg_hdr_t)),(void *)((char *)src + (wsize-overlap)),overlap) == NULL){
             return IO_IPC_MEM_ERR;
         }
 
-        atomic_store(&args->segment->write_index,overlap);
+        atomic_store(&segment->write_index,overlap);
 
     }
 
@@ -185,15 +186,17 @@ int shm_rbuf_put(struct shm_rbuf_arg_t * args, void * src, uint8_t wsize){
             return IO_IPC_MEM_ERR;
         }
 
-        atomic_fetch_add(&args->segment->write_index,wsize+1);
+        atomic_fetch_add(&segment->write_index,wsize+1);
     }
 
     return IO_IPC_SUCCESS;
 }
 
-int shm_rbuf_get(struct shm_rbuf_arg_t * args, void * rbuf, uint8_t bufsize){
+int shm_rbuf_read(struct shm_rbuf_arg_t * args, void * rbuf, uint8_t bufsize, uint32_t segment_id){
     
-    if(args == NULL || args->segment == NULL || rbuf == NULL){
+    struct shm_rbuf_seg_hdr_t * segment;
+
+    if(args == NULL || segment_id < args->segment_count  || rbuf == NULL || (segment == args->segment_heads[segment_id]) == NULL){
         return IO_IPC_NULLPTR_ERR;
     }
 
@@ -201,30 +204,30 @@ int shm_rbuf_get(struct shm_rbuf_arg_t * args, void * rbuf, uint8_t bufsize){
         return 0;
     }
 
-    uint32_t write_index = atomic_load(&args->segment->write_index);
+    uint32_t write_index = atomic_load(&segment->write_index);
 
-    if(write_index == args->segment->read_index){
+    if(write_index == segment->read_index){
         return 0;
     }
     
-    char * base_ptr = ((char *)args->segment + sizeof(struct shm_rbuf_seg_hdr_t) + args->segment->read_index);
+    char * base_ptr = ((char *)segment + sizeof(struct shm_rbuf_seg_hdr_t) + segment->read_index);
     uint8_t rsize = *base_ptr;
 
     if(rsize > bufsize){
         return IO_IPC_SIZE_ERR;
     }
 
-    uint8_t overlap = (args->segment->write_index + rsize) % args->segment->size;
+    uint8_t overlap = (segment->write_index + rsize) % segment->size;
 
     if(overlap){
         if(memcpy(rbuf,(void *)base_ptr,rsize-overlap) == NULL){
             return IO_IPC_MEM_ERR;
         }
-        if(memcpy((void *)((char * )rbuf + (rsize-overlap)),(void *)((char *) args->segment + sizeof(struct shm_rbuf_seg_hdr_t)),overlap) == NULL){
+        if(memcpy((void *)((char * )rbuf + (rsize-overlap)),(void *)((char *) segment + sizeof(struct shm_rbuf_seg_hdr_t)),overlap) == NULL){
             return IO_IPC_MEM_ERR;
         }
 
-        atomic_store(&args->segment->read_index,overlap);
+        atomic_store(&segment->read_index,overlap);
     }
 
     else{
@@ -232,7 +235,9 @@ int shm_rbuf_get(struct shm_rbuf_arg_t * args, void * rbuf, uint8_t bufsize){
             return IO_IPC_MEM_ERR;
         }
 
-        atomic_fetch_add(&args->segment->read_index,rsize+1);
+        atomic_fetch_add(&segment->read_index,rsize+1);
     }
+
+    return rsize;
 
 }

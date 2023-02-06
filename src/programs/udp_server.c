@@ -9,15 +9,20 @@
 #include <netinet/ip6.h>
 #include <sys/sysinfo.h>
 #include <sys/uio.h>
+#include <sys/uio.h>
 #include <pthread.h>
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <signal.h>
+#include <sys/ioctl.h>
+#include <liburing.h>
 
 // Local includes
 #include <ip_to_str.h>
+#include <io_ipc.h>
+#include <io_ipc/shm_ringbuf.h>
 
 // Configuration Options
 #define DEFAULT_PORT 8080
@@ -33,6 +38,8 @@
 #define RETURN_FAIL (-1)
 
 #define UNUSED(x)(void)(x)
+
+#define HUGE_PAGE_SIZE 2048 * 1000
 
 #define NEWLINE_CHAR (char) (10)
 #define BLANK (char) (32)
@@ -60,7 +67,7 @@
 #define UTIL_TIMEOUT 500 * NANOSECONDS_PER_MILLISECOND
 
 #define RECV_TIMEOUT 1000
-#define MAX_MSG 512
+#define MAX_MSG __IOV_MAX
 
 
 // Global Variables
@@ -69,27 +76,37 @@ static volatile sig_atomic_t server_running = true;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_rwlock_t datebuf_lock = PTHREAD_RWLOCK_INITIALIZER;
-static int logfilefd;
+static enum ipc_type_t ipc_type = SHM;
 
 // Structs
-struct packetbuf_t {
+struct packet_buf_t {
     struct mmsghdr msgs[MAX_MSG];
     struct iovec iovecs[MAX_MSG];
     unsigned char payload_buf[MAX_MSG];
 };
 
-struct socktarg_t {
+struct disk_arg_t 
+{
+    int logfilefd;
+    struct io_uring * ring;
+    struct iovec iovecs[MAX_MSG];
+    struct io_uring_sqe * sqe;
+    struct io_uring_cqe * cqe;
+};
+
+struct sock_targ_t {
     int domain;
-    uint8_t cpu;
+    uint8_t thread_id;
+    void * ipc_arg;
     in_port_t port;
     uint64_t pkt_in;
     uint64_t pkt_out;
     uint64_t log_count;
-    char strerror_buf[256];
+    char strerror_buf[64];
     int return_code;
 };
 
-struct utiltarg_t {
+struct util_targ_t {
     size_t interval;
     int return_code;
 };
@@ -133,6 +150,31 @@ time_t update_datetime(char * datebuf){
     return t;
 }
 
+void ipc_cleanup(void * ipc_arg,enum ipc_type_t ipc_type, int * retval){
+
+    switch (ipc_type)
+    {
+    case DISK:
+        close(((struct disk_arg_t *)ipc_arg)->logfilefd);
+        io_uring_queue_exit(((struct disk_arg_t *)ipc_arg)->ring);
+        free(ipc_arg);
+        return;
+    
+    case SHM:
+        if(retval != NULL){
+            *retval = shm_rbuf_finalize((struct shm_rbuf_arg_t *)ipc_arg);
+        } else {
+            shm_rbuf_finalize((struct shm_rbuf_arg_t *)ipc_arg);
+        }
+        free(ipc_arg);
+        return;
+
+    default:
+        return;
+    }
+
+}
+
 /* Blocks all blockable signals with the option to keep SIGINT and SIGTERM unblocked */
 int8_t block_signals(bool keep){
     sigset_t set;
@@ -160,14 +202,18 @@ void sig_handler(int signal){
 }
 
 /* Routine for helper thread to periodically wake up and update the 
- globla datetime buffer */
+ global datetime buffer */
 void * util_thread_routine(void * arg){
 
-    block_signals(true);
-    signal(SIGINT,sig_handler);
-    signal(SIGTERM,sig_handler);
+    if(block_signals(true)){
+        error_msg("Failed to block signals\n");
+    }
+    if(signal(SIGINT,sig_handler) == SIG_ERR || signal(SIGTERM,sig_handler) == SIG_ERR){
+        char strerror_buf[64];
+        error_msg("Failed to set signal handler : %s\n",strerror_r(errno,strerror_buf,64));
+    }
 
-    struct utiltarg_t * targs = (struct utiltarg_t *) arg;
+    struct util_targ_t * targs = (struct util_targ_t *) arg;
     struct timespec ts = {.tv_nsec=targs->interval};
 
     while (server_running)
@@ -275,16 +321,15 @@ int bind_socket(int sockfd, struct sockaddr * sockaddr, in_port_t port, int doma
     return RETURN_SUC;
 }
 
-/* Listen for udp packets. Replies to valid requests and logs invalid requests */
-int listen_and_reply(int sockfd,struct socktarg_t * targs){
+/* Listen for udp packets. Replies to valid requests and logs invalid requests using ipc method specified by ipy_type*/
+int listen_and_reply(int sockfd,struct sock_targ_t * targs){
 
-    struct packetbuf_t * recvbuf = NULL;
-    struct packetbuf_t * sendbuf = NULL;
+    struct packet_buf_t * recvbuf = NULL;
+    struct packet_buf_t * sendbuf = NULL;
     char * logstr_buf = NULL;
     void * recv_ipbuf = NULL;
     void * send_ipbuf = NULL;
-    struct iovec * write_iovecs  = NULL;
-    int retval_rcv, retval_snd, i, send_count = 0, invalid_count = 0, logbuf_size, ip_bufsize;
+    int retval_rcv, retval_snd, retval_ipc, i, send_count = 0, invalid_count = 0, logbuf_size, ip_bufsize;
     uint8_t logstr_len;
 
     if(targs->domain == AF_INET){
@@ -295,18 +340,16 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
         logbuf_size = LOG_BUF_SIZE_IP6;
     }
 
-    if((recvbuf = (struct packetbuf_t *) aligned_alloc(64,sizeof(struct packetbuf_t))) == NULL
-        || (sendbuf = (struct packetbuf_t *) aligned_alloc(64,sizeof(struct packetbuf_t))) == NULL
+    if((recvbuf = (struct packet_buf_t *) aligned_alloc(64,sizeof(struct packet_buf_t))) == NULL
+        || (sendbuf = (struct packet_buf_t *) aligned_alloc(64,sizeof(struct packet_buf_t))) == NULL
         || (logstr_buf = (char *) aligned_alloc(64,logbuf_size*MAX_MSG)) == NULL 
         || (recv_ipbuf = aligned_alloc(64,ip_bufsize*MAX_MSG)) == NULL
-        || (send_ipbuf = aligned_alloc(64,ip_bufsize*MAX_MSG)) == NULL
-        || (write_iovecs = (struct iovec *) aligned_alloc(64,sizeof(struct iovec)*MAX_MSG)) == NULL) {
+        || (send_ipbuf = aligned_alloc(64,ip_bufsize*MAX_MSG)) == NULL) {
             error_msg("Memory allocation failed : %s",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
             free(sendbuf);
             free(logstr_buf);
             free(recv_ipbuf);
             free(send_ipbuf);
-            free(write_iovecs);
             return RETURN_FAIL;
         }
 
@@ -328,8 +371,12 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
         sendbuf->msgs[i].msg_hdr.msg_iovlen = 1;
         sendbuf->msgs[i].msg_hdr.msg_name = (void *)((char *)(send_ipbuf)+i*ip_bufsize);
         sendbuf->msgs[i].msg_hdr.msg_namelen = ip_bufsize;
-        write_iovecs[i].iov_base = &logstr_buf[i*logbuf_size];
-        write_iovecs[i].iov_len = logbuf_size;
+
+        if(ipc_type == DISK){
+            ((struct disk_arg_t *)targs->ipc_arg)->iovecs[i].iov_base = &logstr_buf[i*logbuf_size];
+            ((struct disk_arg_t *)targs->ipc_arg)->iovecs[i].iov_len = logbuf_size;
+        }
+
     }
 
     while(server_running){
@@ -342,10 +389,10 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
 			} else {
                 error_msg("Error in recvmmsg : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                 free(sendbuf);
+                free(recvbuf);
                 free(logstr_buf);
                 free(recv_ipbuf);
                 free(send_ipbuf);
-                free(write_iovecs);
                 return RETURN_FAIL;
             }
 			
@@ -353,6 +400,27 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
 
         targs->pkt_in += retval_rcv;
 
+        // Check if previos io_uring submission was successful
+        if(ipc_type == DISK && ((struct disk_arg_t *)targs->ipc_arg)->sqe!= NULL){
+
+            struct disk_arg_t * disk_args = ((struct disk_arg_t *)targs->ipc_arg);
+            
+            if(((retval_ipc = io_uring_wait_cqe(disk_args->ring,&disk_args->cqe)) < 0) || (disk_args->cqe->res < 0)){
+                error_msg("Error in io_uring write : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
+                free(sendbuf);
+                free(recvbuf);
+                free(logstr_buf);
+                free(recv_ipbuf);
+                free(send_ipbuf);
+                return RETURN_FAIL;
+            }
+
+            io_uring_cqe_seen(disk_args->ring, disk_args->cqe);
+            
+        }
+
+
+ 
         for(i = 0; i < retval_rcv; i++){
 
             if(recvbuf->payload_buf[i] == INVALID_PAYLOAD){
@@ -361,8 +429,36 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
                     continue;
                 }
 
-                write_iovecs[invalid_count++].iov_len = logstr_len;
-                
+                switch (ipc_type)
+                {
+                case DISK:
+                    ((struct disk_arg_t *)targs->ipc_arg)->iovecs[invalid_count++].iov_len = logstr_len;
+                    break;
+                   
+                case SHM:
+                   if((retval_ipc = shm_rbuf_write(((struct shm_rbuf_arg_t *)targs->ipc_arg),&logstr_buf[invalid_count*logbuf_size],logstr_len,targs->thread_id))!=IO_IPC_SUCCESS){
+                        if(retval_ipc == IO_IPC_SIZE_ERR){
+                            error_msg("Buffer %d has reached capacity\n",targs->thread_id);
+                            continue;
+                        } 
+
+                        else {
+                            error_msg("Error in shm_rbuf_write : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
+                            free(sendbuf);
+                            free(recvbuf);
+                            free(logstr_buf);
+                            free(recv_ipbuf);
+                            free(send_ipbuf);
+                            return RETURN_FAIL;
+                        }
+                   }
+
+                   invalid_count++;
+
+                default:
+                    break;
+                }
+
                 continue;
             }
 
@@ -375,14 +471,28 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
 
         if(invalid_count){
 
-            if(pwritev2(logfilefd,write_iovecs,invalid_count,-1,RWF_APPEND) < 0){
-                error_msg("Error in writev : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
-                free(sendbuf);
-                free(logstr_buf);
-                free(recv_ipbuf);
-                free(send_ipbuf);
-                free(write_iovecs);
+            switch (ipc_type)
+            {
+            case DISK:
+
+                ((struct disk_arg_t *)targs->ipc_arg)->sqe = io_uring_get_sqe(((struct disk_arg_t *)targs->ipc_arg)->ring);
+
+                io_uring_prep_writev(((struct disk_arg_t *)targs->ipc_arg)->sqe,((struct disk_arg_t *)targs->ipc_arg)->logfilefd,((struct disk_arg_t *)targs->ipc_arg)->iovecs,invalid_count,0);
+
+                if(io_uring_submit(((struct disk_arg_t *)targs->ipc_arg)->ring) < 0){
+                    error_msg("Error in io_uring submit : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
+                    free(sendbuf);
+                    free(recvbuf);
+                    free(logstr_buf);
+                    free(recv_ipbuf);
+                    free(send_ipbuf);
                 return RETURN_FAIL;
+                }
+                
+                break;
+            
+            default:
+                break;
             }
 
             targs->log_count += invalid_count;
@@ -398,10 +508,10 @@ int listen_and_reply(int sockfd,struct socktarg_t * targs){
                 if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
                     error_msg("Error in sendmmsg : sendcount %d, %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                     free(sendbuf);
+                    free(recvbuf);
                     free(logstr_buf);
                     free(recv_ipbuf);
                     free(send_ipbuf);
-                    free(write_iovecs);
                     return RETURN_FAIL;
                 }
             } else {
@@ -423,14 +533,14 @@ void * run_socket(void *args){
     int sockfd;
     int opt = 1;
     struct timeval timeout = {.tv_sec=0,.tv_usec=RECV_TIMEOUT};
-    struct socktarg_t * targs = (struct socktarg_t *) args;
+    struct sock_targ_t * targs = (struct sock_targ_t *) args;
     struct sockaddr_storage server_addr;
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(targs->cpu,&cpuset);
+    CPU_SET(targs->thread_id,&cpuset);
 
     if(pthread_setaffinity_np(pthread_self(),sizeof(cpuset),&cpuset)){
-        error_msg("Failed to set cpu affinity of thread %d to cpu %d\n",pthread_self(),targs->cpu);
+        error_msg("Failed to set cpu affinity of thread %d to cpu %d\n",pthread_self(),targs->thread_id);
     }
 
     if(block_signals(false)){
@@ -519,55 +629,140 @@ void * run_socket(void *args){
 int main(int argc, char ** argv) { 
 
     in_port_t serv_port = (argc > 1) ? (uint16_t)strtol(argv[1],NULL,10) : DEFAULT_PORT;
-    int i, thread_count, n_procs = get_nprocs();
-    thread_count = (MT && n_procs > 0) ? n_procs -1  : 0;
+    int i, retval, thread_count, n_procs = get_nprocs();
+    thread_count = (MT && n_procs > 0) ? n_procs : 1;
+    void * ipc_arg;
     pthread_t * threads;
     pthread_t util_thread;
-    struct socktarg_t * sock_targs;
-    struct utiltarg_t util_arg = {.interval=(size_t)UTIL_TIMEOUT};
-    struct socktarg_t main_targ = {.domain=DOMAIN,.port=serv_port};
+    struct sock_targ_t * sock_targs;
+    struct util_targ_t util_arg = {.interval=(size_t)UTIL_TIMEOUT};
 
-
-   if((logfilefd = open(DEFAULT_LOG,OPEN_MODE,OPEN_PERM)) < 0){
-        perror("Opening logfile failed");
-        exit(EXIT_FAILURE);
-   }
-
-    if((threads = calloc(sizeof(pthread_t),thread_count)) == NULL || (sock_targs = aligned_alloc(64,sizeof(struct socktarg_t)*thread_count)) == NULL){
+    if((threads = calloc(sizeof(pthread_t),thread_count-1)) == NULL || (sock_targs = calloc(sizeof(struct sock_targ_t),thread_count)) == NULL){
         perror("Calloc failed");
-        close(logfilefd);
+        exit(EXIT_FAILURE);
+    }
+
+    for(i = 0; i < thread_count; i++){
+        sock_targs[i].thread_id = i;
+        sock_targs[i].domain = DOMAIN;
+        sock_targs[i].port = htons(serv_port);
+        sock_targs[i].log_count = 0;
+        sock_targs[i].pkt_in = 0;
+        sock_targs[i].pkt_out = 0;
+    }
+
+    switch (ipc_type)
+    {
+    case DISK:
+    
+        if((ipc_arg = calloc(sizeof(int),1)) == NULL){
+            perror("calloc failed");
+            free(threads);
+            free(sock_targs);
+            exit(EXIT_FAILURE);
+        }
+
+        if((*((int *)ipc_arg) = open(DEFAULT_LOG,OPEN_MODE,OPEN_PERM)) < 0){
+            free(threads);
+            free(sock_targs);
+            perror("opening logfile failed");
+            exit(EXIT_FAILURE);
+        }
+
+        for(i = 0; i < thread_count; i++){
+            if((sock_targs[i].ipc_arg = aligned_alloc(sizeof(struct disk_arg_t),1)) == NULL){
+                perror("aligned alloc failed");
+            }
+
+            else if(memset(((struct disk_arg_t *)ipc_arg)->iovecs,0,MAX_MSG*sizeof(struct iovec)) == NULL){
+                fprintf(stderr,"Memset error\n");
+            }
+
+            else if(io_uring_queue_init(MAX_MSG,((struct disk_arg_t *)sock_targs[i].ipc_arg)->ring,0)){
+                perror("io_uring queue init failed");
+            } else {
+                ((struct disk_arg_t *)sock_targs[i].ipc_arg)->logfilefd = *((int *)ipc_arg);
+                continue;
+            }
+            for(int j = i; j > -1; j--){
+                free(sock_targs[i].ipc_arg);
+            }
+            close(*((int *) ipc_arg));
+            free(threads);
+            free(sock_targs);
+            exit(EXIT_FAILURE);
+        }
+
+        break;
+
+    case SHM:
+
+        if((ipc_arg = calloc(sizeof(struct shm_rbuf_arg_t),1)) == NULL){
+            perror("calloc failed");
+            free(threads);
+            free(sock_targs);
+            exit(EXIT_FAILURE);
+        }
+
+        ((struct shm_rbuf_arg_t *)(ipc_arg))->create = true;
+        ((struct shm_rbuf_arg_t *)(ipc_arg))->key_path = DEFAULT_LOG;
+        ((struct shm_rbuf_arg_t *)(ipc_arg))->segment_count = thread_count;
+        ((struct shm_rbuf_arg_t *)(ipc_arg))->size = HUGE_PAGE_SIZE;
+
+        if((retval = shm_rbuf_init(((struct shm_rbuf_arg_t *)(ipc_arg)))) != IO_IPC_SUCCESS){
+            if(retval > 0){
+                perror("shm_rbuf_init failed");
+            }
+            else {
+                fprintf(stderr,"shm_rbuf_init failed : error code %d\n",retval);
+            }
+            free(threads);
+            free(sock_targs);
+            free(ipc_arg);
+            exit(EXIT_FAILURE);
+        }
+
+        for(i = 0; i < thread_count; i++){
+            sock_targs[i].ipc_arg = ipc_arg;
+        }
+
+        break;
+    
+    
+    default:
+        fprintf(stderr,"Invalid ipc type value %d\n",ipc_type);
+        free(threads);
+        free(sock_targs);
         exit(EXIT_FAILURE);
     }
 
     if(update_datetime(global_datetime_buf) == RETURN_FAIL){
         fprintf(stderr,"Initializing the global datetime buffer failed\n");
-        close(logfilefd);
+        ipc_cleanup(ipc_arg,ipc_type,NULL);
+        free(threads);
+        free(sock_targs);
         exit(EXIT_FAILURE);
     }
 
     
     if(pthread_create(&util_thread,NULL,util_thread_routine,(void*)&util_arg)){
         perror("Creating util thread failed");
-        close(logfilefd);
+        ipc_cleanup(ipc_arg,ipc_type,NULL);
+        free(threads);
+        free(sock_targs);
         exit(EXIT_FAILURE);
     }
 
-    for(i = 0; i < thread_count; i++){
-        if(memcpy((void*)&sock_targs[i],&main_targ,sizeof(struct socktarg_t))==NULL){
-            fprintf(stderr,"Memcopy failed\n");
-            exit(EXIT_FAILURE);
-        }
-
-        sock_targs[i].cpu = i+1;
+    for(i = 1; i < thread_count; i++){
 
         if(pthread_create(&threads[i],NULL,run_socket,(void*)&sock_targs[i])){
             perror("Could not create listener thread");
         }
     }
 
-   run_socket((void *)&main_targ);
+   run_socket((void *)&sock_targs[0]);
 
-   for(i = 0; i < thread_count; i++){
+   for(i = 1; i < thread_count; i++){
         if(pthread_join(threads[i],NULL)){
             perror("Pthread join failed");
         }
@@ -579,15 +774,9 @@ int main(int argc, char ** argv) {
 
     unsigned long long int total_in_count = 0 ,total_out_count = 0, total_log_count = 0;
 
-    if(main_targ.return_code == RETURN_FAIL){
+    if(sock_targs[0].return_code == RETURN_FAIL){
         fprintf(stderr,"Main thread returned an error\n");
-   }
-
-   printf("\nMain thread : packets received  : %lu, packets sent  : %lu, messages logged : %lu\n",main_targ.pkt_in,main_targ.pkt_out,main_targ.log_count);
-
-    total_in_count += main_targ.pkt_in;
-    total_out_count += main_targ.pkt_out;
-    total_log_count += main_targ.log_count;
+    }
 
    for(i = 0; i < thread_count; i++){
         if(sock_targs[i].return_code == RETURN_FAIL){
@@ -607,8 +796,15 @@ int main(int argc, char ** argv) {
         fprintf(stderr,"Util thread returned an error\n");
    }
 
+   ipc_cleanup(ipc_arg,ipc_type,&retval);
+
+    if(retval !=  IO_IPC_SUCCESS){
+        fprintf(stderr,"Error in ipc cleanup : error code %d\n",retval);
+    }
+
    free(threads);
-   close(logfilefd);
+   free(sock_targs);
+   
     
    return EXIT_SUCCESS; 
 }

@@ -1,4 +1,4 @@
-#include "ipc.h"
+#include "include/io_ipc.h"
 
 
 static int shm_attach_header(void * shm, struct shm_header_t ** hdr_ptr, uint32_t size, bool init){

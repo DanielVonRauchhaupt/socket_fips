@@ -44,22 +44,22 @@ struct ip_llist_t
 /*
     Initialises memory for the ip_llist_t struct (Should be called before entering the multi-threaded context)
 */
-int ip_llist_init(struct ip_llist_t ** htable);
+int ip_llist_init(struct ip_llist_t ** llist);
 
 /*
     Appends a new node with addr and timestamp to the end of the list
 */
-int ip_llist_append(struct ip_llist_t * htable, void * addr, time_t * timestamp, int domain);
+int ip_llist_append(struct ip_llist_t * llist, void * addr, time_t * timestamp, int domain);
 
 /*
     Removes a node from the list (Not MT safe if called on the tail node)
 */
-int ip_llist_remove(struct ip_listnode_t * node, struct ip_listnode_t * prev);
+int ip_llist_remove(struct ip_listnode_t ** node, struct ip_listnode_t * prev);
 
 /*
     Frees memory for the ip_llist_t struct (Should be called after exeting the multi-threaded context)
 */
-int ip_llist_destroy(struct ip_llist_t * htable);
+int ip_llist_destroy(struct ip_llist_t ** llist);
 
 
 #endif

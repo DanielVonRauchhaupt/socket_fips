@@ -20,7 +20,8 @@ static int create_lnode(struct ip_listnode_t ** lnode,void * key, time_t * ts, i
             free(lnode);
             return IP_LLIST_MEM_ERR;
         }
-            *((uint32_t *)(*lnode)->key) = *((uint32_t *) key);
+        *((uint32_t *)(*lnode)->key) = *((uint32_t *) key);
+        (*lnode)->domain = AF_INET;
 
         return IP_LLIST_SUCCESS;
     
@@ -30,10 +31,8 @@ static int create_lnode(struct ip_listnode_t ** lnode,void * key, time_t * ts, i
             free(lnode);
             return IP_LLIST_MEM_ERR;
         }
-    
-        if(key != NULL){
-            *((__uint128_t *)(*lnode)->key) = *((__uint128_t * ) key);
-        }
+        *((__uint128_t *)(*lnode)->key) = *((__uint128_t * ) key);
+        (*lnode)->domain = AF_INET6;
 
         return IP_LLIST_SUCCESS;
 
@@ -43,14 +42,16 @@ static int create_lnode(struct ip_listnode_t ** lnode,void * key, time_t * ts, i
     }
 }
 
-static void destroy_lnode(struct ip_listnode_t * lnode){
+static void destroy_lnode(struct ip_listnode_t ** lnode){
 
-    if(lnode == NULL){
+    if(*lnode == NULL){
         return;
     }
     
-    free(lnode->key);
-    free(lnode);
+    free((*lnode)->key);
+    free(*lnode);
+    *lnode = NULL;
+    
 }
 
 int ip_llist_init(struct ip_llist_t ** llist){
@@ -78,23 +79,27 @@ int ip_llist_append(struct ip_llist_t * llist, void * key, time_t * ts, int doma
         return IP_LLIST_NULLPTR_ERR;
     }
 
-    int retval;
+    int retval;    
+    struct ip_listnode_t * new;
+
+    if((retval = create_lnode(&new,key,ts,domain))){
+        return retval;
+    }
 
     if(pthread_mutex_lock(&llist->tail_lock)){
         pthread_mutex_unlock(&llist->tail_lock);
         return IP_LLIST_MUTEX_ERR;
-    }    
-
-    struct ip_listnode_t * new;
-
-    if((retval = create_lnode(&new,key,ts,domain))){
-        pthread_mutex_unlock(&llist->tail_lock);
-        return retval;
     }
 
-    llist->tail->next = new;
-    llist->tail = new;
-    
+    if(llist->tail == NULL){
+        llist->head = new;
+        llist->tail = new;
+    } 
+
+    else{
+        llist->tail->next = new;
+        llist->tail = new;
+    }
 
     if(pthread_mutex_unlock(&llist->tail_lock)){
         return IP_LLIST_MUTEX_ERR;
@@ -104,14 +109,14 @@ int ip_llist_append(struct ip_llist_t * llist, void * key, time_t * ts, int doma
 }
 
 
-int ip_llist_remove(struct ip_listnode_t * node, struct ip_listnode_t * prev){
+int ip_llist_remove(struct ip_listnode_t ** node, struct ip_listnode_t * prev){
 
-    if(node == NULL){
+    if(node == NULL || *node == NULL){
         return IP_LLIST_NULLPTR_ERR;
     }
 
     if(prev != NULL){
-        prev->next = node->next;
+        prev->next = (*node)->next;
     }
 
     destroy_lnode(node);
@@ -121,11 +126,36 @@ int ip_llist_remove(struct ip_listnode_t * node, struct ip_listnode_t * prev){
 }
 
 
-int ip_llist_destroy(struct ip_llist_t * llist){
+int ip_llist_destroy(struct ip_llist_t ** llist){
 
-    if(llist == NULL){
+    if(llist == NULL || *llist){
         return IP_LLIST_NULLPTR_ERR;
     }
 
+    int error,retval = IP_LLIST_SUCCESS;
+    struct ip_listnode_t * prev, * it = (*llist)->head;
+
+    while (it != NULL)
+    {
+        prev = it;
+        it = it->next;
+        if((retval = ip_llist_remove(prev,NULL)) < 0){
+            error = retval;
+        }
+    }
+
+    if(pthread_mutex_destroy(&(*llist)->tail_lock)){
+        error = IP_LLIST_MUTEX_ERR;
+    }
+
+    free(*llist);
+
+    *llist = NULL;
+    
+    if(error){
+        return error;
+    }
+
+    return IP_LLIST_SUCCESS;
 }
 

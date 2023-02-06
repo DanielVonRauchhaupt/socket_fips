@@ -6,7 +6,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <sys/mman.h>
 /**
  *  Small and simple hashtable to store IPv4 and IPv6 Addresses
  * 
@@ -28,6 +28,7 @@
 struct ip_hashbin_t
 { 
    void * key;
+   int domain;
    uint32_t count;
    pthread_mutex_t lock;
    struct ip_hashbin_t * next;
@@ -58,7 +59,7 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * key, int domain);
 /*
     Frees memory for the ip_hasttable_t struct (Should be called after exiting the multi threaded context)
 */
-int ip_hashtable_destroy(struct ip_hashtable_t * htable); 
+int ip_hashtable_destroy(struct ip_hashtable_t ** htable); 
 
 
 #endif

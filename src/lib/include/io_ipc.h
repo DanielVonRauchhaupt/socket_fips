@@ -14,9 +14,10 @@
 #include <string.h>
 #include <errno.h>
 
-#include "include/ipc/shm_ringbuf.h"
-#include "include/ipc/msgq.h"
-#include "sock.h"
+
+#include "io_ipc/shm_ringbuf.h"
+#include "io_ipc/msgq.h"
+#include "io_ipc/sock.h"
 
 #define IO_IPC_SUCCESS (0)
 #define IO_IPC_ARG_ERR (-1)
@@ -37,7 +38,7 @@ enum ipc_type_t
 
 union ipc_arg_t
 {
-    void * standin;
+    void * placeholder;
 };
 
 int ipc_init(union ipc_arg_t * arg, enum ipc_type_t type);
