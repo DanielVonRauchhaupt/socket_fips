@@ -19,7 +19,7 @@ struct shm_rbuf_arg_t {
 };
 
 struct shm_rbuf_global_hdr_t {
-    uint8_t segment_count;
+    uint32_t segment_count;
     uint32_t size;
 };
 

@@ -34,7 +34,7 @@ int shm_rbuf_init(struct shm_rbuf_arg_t * args){
         return errno;
     }
 
-    uint8_t shm_flag = 0;
+    int shm_flag = 0;
 
     if(args->create){
 
@@ -58,7 +58,7 @@ int shm_rbuf_init(struct shm_rbuf_arg_t * args){
     }
 
     if(args->create){
-        args->head->size = args->size;
+        args->head->size = args->size - sizeof(struct shm_rbuf_global_hdr_t);
         args->head->segment_count = args->segment_count;
     } 
     
@@ -77,8 +77,8 @@ int shm_rbuf_init(struct shm_rbuf_arg_t * args){
         return IO_IPC_MEM_ERR;
     }
 
-    uint8_t padding = args->size % args->segment_count;
-    uint32_t base_size = (args->size / args->segment_count) - sizeof(struct shm_rbuf_seg_hdr_t);
+    uint8_t padding = args->head->size % args->segment_count;
+    uint32_t base_size = (args->head->size / args->segment_count) - sizeof(struct shm_rbuf_seg_hdr_t);
     uint32_t prior_size;
 
     args->segment_heads[0] = (struct shm_rbuf_seg_hdr_t *) ((char *)(args->head)+sizeof(struct shm_rbuf_global_hdr_t));
@@ -139,14 +139,18 @@ int shm_rbuf_write(struct shm_rbuf_arg_t * args, void * src, uint8_t wsize, uint
 
     struct shm_rbuf_seg_hdr_t * segment;
 
-    if(args == NULL || segment_id < args->segment_count  || src == NULL || (segment == args->segment_heads[segment_id]) == NULL){
+    if(args == NULL || src == NULL || (segment = args->segment_heads[segment_id]) == NULL){
         return IO_IPC_NULLPTR_ERR;
+    }
+
+    else if(segment_id >= args->segment_count){
+        return IO_IPC_ARG_ERR;
     }
 
     uint32_t free_bytes, read_index = atomic_load(&segment->read_index);
 
     if(read_index == segment->write_index){
-        free_bytes = args->size;
+        free_bytes = segment->size;
     } 
 
     else if(read_index < segment->write_index){
@@ -165,7 +169,7 @@ int shm_rbuf_write(struct shm_rbuf_arg_t * args, void * src, uint8_t wsize, uint
     *(base_ptr++) = wsize;
     
 
-    uint8_t overlap = (read_index + wsize + 1) % segment->size;
+    uint8_t overlap = ((read_index + wsize + 1) > segment->size) ? (read_index + wsize + 1) % segment->size : 0;
 
     if(overlap){
 
@@ -182,7 +186,7 @@ int shm_rbuf_write(struct shm_rbuf_arg_t * args, void * src, uint8_t wsize, uint
     }
 
     else {
-        if(memcpy(base_ptr,src,wsize)){
+        if(memcpy(base_ptr,src,wsize) == NULL){
             return IO_IPC_MEM_ERR;
         }
 
@@ -196,7 +200,7 @@ int shm_rbuf_read(struct shm_rbuf_arg_t * args, void * rbuf, uint8_t bufsize, ui
     
     struct shm_rbuf_seg_hdr_t * segment;
 
-    if(args == NULL || segment_id < args->segment_count  || rbuf == NULL || (segment == args->segment_heads[segment_id]) == NULL){
+    if(args == NULL || segment_id < args->segment_count  || rbuf == NULL || (segment = args->segment_heads[segment_id]) == NULL){
         return IO_IPC_NULLPTR_ERR;
     }
 
@@ -217,7 +221,7 @@ int shm_rbuf_read(struct shm_rbuf_arg_t * args, void * rbuf, uint8_t bufsize, ui
         return IO_IPC_SIZE_ERR;
     }
 
-    uint8_t overlap = (segment->write_index + rsize) % segment->size;
+    uint8_t overlap = ((segment->write_index + rsize + 1) > segment->size) ? (segment->write_index + rsize) % segment->size : 0;
 
     if(overlap){
         if(memcpy(rbuf,(void *)base_ptr,rsize-overlap) == NULL){

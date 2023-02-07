@@ -982,8 +982,7 @@ int main(int argc, char **argv){
 	UNUSED(file_verdict);
 	
     struct arguments arguments;
-	
-	struct watcher_targs_t main_targs;
+
 	struct watcher_targs_t * thread_args;
 	struct unban_targs_t unban_targs;
 	struct shm_rbuf_arg_t rbuf_args;
@@ -992,7 +991,7 @@ int main(int argc, char **argv){
 	arguments.verbose = 0;
 	arguments.device = "";
 	int i, thread_count, retval;
-    thread_count = (MT && WATCHER_COUNT > 0) ? WATCHER_COUNT -1  : 0;
+    thread_count = (MT && WATCHER_COUNT > 0) ? WATCHER_COUNT : 1;
 
 	/* Parse command line arguments */
 	retval = argp_parse(&argp, argc, argv, 0, NULL, &arguments);
@@ -1010,7 +1009,7 @@ int main(int argc, char **argv){
 		exit(EXIT_FAILURE);
 	}
 
-	if((thread_ids = calloc(sizeof(pthread_t),thread_count)) == NULL || (thread_args= calloc(sizeof(struct unban_targs_t),thread_count)) == NULL){
+	if((thread_ids = calloc(sizeof(pthread_t),thread_count)) == NULL || (thread_args = calloc(sizeof(struct unban_targs_t),thread_count)) == NULL){
 		perror("Calloc failed");
 		ebpf_cleanup(arguments.device,true,true);
 		exit(EXIT_FAILURE);
@@ -1047,13 +1046,21 @@ int main(int argc, char **argv){
 	} else {
 
 		for(i = 0; i < thread_count; i++){
+			thread_args[i].ban_count = 0;
+			thread_args[i].ipc_args = &rbuf_args;
+			thread_args[i].rcv_count = 0;
+			thread_args[i].thread_id = i;
 			thread_args[i].wakeup_interval = TIMEOUT;
-			if(pthread_create(&thread_ids[i],NULL,ban_thread_routine,&thread_args[i])){
-				perror("pthread create failed");
+
+			if(i > 0){
+				if(pthread_create(&thread_ids[i],NULL,ban_thread_routine,&thread_args[i])){
+					perror("pthread create failed");
+				}
 			}
+
 		}
 
-		ban_thread_routine(&main_targs);
+		ban_thread_routine(&thread_args[0]);
 
 		for(i = 0; i < thread_count; i++){
 			thread_args[i].wakeup_interval = TIMEOUT;

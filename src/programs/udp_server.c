@@ -30,7 +30,7 @@
 #define IP4_ADDRESS "10.3.10.131"
 #define IP6_ADDRESS "2001:db8:db8::1" 
 #define DOMAIN AF_INET
-#define MT true
+#define MT false
 #define LOG_SHORT false
 
 // Definitions
@@ -711,6 +711,7 @@ int main(int argc, char ** argv) {
 
         if((retval = shm_rbuf_init(((struct shm_rbuf_arg_t *)(ipc_arg)))) != IO_IPC_SUCCESS){
             if(retval > 0){
+                fprintf(stderr,"Error code %d\n",retval);
                 perror("shm_rbuf_init failed");
             }
             else {
