@@ -41,16 +41,19 @@
 #define BAN_TIME 180
 #define BAN_THRESHOLD 1
 
+#define DEFAULT_IFACE "enp24s0f0np0"
+
 #define DEFAULT_LOG "/mnt/scratch/PR/logs/udpsvr.log"
 
 #define UNUSED(x)(void)(x)
 
 #define MATCH_REGEX "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} client (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+) exceeded request rate limit"
+#define IP_REGEX "(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+)"
 
 #define LOGBUF_SIZE 256
 
 static volatile sig_atomic_t server_running = true;
-static bool verbose = true;
+static bool verbose = false;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct ip_hashtable_t * htable;
@@ -88,7 +91,7 @@ static const struct argp_option opts[] = {
 
 struct unban_targs_t{
 	uint32_t wakeup_interval;
-	uint32_t unban_count;
+	uint64_t unban_count;
 	int retval;
 };
 
@@ -103,13 +106,13 @@ struct watcher_targs_t {
 	struct shm_rbuf_arg_t * ipc_args;
 	uint8_t thread_id;
 	uint32_t wakeup_interval;
-	uint32_t rcv_count;
-	uint32_t ban_count;
+	uint64_t rcv_count;
+	uint64_t ban_count;
 	int retval;
 };
 
 struct regex_context_t {
-	char ip_str_buf[INET6_ADDRSTRLEN];
+	char ip_str_buf[LOGBUF_SIZE];
 	union ip_addr_t ip_addr;
 	int8_t domain;
 };
@@ -139,10 +142,12 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 		break;
 	case ARGP_KEY_END:
       if (state->arg_num < 1){
+		arguments->device = DEFAULT_IFACE;
         /* Not enough arguments. */
-	    fprintf(stderr, "Not enough arguments. See usage\n");
-        argp_usage (state);
-        return ARGP_ERR_UNKNOWN;
+	    //fprintf(stderr, "Not enough arguments. See usage\n");
+        //argp_usage (state);
+        //return ARGP_ERR_UNKNOWN;
+		break;
 	  }
 	  else{
       break;
@@ -453,9 +458,7 @@ int blacklist_modify(int fd, void * ip_addr, unsigned int action, unsigned int d
 		
 
 		if (errno == 17) {
-			#ifndef LONGTERM
-			error_msg(": Already in blacklist\n");
-			#endif 
+			if(verbose){error_msg("address already in blacklist\n");}
 			return EXIT_OK;
 		}
 		error_msg("\n");
@@ -767,14 +770,15 @@ void * unban_thread_routine(void * args){
 					if(retval < 0){
 						if(verbose){error_msg("Error modifying ebf map : error code %d\n",retval);}
 					} else {
+						info_msg("Unbanned client: %d\n", iterator->key);
 						targs->unban_count++;
 					}
 
 					if(brk){
 						if(pthread_mutex_unlock(&banned_list->tail_lock)){
-							if(verbose){error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));}
-							targs->retval = EXIT_FAIL;
-							pthread_exit(&targs->retval);
+							if(verbose){error_msg("Failed to release banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));}
+								targs->retval = EXIT_FAIL;
+								pthread_exit(&targs->retval);
 						}
 
 						break;
@@ -812,19 +816,24 @@ void * unban_thread_routine(void * args){
 int regex_match_handler(unsigned int id, unsigned long long from, unsigned long long to,
                   unsigned int flags, void *ctx){
 
+	UNUSED(flags);
 	struct regex_context_t * context = (struct regex_context_t *)ctx;
+
+	if(id != 1){
+		return 0;
+	}
 
 	context->ip_str_buf[to] = '\0';
 
 	if (inet_pton(AF_INET,&context->ip_str_buf[from],&context->ip_addr.ipv4) == 1) {
 		context->domain = AF_INET;
-        return 0;
+        return 1;
     } else if (inet_pton(AF_INET6, &context->ip_str_buf[from],&context->ip_addr.ipv6) == 1) {
 		context->domain = AF_INET6;
-        return 0;
+        return 1;
     } else {
 		context->domain = -1;
-		return -1;
+		return 0;
     }
 }
 
@@ -854,12 +863,12 @@ void * ban_thread_routine(void * args){
         error_msg("Failed to block signals\n");
     }
 
-	if (hs_compile(MATCH_REGEX, HS_FLAG_DOTALL, HS_MODE_BLOCK, NULL, &database, &compile_error) != HS_SUCCESS) {
+	if (hs_compile(MATCH_REGEX, HS_FLAG_SOM_LEFTMOST, HS_MODE_BLOCK, NULL, &database, &compile_error) != HS_SUCCESS) {
         error_msg("Hyperscan compilation failed with error code %d\n", compile_error->expression);
         hs_free_compile_error(compile_error);
 		targs->retval = EXIT_FAIL;
         return &targs->retval;
-    }
+    } 
 
     if (hs_alloc_scratch(database, &scratch) != HS_SUCCESS) {
         error_msg("Hyperscan allocation of scratch space failed\n");
@@ -877,27 +886,43 @@ void * ban_thread_routine(void * args){
 
 				targs->rcv_count++;
 				no_read = false;
-
-				write(1,reg_context.ip_str_buf,retval);
-				
 				/*
-				if(hs_scan(database,reg_context.ip_str_buf,retval,0,scratch,regex_match_handler,NULL) != HS_SCAN_TERMINATED){
-					error_msg("Hyperscan error for logstring %s\n",reg_context.ip_str_buf);
-					targs->retval = EXIT_FAIL;
-					return &targs->retval;
+				if((retval=hs_scan(database,reg_context.ip_str_buf,LOGBUF_SIZE,0,scratch,regex_match_handler,&reg_context)) != HS_SCAN_TERMINATED){
+					if(retval != HS_SUCCESS){
+						error_msg("Hyperscan error for logstring %s : error code %d\n",reg_context.ip_str_buf,retval);
+						hs_free_database(database);
+						hs_free_scratch(scratch);
+						targs->retval = EXIT_FAIL;
+						return &targs->retval;
+					}
+					continue;
+				}
+				*/
+
+				reg_context.ip_str_buf[retval-1] = '\0';
+				info_msg("Received logstring: %s\n", reg_context.ip_str_buf);
+
+				if (inet_pton(AF_INET,reg_context.ip_str_buf,&reg_context.ip_addr.ipv4) == 1) {
+					reg_context.domain = AF_INET;
+				} else if (inet_pton(AF_INET6, reg_context.ip_str_buf,&reg_context.ip_addr.ipv6) == 1) {
+					reg_context.domain = AF_INET6;
+				} else {
+					reg_context.domain = -1;
 				}
 
 				switch (reg_context.domain)
 				{
 				case AF_INET:
 					
-					retval = ip_hashtable_insert(htable,reg_context.ip_addr.ipv4,AF_INET);
+					retval = ip_hashtable_insert(htable,&reg_context.ip_addr.ipv4,AF_INET);
 
 					break;
 
 				case AF_INET6:
 
-					retval = ip_hashtable_insert(htable,reg_context.ip_addr.ipv6,AF_INET6);
+					retval = ip_hashtable_insert(htable,&reg_context.ip_addr.ipv6,AF_INET6);
+
+					break;
 				
 				case -1:
 					if(verbose){error_msg("Invalid address in logstring : %s\n",reg_context.ip_str_buf);}
@@ -918,19 +943,19 @@ void * ban_thread_routine(void * args){
 					switch (reg_context.domain)
 					{
 					case AF_INET:
-						if((retval = ip_llist_append(&banned_list,&reg_context.ip_addr.ipv4,&ts,AF_INET)) < 0){
+						if((retval = ip_llist_append(banned_list,&reg_context.ip_addr.ipv4,&ts,AF_INET)) < 0){
 							if(verbose){error_msg("Error appending to banned list for logstring : %s : Error Code %d\n",reg_context.ip_str_buf,retval);}
 								continue;
 						}
-					    retval = blacklist_modify(file_blacklist_ipv4,&reg_context.ip_addr.ipv4,ACTION_ADD,AF_INET,nr_cpus,strerror_buf,sizeof(strerror_buf));
+					    retval = blacklist_modify(ipv4_ebpf_map,&reg_context.ip_addr.ipv4,ACTION_ADD,AF_INET,nr_cpus,strerror_buf,sizeof(strerror_buf));
 						break;
 					
 					case AF_INET6:
-						if((retval = ip_llist_append(&banned_list,&reg_context.ip_addr.ipv6,&ts,AF_INET6)) < 0){
+						if((retval = ip_llist_append(banned_list,&reg_context.ip_addr.ipv6,&ts,AF_INET6)) < 0){
 							if(verbose){error_msg("Error appending to banned list for logstring : %s : Error Code %d\n",reg_context.ip_str_buf,retval);}
 								continue;
 						}
-					    retval = blacklist_modify(file_blacklist_ipv6,&reg_context.ip_addr.ipv6,ACTION_ADD,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
+					    retval = blacklist_modify(ipv6_ebpf_map,&reg_context.ip_addr.ipv6,ACTION_ADD,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
 						break;
 
 					default:
@@ -943,9 +968,12 @@ void * ban_thread_routine(void * args){
 						continue;
 					}
 
+					info_msg("Banned client: %d\n", reg_context.ip_addr.ipv4);
+
+
 					targs->ban_count++;
 				
-				} */
+				} 
 
 			}
 
@@ -965,6 +993,9 @@ void * ban_thread_routine(void * args){
 
 	}
 	
+	hs_free_database(database);
+	hs_free_scratch(scratch);
+
 	targs->retval = EXIT_SUCCESS;
 	return &targs->retval;
 
@@ -984,8 +1015,8 @@ int main(int argc, char **argv){
     struct arguments arguments;
 
 	struct watcher_targs_t * thread_args;
-	struct unban_targs_t unban_targs;
-	struct shm_rbuf_arg_t rbuf_args;
+	struct unban_targs_t unban_targs = {.unban_count = 0,.wakeup_interval=TIMEOUT};
+	struct shm_rbuf_arg_t rbuf_args = {.create=false,.key_path=DEFAULT_LOG,.size=0};
 	pthread_t unban_thread_id;
 	pthread_t * thread_ids;
 	arguments.verbose = 0;
@@ -998,7 +1029,7 @@ int main(int argc, char **argv){
 	if (retval)
 		return retval;
 
-    if(ebpf_setup(arguments.device,true)){
+    if(ebpf_setup(arguments.device,false)){
 		fprintf(stderr,"ebpf setup failed\n");
 		exit(EXIT_FAILURE);
 	}
@@ -1009,7 +1040,7 @@ int main(int argc, char **argv){
 		exit(EXIT_FAILURE);
 	}
 
-	if((thread_ids = calloc(sizeof(pthread_t),thread_count)) == NULL || (thread_args = calloc(sizeof(struct unban_targs_t),thread_count)) == NULL){
+	if((thread_ids = calloc(sizeof(pthread_t),thread_count-1)) == NULL || (thread_args = calloc(sizeof(struct unban_targs_t),thread_count)) == NULL){
 		perror("Calloc failed");
 		ebpf_cleanup(arguments.device,true,true);
 		exit(EXIT_FAILURE);
@@ -1038,6 +1069,7 @@ int main(int argc, char **argv){
 		free(thread_ids);
 		free(thread_args);
 		ebpf_cleanup(arguments.device,true,true);
+		exit(EXIT_FAILURE);
 	}
 
 
@@ -1062,18 +1094,38 @@ int main(int argc, char **argv){
 
 		ban_thread_routine(&thread_args[0]);
 
-		for(i = 0; i < thread_count; i++){
-			thread_args[i].wakeup_interval = TIMEOUT;
-			thread_args[i].ipc_args = &rbuf_args;
+		for(i = 0; i < (thread_count-1); i++){
 			if(pthread_join(thread_ids[i],NULL)){
-				perror("pthread join failed");
+				perror("pthread join failed for watcher thread");
 			}
 		}
 
-	}
-	
+		if(pthread_join(unban_thread_id,NULL)){
+			perror("pthread join failed for unban thread");
+		}
 
-    if(ebpf_cleanup(arguments.device,true,true)){
+	}
+
+	uint64_t total_rcv_count = 0, total_ban_count = 0;
+
+	for(i = 0; i < thread_count; i++){
+		if(thread_args[i].retval != RETURN_SUCC){
+			fprintf(stderr,"Watcher thread %d returned with error code %d\n",i,thread_args[i].retval);
+		}
+		printf("\nThread %d : messages received %ld : clients banned %ld\n",i,thread_args[i].rcv_count,thread_args[i].ban_count);
+	
+		total_rcv_count += thread_args[0].rcv_count;
+		total_ban_count += thread_args[0].ban_count;
+
+	}
+
+	if(unban_targs.retval != RETURN_SUCC){
+		fprintf(stderr,"Unban thread returned with error code %d\n",thread_args[i].retval);
+	}
+
+	printf("Total messages received %ld : total clients banned %ld : total clients unbanned %ld\n",total_rcv_count,total_ban_count,unban_targs.unban_count);
+
+    if(ebpf_cleanup(arguments.device,true,false)){
 		fprintf(stderr,"ebpf cleanup failed\n");
 		ip_llist_destroy(&banned_list);
 		ip_hashtable_destroy(&htable);
@@ -1087,6 +1139,5 @@ int main(int argc, char **argv){
 
 	free(thread_ids);
 	free(thread_args);	
-
 
 }	

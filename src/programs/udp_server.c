@@ -51,13 +51,13 @@
 #define STR_SIZE_IP4 (sizeof("DDD.DDD.DDD.DDD") - 1)
 #define STR_SIZE_IP6 (sizeof("DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD") - 1)
 
-#define LOG_STR_FMT_IP4 "YYYY-MM-DD HH:MM:SS client DDD.DDD.DDD.DDD exeeded request rate limit\n"
+#define LOG_STR_FMT_IP4 "YYYY-MM-DD HH:MM:SS client DDD.DDD.DDD.DDD exceeded request rate limit\n"
 #define LOG_BUF_SIZE_IP4 (sizeof(LOG_STR_FMT_IP4) - 1)
 #define LOG_STR_FMT_IP6 "YYYY-MM-DD HH:MM:SS client DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD exeeded request rate limit\n" 
 #define LOG_BUF_SIZE_IP6 (sizeof(LOG_STR_FMT_IP6) - 1)
 #define HOST_PREFIX " client "
 #define HOST_PREFIX_SIZE (sizeof(HOST_PREFIX)-1)
-#define MSG_STR " exeeded request rate limit\n"
+#define MSG_STR " exceeded request rate limit\n"
 #define MSG_STR_SIZE (sizeof(MSG_STR)-1)
 
 #define OPEN_MODE O_WRONLY | O_CREAT | O_APPEND 
@@ -233,10 +233,10 @@ void * util_thread_routine(void * arg){
 /* Copies the string form of addr to the logstr_buf */
 uint8_t logstr_short(int domain, char * logstr_buf, void * addr){
     int addrlen;  
-    if (domain == AF_INET6){
-        addrlen = ipv6_to_str(addr,(void *)(logstr_buf));
+    if (domain == AF_INET){
+        addrlen = ipv4_to_str((void *)&((struct sockaddr_in *)addr)->sin_addr,(void *)(logstr_buf));
     } else {
-        addrlen = ipv4_to_str(addr,(void *)(logstr_buf));
+        addrlen = ipv6_to_str((void *)&((struct sockaddr_in6 *)addr)->sin6_addr,(void *)(logstr_buf));
     }
     logstr_buf[addrlen] = NEWLINE_CHAR;
     return addrlen + 1;
@@ -381,7 +381,7 @@ int listen_and_reply(int sockfd,struct sock_targ_t * targs){
 
     while(server_running){
 
-        retval_rcv = recvmmsg(sockfd,recvbuf->msgs,MAX_MSG,MSG_WAITFORONE,NULL);
+        retval_rcv = recvmmsg(sockfd,recvbuf->msgs,MAX_MSG,MSG_WAITALL,NULL);
 
         if (retval_rcv < 1) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
@@ -424,7 +424,7 @@ int listen_and_reply(int sockfd,struct sock_targ_t * targs){
         for(i = 0; i < retval_rcv; i++){
 
             if(recvbuf->payload_buf[i] == INVALID_PAYLOAD){
-                if((logstr_len = logstr_long(targs->domain,&logstr_buf[invalid_count*logbuf_size],(struct sockaddr *)recvbuf->msgs[i].msg_hdr.msg_name)) == 0){
+                if((logstr_len = logstr_short(targs->domain,&logstr_buf[invalid_count*logbuf_size],(struct sockaddr *)recvbuf->msgs[i].msg_hdr.msg_name)) == 0){
                     error_msg("Error writing logstring\n");
                     continue;
                 }
@@ -645,7 +645,7 @@ int main(int argc, char ** argv) {
     for(i = 0; i < thread_count; i++){
         sock_targs[i].thread_id = i;
         sock_targs[i].domain = DOMAIN;
-        sock_targs[i].port = htons(serv_port);
+        sock_targs[i].port = serv_port;
         sock_targs[i].log_count = 0;
         sock_targs[i].pkt_in = 0;
         sock_targs[i].pkt_out = 0;
@@ -775,16 +775,12 @@ int main(int argc, char ** argv) {
 
     unsigned long long int total_in_count = 0 ,total_out_count = 0, total_log_count = 0;
 
-    if(sock_targs[0].return_code == RETURN_FAIL){
-        fprintf(stderr,"Main thread returned an error\n");
-    }
-
    for(i = 0; i < thread_count; i++){
-        if(sock_targs[i].return_code == RETURN_FAIL){
-            fprintf(stderr,"Thread %d returned an error\n",i+1);
+        if(sock_targs[i].return_code != RETURN_SUC){
+            fprintf(stderr,"Thread %d returned with an error : error code %d\n",i+1,sock_targs[i].return_code);
         }
 
-        printf("Thread %d : packets received  : %lu, packets sent  : %lu, messages logged : %lu\n",i+1,sock_targs[i].pkt_in,sock_targs[i].pkt_out,sock_targs[i].log_count);
+        printf("\nThread %d : packets received  : %lu, packets sent  : %lu, messages logged : %lu\n",i,sock_targs[i].pkt_in,sock_targs[i].pkt_out,sock_targs[i].log_count);
 
         total_in_count += sock_targs[i].pkt_in;
         total_out_count += sock_targs[i].pkt_out;

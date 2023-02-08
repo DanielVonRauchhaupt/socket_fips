@@ -33,8 +33,8 @@ int shm_rbuf_init(struct shm_rbuf_arg_t * args);
 
 int shm_rbuf_finalize(struct shm_rbuf_arg_t * args);
 
-int shm_rbuf_write(struct shm_rbuf_arg_t * args, void * src, uint8_t wsize, uint32_t segment_id);
+int shm_rbuf_write(struct shm_rbuf_arg_t * args, void * src, uint16_t wsize, uint32_t segment_id);
 
-int shm_rbuf_read(struct shm_rbuf_arg_t * args, void * rbuf, uint8_t bufsize, uint32_t segment_id);
+int shm_rbuf_read(struct shm_rbuf_arg_t * args, void * rbuf, uint16_t bufsize, uint32_t segment_id);
 
 #endif
