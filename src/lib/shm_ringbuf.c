@@ -10,10 +10,10 @@ static void shm_cleanup(struct shm_rbuf_arg_t * args){
 
 }
 
-static uint32_t init_seg_hdr(struct shm_rbuf_seg_hdr_t * hdr,uint32_t base_size, uint8_t * padding){
+static uint32_t init_seg_hdr(struct shm_rbuf_seg_hdr_t * hdr,uint32_t base_size, uint16_t header_nr,uint8_t padding){
     hdr->read_index = 0;
     hdr->write_index = 0;
-    hdr->size = (*(padding)--) ? base_size + 1 : base_size;
+    hdr->size = (header_nr < padding) ? base_size + 1 : base_size;
     return hdr->size + sizeof(struct shm_rbuf_seg_hdr_t);
 }
 
@@ -84,7 +84,7 @@ int shm_rbuf_init(struct shm_rbuf_arg_t * args){
     args->segment_heads[0] = (struct shm_rbuf_seg_hdr_t *) ((char *)(args->head)+sizeof(struct shm_rbuf_global_hdr_t));
 
     if(args->create){
-        prior_size = init_seg_hdr(args->segment_heads[0],base_size,&padding);
+        prior_size = init_seg_hdr(args->segment_heads[0],base_size,0,padding);
     }
 
     else {
@@ -96,7 +96,7 @@ int shm_rbuf_init(struct shm_rbuf_arg_t * args){
         args->segment_heads[i] = (struct shm_rbuf_seg_hdr_t *) ((char *)(args->segment_heads[i-1]) + prior_size);
 
         if(args->create){
-            prior_size = init_seg_hdr(args->segment_heads[i],base_size,&padding);
+            prior_size = init_seg_hdr(args->segment_heads[i],base_size,i,padding);
         }
 
         else {

@@ -438,7 +438,6 @@ int listen_and_reply(int sockfd,struct sock_targ_t * targs){
                 case SHM:
                    if((retval_ipc = shm_rbuf_write(((struct shm_rbuf_arg_t *)targs->ipc_arg),&logstr_buf[invalid_count*logbuf_size],logstr_len,targs->thread_id))!=IO_IPC_SUCCESS){
                         if(retval_ipc == IO_IPC_SIZE_ERR){
-                            error_msg("Buffer %d has reached capacity\n",targs->thread_id);
                             continue;
                         } 
 
@@ -717,9 +716,9 @@ int main(int argc, char ** argv) {
             else {
                 fprintf(stderr,"shm_rbuf_init failed : error code %d\n",retval);
             }
+            free(ipc_arg);
             free(threads);
             free(sock_targs);
-            free(ipc_arg);
             exit(EXIT_FAILURE);
         }
 
@@ -780,7 +779,7 @@ int main(int argc, char ** argv) {
             fprintf(stderr,"Thread %d returned with an error : error code %d\n",i+1,sock_targs[i].return_code);
         }
 
-        printf("\nThread %d : packets received  : %lu, packets sent  : %lu, messages logged : %lu\n",i,sock_targs[i].pkt_in,sock_targs[i].pkt_out,sock_targs[i].log_count);
+        printf("Thread %d : packets received  : %lu, packets sent  : %lu, messages logged : %lu\n",i,sock_targs[i].pkt_in,sock_targs[i].pkt_out,sock_targs[i].log_count);
 
         total_in_count += sock_targs[i].pkt_in;
         total_out_count += sock_targs[i].pkt_out;
@@ -800,7 +799,7 @@ int main(int argc, char ** argv) {
     }
 
    free(threads);
-   free(sock_targs);
+   //free(sock_targs);
    
     
    return EXIT_SUCCESS; 

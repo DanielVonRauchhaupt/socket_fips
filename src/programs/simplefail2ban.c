@@ -35,10 +35,10 @@
 #define RETURN_FAIL (-1)
 #define RETURN_SUCC (0)
 #define MT false
-#define WATCHER_COUNT 4
+#define WATCHER_COUNT 1
 #define HUGE_PAGE_SIZE 2048 * 1000
 
-#define BAN_TIME 180
+#define BAN_TIME 60
 #define BAN_THRESHOLD 1
 
 #define DEFAULT_IFACE "enp24s0f0np0"
@@ -445,15 +445,15 @@ int blacklist_modify(int fd, void * ip_addr, unsigned int action, unsigned int d
 	if (res != 0) { 
 		if (domain == AF_INET){
 			inet_ntop(AF_INET,ip_addr,ip_str_buf,INET6_ADDRSTRLEN);
-			error_msg(
-			"%s() IP:%s key:0x%X errno(%d/%s)",
-			__func__, ip_str_buf, (__u32)*((__u32 *)ip_addr), errno, strerror_r(errno,strerror_buf,strerror_size));
+			if(verbose){error_msg(
+			"%s() line %d IP:%s key:0x%X errno(%d/%s)",
+			__func__,__LINE__, ip_str_buf, (__u32)*((__u32 *)ip_addr), errno, strerror_r(errno,strerror_buf,strerror_size));}
 					}
 		else{
 			inet_ntop(AF_INET6,ip_addr,ip_str_buf,INET6_ADDRSTRLEN);
-			error_msg(
-			"%s() IP:%s key:0x%llX%llX errno(%d/%s)",
-			__func__, ip_str_buf, (__u64)*((__uint128_t *)ip_addr),(__u64)(*((__uint128_t *)ip_addr)>>64), errno,strerror_r(errno,strerror_buf,strerror_size)); 	
+			if(verbose){error_msg(
+			"%s() line %d IP:%s key:0x%llX%llX errno(%d/%s)",
+			__func__,__LINE__, ip_str_buf, (__u64)*((__uint128_t *)ip_addr),(__u64)(*((__uint128_t *)ip_addr)>>64), errno,strerror_r(errno,strerror_buf,strerror_size));} 	
 				}
 		
 
@@ -467,13 +467,13 @@ int blacklist_modify(int fd, void * ip_addr, unsigned int action, unsigned int d
 	if (verbose){
 		if (domain == AF_INET){
 				inet_ntop(AF_INET,ip_addr,ip_str_buf,INET6_ADDRSTRLEN);
-				error_msg(
-				"%s() IP:%s key:0x%X\n", __func__, ip_str_buf, (__u32)*((__u32 *)ip_addr));
+				if(verbose){error_msg(
+				"%s() line %d IP:%s key:0x%X\n", __func__,__LINE__, ip_str_buf, (__u32)*((__u32 *)ip_addr));}
 		}
 		else {
 			inet_ntop(AF_INET6,ip_addr,ip_str_buf,INET6_ADDRSTRLEN);
-			error_msg(
-			"%s() IP:%s key:0x%llX%llX\n", __func__, ip_str_buf, (__u64)*((__uint128_t *)ip_addr),(__u64)(*((__uint128_t *)ip_addr)>>64));
+			if(verbose){error_msg(
+			"%s() line %d IP:%s key:0x%llX%llX\n", __func__,__LINE__, ip_str_buf, (__u64)*((__uint128_t *)ip_addr),(__u64)(*((__uint128_t *)ip_addr)>>64));}
 			}
 	}	
 	return EXIT_OK;
@@ -702,14 +702,14 @@ void * unban_thread_routine(void * args){
 		time(&ts);
 
 		if(ts == -1){
-			if(verbose){error_msg("Failed to obtain timestamp : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));}
+			error_msg("Failed to obtain timestamp : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 			targs->retval = EXIT_FAIL;
 			pthread_exit(&targs->retval);
 		}
 
 		if(pthread_mutex_lock(&banned_list->tail_lock)){
 			pthread_mutex_unlock(&banned_list->tail_lock);
-			if(verbose){error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));}
+			error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 			targs->retval = EXIT_FAIL;
 			pthread_exit(&targs->retval);
 		}
@@ -717,14 +717,17 @@ void * unban_thread_routine(void * args){
 		current_tail = banned_list->tail;
 
 		if(pthread_mutex_unlock(&banned_list->tail_lock)){
-			if(verbose){error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));}
+			error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 			targs->retval = EXIT_FAIL;
 			pthread_exit(&targs->retval);
 		}
 
 		if(current_tail == NULL || banned_list->head == NULL){
 			if(current_tail != NULL){
-				if(verbose){error_msg("Banned list head is null but list is not empty\n");}
+				error_msg("Banned list head is null but list is not empty\n");
+
+
+
 			}
 		} else {
 
@@ -744,7 +747,7 @@ void * unban_thread_routine(void * args){
 					if(brk){
 						if(pthread_mutex_lock(&banned_list->tail_lock)){
 							pthread_mutex_unlock(&banned_list->tail_lock);
-							if(verbose){error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));}
+							error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 							targs->retval = EXIT_FAIL;
 							pthread_exit(&targs->retval);
 						}
@@ -764,21 +767,32 @@ void * unban_thread_routine(void * args){
 
 					default:
 						retval = -1;
-						if(verbose){error_msg("Invalid domain in banned list %d\n",iterator->domain);}
+						error_msg("Invalid domain in banned list %d\n",iterator->domain);
 					}
 
 					if(retval < 0){
-						if(verbose){error_msg("Error modifying ebf map : error code %d\n",retval);}
+						error_msg("Error modifying ebf map : error code %d\n",retval);
 					} else {
-						info_msg("Unbanned client: %d\n", iterator->key);
 						targs->unban_count++;
 					}
 
 					if(brk){
 						if(pthread_mutex_unlock(&banned_list->tail_lock)){
-							if(verbose){error_msg("Failed to release banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));}
+							error_msg("Failed to release banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 								targs->retval = EXIT_FAIL;
 								pthread_exit(&targs->retval);
+						}
+
+						if(prev == NULL){
+							banned_list->head = NULL;
+						}
+
+						if(iterator->next == NULL){
+							banned_list->tail = NULL;
+						}
+
+						if((retval = ip_llist_remove(&iterator,prev)) < 0){
+							error_msg("Error removing tail node from banned list : error code %d\n",retval);
 						}
 
 						break;
@@ -787,11 +801,14 @@ void * unban_thread_routine(void * args){
 					next = iterator->next;
 
 					if((retval = ip_llist_remove(&iterator,prev)) < 0){
-						if(verbose){error_msg("Error removing node from banned list : error code %d\n",retval);}
+						error_msg("Error removing node from banned list : error code %d\n",retval);
 					}
 
 					iterator = next;
 
+					if(prev == NULL){
+						banned_list->head = next;
+					}
 				}
 
 				else {
@@ -900,7 +917,6 @@ void * ban_thread_routine(void * args){
 				*/
 
 				reg_context.ip_str_buf[retval-1] = '\0';
-				info_msg("Received logstring: %s\n", reg_context.ip_str_buf);
 
 				if (inet_pton(AF_INET,reg_context.ip_str_buf,&reg_context.ip_addr.ipv4) == 1) {
 					reg_context.domain = AF_INET;
@@ -967,9 +983,6 @@ void * ban_thread_routine(void * args){
 						no_read = false;
 						continue;
 					}
-
-					info_msg("Banned client: %d\n", reg_context.ip_addr.ipv4);
-
 
 					targs->ban_count++;
 				
@@ -1112,7 +1125,7 @@ int main(int argc, char **argv){
 		if(thread_args[i].retval != RETURN_SUCC){
 			fprintf(stderr,"Watcher thread %d returned with error code %d\n",i,thread_args[i].retval);
 		}
-		printf("\nThread %d : messages received %ld : clients banned %ld\n",i,thread_args[i].rcv_count,thread_args[i].ban_count);
+		printf("Thread %d : messages received %ld : clients banned %ld\n",i,thread_args[i].rcv_count,thread_args[i].ban_count);
 	
 		total_rcv_count += thread_args[0].rcv_count;
 		total_ban_count += thread_args[0].ban_count;
