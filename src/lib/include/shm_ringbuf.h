@@ -1,5 +1,5 @@
-#ifndef _SHM_RINGBUF_H
-#define _SHM_RINGBUF_H
+#ifndef _SHMRBUF_H
+#define _SHMRBUF_H
 
 #include <stdint.h>
 #include <sys/shm.h>
@@ -8,44 +8,72 @@
 #include <io_ipc.h>
 #include <stdatomic.h>
 
-struct shm_rbuf_arg_t {
-    const char * key_path;
+struct shmrbuf_writer_arg_t {
+    const char * shm_key;
+    uint16_t line_size;
+    uint32_t lines;
+    uint8_t segment_count;
+    uint8_t reader_count;
+    bool overwrite;
+    struct shmrbuf_global_hdr_t * head;
+    struct shmrbuf_seg_whdr_t * segment_hdrs;
     int shmid;
-    uint16_t line_size;
-    uint32_t lines;
-    uint8_t segment_count;
-    uint8_t reader_count;
-    struct shm_rbuf_seg_hdr_t ** segment_heads;
-    pthread_mutex_t * segment_locks;
-    uint32_t * segment_rindices;
-    bool create;
-    bool overwrite;
-    struct shm_rbuf_global_hdr_t * head;
 };
 
-struct shm_rbuf_global_hdr_t {
+struct shmrbuf_reader_arg_t {
+    const char * shm_key;
+    int shmid;
+    uint8_t reader_index;
+    struct shmrbuf_global_hdr_t * head;
+    struct shmrbuf_seg_rhdr_t * segment_hdrs;
+};
+
+
+struct shmrbuf_global_hdr_t {
     uint8_t segment_count;
     bool overwrite;
     uint16_t line_size;
     uint32_t lines;
     uint8_t reader_count;
+    atomic_uint_fast8_t reader_index;
     
 };
 
-struct shm_rbuf_seg_hdr_t {
-    uint32_t lines;
-    atomic_uint_fast32_t write_index;
-    atomic_uint_fast32_t read_index;
-    atomic_uint_fast8_t read_count;
+struct shmrbuf_seg_rhdr_t {
+
+    atomic_uint_fast32_t * write_index;
+    atomic_uint_fast32_t * read_index;
+    pthread_mutex_t segment_lock;
+    void * data
     
 };
 
-int shm_rbuf_init(struct shm_rbuf_arg_t * args);
+struct shmrbuf_seg_whdr_t {
 
-int shm_rbuf_finalize(struct shm_rbuf_arg_t * args);
+    atomic_uint_fast32_t * write_index;
+    atomic_uint_fast32_t * first_reader;
+    void * data
+    
+};
 
-int shm_rbuf_write(struct shm_rbuf_arg_t * args, void * src, uint16_t wsize, uint32_t segment_id);
+enum shmrbuf_role_t {
+    SHMRBUF_WRITER,
+    SHMRBUF_READER
+};
 
-int shm_rbuf_read(struct shm_rbuf_arg_t * args, void * rbuf, uint16_t bufsize, uint32_t segment_id);
+union shmrbuf_arg_t {
+
+    struct shmrbuf_writer_arg_t wargs;
+    struct shmrbuf_reader_arg_t rargs;
+
+};
+
+int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role);
+
+int shmrbuf_finalize(union shmrbuf_arg_t *, enum shmrbuf_role_t role);
+
+int shmrbuf_write(struct shmrbuf_writer_arg_t * args, void * src, uint16_t wsize, uint8_t segment_id);
+
+int shmrbuf_read(struct shmrbuf_reader_arg_t * args, void * rbuf, uint16_t bufsize, uint8_t segment_id);
 
 #endif
