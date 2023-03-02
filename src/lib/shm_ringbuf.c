@@ -238,14 +238,15 @@ int shmrbuf_read(struct shmrbuf_reader_arg_t * args, void * rbuf, uint16_t bufsi
 
     struct shmrbuf_seg_rhdr_t * segment = &args->segment_hdrs[segment_id];
     uint32_t write_index = atomic_load(segment->write_index);
-    uint32_t read_index = *segment->read_index;
-    uint32_t new_read_index = (read_index == args->head->lines - 1) ? 0 : new_read_index + 1;
-    uint16_t rsize = MIN(args->head->line_size,bufsize);
 
     if(pthread_mutex_lock(&segment->segment_lock) == -1){
         pthread_mutex_unlock(&segment->segment_lock);
         return IO_IPC_MUTEX_ERR;
     }
+
+    uint32_t read_index = *segment->write_index;
+    uint32_t new_read_index = (read_index == args->head->lines - 1) ? 0 : new_read_index + 1;
+    uint16_t rsize = MIN(args->head->line_size,bufsize);
 
     if(write_index == read_index){
 
@@ -260,7 +261,11 @@ int shmrbuf_read(struct shmrbuf_reader_arg_t * args, void * rbuf, uint16_t bufsi
         return IO_IPC_MEM_ERR;
     }
 
-    atomic_store(segment->read_index,new_read_index);    
+    atomic_store(segment->read_index,new_read_index);   
+
+    if(pthread_mutex_unlock(&segment->segment_lock) == -1){
+        return IO_IPC_MUTEX_ERR;
+    } 
 
     return rsize;
 
