@@ -7,6 +7,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <netinet/ip6.h>
+#include <sys/stat.h>
 #include <sys/sysinfo.h>
 #include <sys/uio.h>
 #include <sys/uio.h>
@@ -18,39 +19,43 @@
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <liburing.h>
+#include <argp.h>
 
 // Local includes
 #include <ip_to_str.h>
 #include <io_ipc.h>
 #include <shm_ringbuf.h>
 
-// Configuration Options
+// Default configuration
 #define DEFAULT_PORT 8080
-#define DEFAULT_LOG "/mnt/scratch/PR/logs/udpsvr.log"
-#define IP4_ADDRESS "10.3.10.131"
-#define IP6_ADDRESS "2001:db8:db8::1" 
+#define DEFAULT_LOG "udpsvr.log"
+#define IP4_ADDRESS "127.0.0.1"//"10.3.10.131"
+#define IP6_ADDRESS "::1"//"2001:db8:db8::1" 
 #define DOMAIN AF_INET
-#define MT false
 #define LOG_SHORT false
+#define IPC_TYPE DISK
+#define THREADS 1
+
+// Shared memory default configuration
+#define SHM_LINES 100000
 
 // Definitions
+
+// Return codes
 #define RETURN_SUC (0)
 #define RETURN_FAIL (-1)
 
-#define UNUSED(x)(void)(x)
-
-#define HUGE_PAGE_SIZE 2048 * 1000
-
+// Characters
 #define NEWLINE_CHAR (char) (10)
 #define BLANK (char) (32)
 #define INVALID_PAYLOAD ('B')
 
+// Logstring stuff
 #define DATE_FMT "YYYY-MM-DD HH:MM:SS"
 #define STRFTIME_FMT "%Y-%m-%d %H:%M:%S"
 #define DATE_SIZE (sizeof(DATE_FMT) - 1)
 #define STR_SIZE_IP4 (sizeof("DDD.DDD.DDD.DDD") - 1)
 #define STR_SIZE_IP6 (sizeof("DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD") - 1)
-
 #define LOG_STR_FMT_IP4 "YYYY-MM-DD HH:MM:SS client DDD.DDD.DDD.DDD exceeded request rate limit\n"
 #define LOG_BUF_SIZE_IP4 (sizeof(LOG_STR_FMT_IP4) - 1)
 #define LOG_STR_FMT_IP6 "YYYY-MM-DD HH:MM:SS client DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD exeeded request rate limit\n" 
@@ -60,15 +65,19 @@
 #define MSG_STR " exceeded request rate limit\n"
 #define MSG_STR_SIZE (sizeof(MSG_STR)-1)
 
+// Open options
 #define OPEN_MODE O_WRONLY | O_CREAT | O_APPEND 
 #define OPEN_PERM 0644
 
+// Sizes
 #define NANOSECONDS_PER_MILLISECOND 1000000
 #define UTIL_TIMEOUT 500 * NANOSECONDS_PER_MILLISECOND
-
 #define RECV_TIMEOUT 1000
 #define MAX_MSG __IOV_MAX
+#define HUGE_PAGE_SIZE 2048 * 1000
 
+// Helpers
+#define UNUSED(x)(void)(x)
 
 // Global Variables
 static char global_datetime_buf[DATE_SIZE+1];
@@ -76,7 +85,13 @@ static volatile sig_atomic_t server_running = true;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_rwlock_t datebuf_lock = PTHREAD_RWLOCK_INITIALIZER;
-static enum ipc_type_t ipc_type = SHM;
+static enum ipc_type_t ipc_type = IPC_TYPE;
+static in_port_t port = DEFAULT_PORT;
+static bool logshort = LOG_SHORT;
+static char * ip4_addr = IP4_ADDRESS;
+static char * ip6_addr = IP6_ADDRESS;
+static int domain = DOMAIN;
+static uint8_t threads = THREADS;
 
 // Structs
 struct packet_buf_t {
@@ -90,18 +105,18 @@ struct disk_arg_t
     int logfilefd;
     struct io_uring * ring;
     struct iovec iovecs[MAX_MSG];
-    struct io_uring_sqe * sqe;
-    struct io_uring_cqe * cqe;
+    struct io_uring_sqe sqes[MAX_MSG];
+    struct io_uring_cqe cqes[MAX_MSG];
 };
 
 struct sock_targ_t {
     int domain;
     uint8_t thread_id;
     void * ipc_arg;
-    in_port_t port;
     uint64_t pkt_in;
     uint64_t pkt_out;
     uint64_t log_count;
+    uint64_t log_drop;
     char strerror_buf[64];
     int return_code;
 };
@@ -110,6 +125,197 @@ struct util_targ_t {
     size_t interval;
     int return_code;
 };
+
+// Argparse
+
+const char *argp_program_version = "Simple UDP Server";
+
+static struct argp argp = {
+    .options = options,
+    .parser = parse_opt,
+    .args_doc = "",
+    .doc = "Simple program for writing log messages from shared memory ring buffer to file"
+};
+
+static struct argp_option options[] = {
+    {"disk", 'd', "DISK", 0, "Specify disk as ipc type",0},
+    {"ipv4", '4', "IPV4", 0, "Specify IPv4 address",0},
+    {"ipv6", '6', "IPV6", 0, "Specify IPv6 address",0},
+    {"threads", 't', "THREADS", 0, "Specify the number of listener threads to use",0},
+    {"logshort", 'l', 0, 0, "Enable short logging",0},
+    {"shm", 's', "SHM", 0, "Specify shared memory as ipc type",0},
+    {"nlines", 'n', "SHM_NLINES", 0, "Specify shared memory lines per segment",0},
+    {"overwrite", 'o', 0, 0, "Enable overwrite for shared memory",0},
+    {"port", 'p', "PORT", 0, "Specify the port to listen at",0},
+    {"msgq", 'q', "MSGQ", 0, "Specify message queue as ipc type",0},
+    {0}
+};
+
+struct arguments {
+    bool ipc_set;
+    bool domain_set;
+    char *logfile;
+    uint8_t thread_count;
+    char *shm_key;
+    uint16_t shm_line_size;
+    uint32_t shm_lines;
+    bool overwrite;
+    in_port_t ipc_port;
+};
+
+static error_t parse_opt(int key, char *arg, struct argp_state *state) {
+    struct arguments *arguments = state->input;
+    struct sockaddr_in6 addrbuf;
+
+    switch (key) {
+
+        case 'd':
+
+            if(arguments->ipc_set){
+                fprintf(stderr,"Only one ipc type allowed\n");
+                argp_usage(state);
+            }
+
+            arguments->ipc_set = true;
+            ipc_type = DISK;
+
+            if(arg){
+                if(stat(arg, NULL) != 0){
+                    fprintf(stderr,"%s is not a valid filepath\n",arg);
+                    argp_usage(state);
+                }
+                arguments->logfile = arg;
+            }
+
+            break;
+
+        case '4':
+            
+            if(arguments->domain_set){
+                fprintf(stderr,"Only one IP type allowed\n");
+                argp_usage(state); 
+            }
+
+            if(arg){
+                if(inet_pton(AF_INET,arg,&addrbuf) == -1){
+                    fprintf(stderr,"%s is not a valid IPv4 Address\n", arg);
+                    argp_usage(state); 
+                }
+                ip4_addr = arg;
+            }
+
+            arguments->domain_set = true;
+            domain = AF_INET;
+            
+            break;
+
+        case '6':
+
+            if(arguments->domain_set){
+                fprintf(stderr,"Only one IP type allowed\n");
+                argp_usage(state); 
+            }
+
+            if(arg){
+
+                if(inet_pton(AF_INET6,arg,&addrbuf) == -1){
+                    fprintf(stderr,"%s is not a valid IPv6 Address\n", arg);
+                    argp_usage(state); 
+                }
+
+                ip6_addr = arg;
+            }
+
+            arguments->domain_set = true;
+            domain = AF_INET6;
+            
+
+            break;
+
+        case 't':
+            
+            arguments->thread_count = (uint8_t) strtol(arg,NULL,10);
+            
+            if(get_nprocs() < arguments->thread_count){
+                arguments->thread_count = get_nprocs();
+                fprintf(stderr,"Using maximum number of listener threads = %d\n",arguments->thread_count);
+            }
+
+            if(arguments->thread_count == 0){
+                arguments->thread_count = 1;
+                fprintf(stderr,"Minimum 1 listener thread required\n");
+            }
+
+            break;
+
+        case 'l':
+
+            logshort = true;
+            break;
+
+        case 's':
+            
+            if(arguments->ipc_set){
+                fprintf(stderr,"Only one IP type allowed\n");
+                argp_usage(state); 
+            }
+
+            if(stat(arg, NULL) != 0){
+                    fprintf(stderr,"%s is not a valid filepath\n",arg);
+                    argp_usage(state);
+            }
+
+            arguments->shm_key = arg;
+
+            break;
+
+        case 'n':
+
+            arguments->shm_lines = (uint32_t) strtol(arg,NULL,10);
+
+            if(arguments->shm_line_size < 2){
+                fprintf(stderr,"Number of lines should be at least 2\n");
+                arguments->shm_line_size = 2;
+            }
+            
+            break;
+
+        case 'o':
+
+            arguments->overwrite = true;
+            
+            break;
+
+        case 'p':
+            
+            port = (in_port_t) strtol(arg,NULL,10);
+
+            if(port < 1023){
+                fprintf(stderr,"Invalid Port %d, using default port %d\n",port,DEFAULT_PORT);
+            }
+
+            port = DEFAULT_PORT;
+
+            break;
+        case 'q':
+            
+            arguments->ipc_port = (in_port_t) strtol(arg,NULL,10);
+
+            if(arguments->ipc_port < 1023){
+                fprintf(stderr,"Invalid Port %d\n",arguments->ipc_port);
+                argp_usage(state);
+            }
+
+            break;
+
+        case ARGP_KEY_ARG:
+            return 0;
+        default:
+            return ARGP_ERR_UNKNOWN;
+    }
+
+    return 0;
+}
 
 // Helper functions
 
@@ -150,45 +356,51 @@ time_t update_datetime(char * datebuf){
     return t;
 }
 
-void ipc_cleanup(void * ipc_arg,enum ipc_type_t ipc_type, int * retval){
+int ipc_cleanup(void * ipc_arg,enum ipc_type_t ipc_type){
+
+    int retval = IO_IPC_SUCCESS;
 
     switch (ipc_type)
     {
     case DISK:
         close(((struct disk_arg_t *)ipc_arg)->logfilefd);
         io_uring_queue_exit(((struct disk_arg_t *)ipc_arg)->ring);
-        free(ipc_arg);
-        return;
+        break;
     
     case SHM:
-        if(retval != NULL){
-            *retval = shm_rbuf_finalize((struct shm_rbuf_arg_t *)ipc_arg);
-        } else {
-            shm_rbuf_finalize((struct shm_rbuf_arg_t *)ipc_arg);
-        }
-        free(ipc_arg);
-        return;
+        retval = shmrbuf_finalize((union shmrbuf_arg_t *)ipc_arg, SHMRBUF_WRITER);
+        break;
 
     default:
-        return;
+        return IO_IPC_ARG_ERR;
     }
+
+    free(ipc_arg);
+    ipc_arg = NULL;
+
+    return retval;
 
 }
 
 /* Blocks all blockable signals with the option to keep SIGINT and SIGTERM unblocked */
 int8_t block_signals(bool keep){
     sigset_t set;
-    if(sigfillset(&set)){
+
+    if(sigfillset(&set))
+    {
         return RETURN_FAIL;
     }
 
-    if(keep){
-        if(sigdelset(&set,SIGINT) || sigdelset(&set,SIGTERM)){
+    if(keep)
+    {
+        if(sigdelset(&set,SIGINT) || sigdelset(&set,SIGTERM))
+        {
             return RETURN_FAIL;
         }
     }
 
-    if(pthread_sigmask(SIG_BLOCK, &set, NULL)){
+    if(pthread_sigmask(SIG_BLOCK, &set, NULL))
+    {
         return RETURN_FAIL;
     }
 
@@ -196,7 +408,8 @@ int8_t block_signals(bool keep){
 }
 
 /* Hander for SIGINT and SIGTERM, sets running global to false */
-void sig_handler(int signal){
+void sig_handler(int signal)
+{
     UNUSED(signal);
     server_running = false;
 }
@@ -233,11 +446,19 @@ void * util_thread_routine(void * arg){
 /* Copies the string form of addr to the logstr_buf */
 uint8_t logstr_short(int domain, char * logstr_buf, void * addr){
     int addrlen;  
-    if (domain == AF_INET){
+    switch (domain)
+    {
+    case AF_INET:
         addrlen = ipv4_to_str((void *)&((struct sockaddr_in *)addr)->sin_addr,(void *)(logstr_buf));
-    } else {
+        break;
+    
+    case AF_INET6:
         addrlen = ipv6_to_str((void *)&((struct sockaddr_in6 *)addr)->sin6_addr,(void *)(logstr_buf));
+
+    default:
+        return 0;
     }
+
     logstr_buf[addrlen] = NEWLINE_CHAR;
     return addrlen + 1;
 }
@@ -253,7 +474,7 @@ uint8_t logstr_long(int domain, char * logstr_buf, struct sockaddr * addr){
         return 0;
     }
 
-    if(memcpy(logstr_buf,global_datetime_buf,DATE_SIZE) == NULL){
+    if(memcpy(logstr_buf,global_datetime_buf, DATE_SIZE) == NULL){
         pthread_rwlock_unlock(&datebuf_lock);
         return 0;
     }
@@ -262,7 +483,7 @@ uint8_t logstr_long(int domain, char * logstr_buf, struct sockaddr * addr){
         return 0;
     }
 
-    if(memcpy(logstr_buf+DATE_SIZE,HOST_PREFIX,HOST_PREFIX_SIZE) == NULL){
+    if(memcpy(logstr_buf+DATE_SIZE, HOST_PREFIX, HOST_PREFIX_SIZE) == NULL){
         return 0;
     }
 
@@ -296,8 +517,6 @@ int bind_socket(int sockfd, struct sockaddr * sockaddr, in_port_t port, int doma
 
     socklen_t len;
 
-    port = (port > 1023) ? port : DEFAULT_PORT;
-
     switch (domain)
     {
     case AF_INET:
@@ -322,22 +541,30 @@ int bind_socket(int sockfd, struct sockaddr * sockaddr, in_port_t port, int doma
 }
 
 /* Listen for udp packets. Replies to valid requests and logs invalid requests using ipc method specified by ipy_type*/
-int listen_and_reply(int sockfd,struct sock_targ_t * targs){
+int listen_and_reply(int sockfd, struct sock_targ_t * targs){
 
     struct packet_buf_t * recvbuf = NULL;
     struct packet_buf_t * sendbuf = NULL;
     char * logstr_buf = NULL;
     void * recv_ipbuf = NULL;
     void * send_ipbuf = NULL;
-    int retval_rcv, retval_snd, retval_ipc, i, send_count = 0, invalid_count = 0, logbuf_size, ip_bufsize;
+    int retval_rcv, retval_snd, retval_ipc, i, logbuf_size, ip_bufsize, send_count = 0, invalid_count = 0;
     uint8_t logstr_len;
 
-    if(targs->domain == AF_INET){
+    switch (targs->domain)
+    {
+    case AF_INET:
         ip_bufsize = sizeof(struct sockaddr_in);
         logbuf_size = LOG_BUF_SIZE_IP4;
-    } else{
+        break;
+    
+    case AF_INET6:
         ip_bufsize = sizeof(struct sockaddr_in6);
         logbuf_size = LOG_BUF_SIZE_IP6;
+
+    default:
+        error_msg("Invalid domain: %d in thread arguments\n", targs->domain);
+        return RETURN_FAIL;
     }
 
     if((recvbuf = (struct packet_buf_t *) aligned_alloc(64,sizeof(struct packet_buf_t))) == NULL
@@ -595,7 +822,7 @@ void * run_socket(void *args){
     }
 
 
-    if((bind_socket(sockfd,(struct sockaddr *)&server_addr,targs->port,targs->domain) == RETURN_FAIL) ){
+    if((bind_socket(sockfd,(struct sockaddr *)&server_addr,port,targs->domain) == RETURN_FAIL) ){
         error_msg("Failed to bind socket : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
         close(sockfd);
         targs->return_code = RETURN_FAIL;
@@ -627,24 +854,34 @@ void * run_socket(void *args){
 
 int main(int argc, char ** argv) { 
 
-    in_port_t serv_port = (argc > 1) ? (uint16_t)strtol(argv[1],NULL,10) : DEFAULT_PORT;
-    int i, retval, thread_count, n_procs = get_nprocs();
-    thread_count = (MT && n_procs > 0) ? n_procs : 1;
     void * ipc_arg;
+    int retval, i;
     pthread_t * threads;
     pthread_t util_thread;
     struct sock_targ_t * sock_targs;
     struct util_targ_t util_arg = {.interval=(size_t)UTIL_TIMEOUT};
 
-    if((threads = calloc(sizeof(pthread_t),thread_count-1)) == NULL || (sock_targs = calloc(sizeof(struct sock_targ_t),thread_count)) == NULL){
+    struct arguments args = {
+        .domain_set = false,
+        .ipc_set = false,
+        .logfile = DEFAULT_LOG,
+        .thread_count = get_nprocs(),
+    };
+
+    if(argp_parse(&argp, argc, argv, 0, 0, &args) == ARGP_ERR_UNKNOWN)
+    {
+        exit(EXIT_FAILURE);
+    }
+
+
+    if((threads = calloc(sizeof(pthread_t),args.thread_count-1)) == NULL || (sock_targs = calloc(sizeof(struct sock_targ_t),args.thread_count)) == NULL){
         perror("Calloc failed");
         exit(EXIT_FAILURE);
     }
 
-    for(i = 0; i < thread_count; i++){
+    for(i = 0; i < args.thread_count; i++){
         sock_targs[i].thread_id = i;
         sock_targs[i].domain = DOMAIN;
-        sock_targs[i].port = serv_port;
         sock_targs[i].log_count = 0;
         sock_targs[i].pkt_in = 0;
         sock_targs[i].pkt_out = 0;
@@ -668,7 +905,7 @@ int main(int argc, char ** argv) {
             exit(EXIT_FAILURE);
         }
 
-        for(i = 0; i < thread_count; i++){
+        for(i = 0; i < args.thread_count; i++){
             if((sock_targs[i].ipc_arg = aligned_alloc(sizeof(struct disk_arg_t),1)) == NULL){
                 perror("aligned alloc failed");
             }
@@ -696,17 +933,18 @@ int main(int argc, char ** argv) {
 
     case SHM:
 
-        if((ipc_arg = calloc(sizeof(struct shm_rbuf_arg_t),1)) == NULL){
+        if((ipc_arg = calloc(sizeof(struct shmrbuf_writer_arg_t),1)) == NULL){
             perror("calloc failed");
             free(threads);
             free(sock_targs);
             exit(EXIT_FAILURE);
         }
 
-        ((struct shm_rbuf_arg_t *)(ipc_arg))->create = true;
-        ((struct shm_rbuf_arg_t *)(ipc_arg))->key_path = DEFAULT_LOG;
-        ((struct shm_rbuf_arg_t *)(ipc_arg))->segment_count = thread_count;
-        ((struct shm_rbuf_arg_t *)(ipc_arg))->size = HUGE_PAGE_SIZE;
+        ((struct shmrbuf_writer_arg_t *)(ipc_arg))->lines = (args.shm_line_size) ? args.shm_line_size : SHM_LINES;
+        ((struct shmrbuf_writer_arg_t *)(ipc_arg))->line_size = (logshort) ? ((domain == AF_INET) ? STR_SIZE_IP4 : STR_SIZE_IP6) : ((domain == AF_INET) ? LOG_BUF_SIZE_IP4 : LOG_BUF_SIZE_IP6);
+        ((struct shmrbuf_writer_arg_t *)(ipc_arg))->shm_key = args.shm_key;
+        ((struct shmrbuf_writer_arg_t *)(ipc_arg))->segment_count = args.thread_count;
+        ((struct shmrbuf_writer_arg_t *)(ipc_arg))->overwrite = args.overwrite;
 
         if((retval = shm_rbuf_init(((struct shm_rbuf_arg_t *)(ipc_arg)))) != IO_IPC_SUCCESS){
             if(retval > 0){
@@ -722,7 +960,7 @@ int main(int argc, char ** argv) {
             exit(EXIT_FAILURE);
         }
 
-        for(i = 0; i < thread_count; i++){
+        for(i = 0; i < args.thread_count; i++){
             sock_targs[i].ipc_arg = ipc_arg;
         }
 
@@ -738,7 +976,7 @@ int main(int argc, char ** argv) {
 
     if(update_datetime(global_datetime_buf) == RETURN_FAIL){
         fprintf(stderr,"Initializing the global datetime buffer failed\n");
-        ipc_cleanup(ipc_arg,ipc_type,NULL);
+        ipc_cleanup(ipc_arg,ipc_type);
         free(threads);
         free(sock_targs);
         exit(EXIT_FAILURE);
@@ -747,13 +985,13 @@ int main(int argc, char ** argv) {
     
     if(pthread_create(&util_thread,NULL,util_thread_routine,(void*)&util_arg)){
         perror("Creating util thread failed");
-        ipc_cleanup(ipc_arg,ipc_type,NULL);
+        ipc_cleanup(ipc_arg,ipc_type);
         free(threads);
         free(sock_targs);
         exit(EXIT_FAILURE);
     }
 
-    for(i = 1; i < thread_count; i++){
+    for(i = 1; i < args.thread_count; i++){
 
         if(pthread_create(&threads[i],NULL,run_socket,(void*)&sock_targs[i])){
             perror("Could not create listener thread");
@@ -762,7 +1000,7 @@ int main(int argc, char ** argv) {
 
    run_socket((void *)&sock_targs[0]);
 
-   for(i = 1; i < thread_count; i++){
+   for(i = 1; i < args.thread_count; i++){
         if(pthread_join(threads[i],NULL)){
             perror("Pthread join failed");
         }
@@ -774,7 +1012,7 @@ int main(int argc, char ** argv) {
 
     unsigned long long int total_in_count = 0 ,total_out_count = 0, total_log_count = 0;
 
-   for(i = 0; i < thread_count; i++){
+   for(i = 0; i < args.thread_count; i++){
         if(sock_targs[i].return_code != RETURN_SUC){
             fprintf(stderr,"Thread %d returned with an error : error code %d\n",i+1,sock_targs[i].return_code);
         }
@@ -786,20 +1024,20 @@ int main(int argc, char ** argv) {
         total_log_count += sock_targs[i].log_count;
    }
 
-    printf("Total packets received : %llu, total packets sent : %llu, total messages logged : %llu\n",total_in_count,total_out_count,total_log_count);
+   printf("Total packets received : %llu, total packets sent : %llu, total messages logged : %llu\n",total_in_count,total_out_count,total_log_count);
 
    if(util_arg.return_code == RETURN_FAIL){
         fprintf(stderr,"Util thread returned an error\n");
    }
 
-   ipc_cleanup(ipc_arg,ipc_type,&retval);
+   retval = ipc_cleanup(ipc_arg,ipc_type);
 
     if(retval !=  IO_IPC_SUCCESS){
         fprintf(stderr,"Error in ipc cleanup : error code %d\n",retval);
     }
 
    free(threads);
-   //free(sock_targs);
+   free(sock_targs);
    
     
    return EXIT_SUCCESS; 
