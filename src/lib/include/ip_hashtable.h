@@ -12,7 +12,7 @@
  * 
  *  All functions beside init and destroy are MT-safe
  * 
- *  The Hashfuntion is simply using the lower 2 bytes of an address as an index
+ *  The hashfunction is simply using the lower 2 bytes of an address as an index
 */
 
 // Number of binds used by the hashtable

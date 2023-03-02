@@ -11,22 +11,33 @@
 struct shm_rbuf_arg_t {
     const char * key_path;
     int shmid;
-    uint32_t size;
+    uint16_t line_size;
+    uint32_t lines;
     uint8_t segment_count;
+    uint8_t reader_count;
     struct shm_rbuf_seg_hdr_t ** segment_heads;
+    pthread_mutex_t * segment_locks;
+    uint32_t * segment_rindices;
     bool create;
+    bool overwrite;
     struct shm_rbuf_global_hdr_t * head;
 };
 
 struct shm_rbuf_global_hdr_t {
-    uint32_t segment_count;
-    uint32_t size;
+    uint8_t segment_count;
+    bool overwrite;
+    uint16_t line_size;
+    uint32_t lines;
+    uint8_t reader_count;
+    
 };
 
 struct shm_rbuf_seg_hdr_t {
-    uint32_t size;
-    atomic_uint_fast32_t read_index;
+    uint32_t lines;
     atomic_uint_fast32_t write_index;
+    atomic_uint_fast32_t read_index;
+    atomic_uint_fast8_t read_count;
+    
 };
 
 int shm_rbuf_init(struct shm_rbuf_arg_t * args);

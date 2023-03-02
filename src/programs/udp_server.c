@@ -22,7 +22,7 @@
 // Local includes
 #include <ip_to_str.h>
 #include <io_ipc.h>
-#include <io_ipc/shm_ringbuf.h>
+#include <shm_ringbuf.h>
 
 // Configuration Options
 #define DEFAULT_PORT 8080

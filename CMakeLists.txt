@@ -5,44 +5,55 @@ project(Bacherlorarbeit)
 # Tell cmake where to find BpfObject module
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/external/tools/cmake)
 
+# External libraries
 add_subdirectory(external)
 
+# Local libraries
 add_subdirectory(src/lib)
 
-find_library(uring NAMES liburing PATHS /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib)
+# System dependencies (liburing and pthread)
+find_library(uring NAMES liburing PATHS /usr/lib/x86_64-linux-gnu)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
+# UDP Server Programm
 add_executable(udp_server ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/udp_server.c)
 target_compile_options(udp_server PRIVATE -Wall -Wextra -Wpedantic)
-
-
 target_include_directories(udp_server
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include/io_ipc
 )
-
-target_link_libraries(udp_server 
-    PUBLIC ip_llist
+target_link_libraries(udp_server
     PUBLIC ip_to_str
     PUBLIC Threads::Threads
     PUBLIC shm_ringbuf
     PUBLIC uring
 )
 
-# Set BpfObject input parameters -- note this is usually not necessary unless
-# you're in a highly vendored environment (like libbpf-bootstrap)
+# SimpleLogstash Programm
+add_executable(simplelogstash ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplelogstash.c)
+target_compile_options(simplelogstash PRIVATE -Wall -Wextra -Wpedantic)
+
+target_include_directories(simplelogstash
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+)
+
+target_link_libraries(simplelogstash 
+    PUBLIC Threads::Threads
+    PUBLIC shm_ringbuf
+    PUBLIC uring
+)
+
+# BPF Setup
 set(BPFOBJECT_BPFTOOL_EXE ${CMAKE_CURRENT_BINARY_DIR}/external/bpftool/bootstrap/bpftool)
 set(BPFOBJECT_VMLINUX_H ${CMAKE_CURRENT_SOURCE_DIR}/external/vmlinux/vmlinux.h)
 set(LIBBPF_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/external/libbpf)
 set(LIBBPF_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/external/libbpf/libbpf.a)
 find_package(BpfObject REQUIRED)
 
-# Build object skeleton and depend skeleton on libbpf build
 bpf_object(ip_blacklist ip_blacklist.bpf.c)
 add_dependencies(ip_blacklist_skel libbpf-build bpftool)
 
-
+# SimpleFail2ban Programm
 add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)                                                         
 target_compile_options(simplefail2ban PRIVATE -Wall -Wextra -Wpedantic)
 
@@ -51,7 +62,6 @@ target_include_directories(simplefail2ban
     PUBLIC /usr/include/hs          
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/list/src  
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include/io_ipc
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/
 ) 
 target_link_libraries(simplefail2ban ip_blacklist_skel ip_hashtable ip_llist ip_to_str shm_ringbuf hs Threads::Threads) 
