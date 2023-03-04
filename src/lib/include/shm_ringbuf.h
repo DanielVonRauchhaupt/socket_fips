@@ -44,7 +44,7 @@ struct shmrbuf_seg_rhdr_t {
     atomic_uint_fast32_t * write_index;
     atomic_uint_fast32_t * read_index;
     pthread_mutex_t segment_lock;
-    void * data
+    void * data;
     
 };
 
@@ -52,7 +52,7 @@ struct shmrbuf_seg_whdr_t {
 
     atomic_uint_fast32_t * write_index;
     atomic_uint_fast32_t * first_reader;
-    void * data
+    void * data;
     
 };
 

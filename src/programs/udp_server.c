@@ -34,10 +34,10 @@
 #define DOMAIN AF_INET
 #define LOG_SHORT false
 #define IPC_TYPE DISK
-#define THREADS 1
+#define NTHREADS 1
 
 // Shared memory default configuration
-#define SHM_LINES 100000
+#define SHM_NLINES 100000
 
 // Definitions
 
@@ -90,27 +90,30 @@ static in_port_t port = DEFAULT_PORT;
 static bool logshort = LOG_SHORT;
 static char * ip4_addr = IP4_ADDRESS;
 static char * ip6_addr = IP6_ADDRESS;
-static int domain = DOMAIN;
-static uint8_t threads = THREADS;
+static uint8_t thread_count = NTHREADS;
 
 // Structs
-struct packet_buf_t {
+
+// Send / Receive buffers for listener threads
+struct packet_buf_t 
+{
     struct mmsghdr msgs[MAX_MSG];
     struct iovec iovecs[MAX_MSG];
     unsigned char payload_buf[MAX_MSG];
 };
 
+// Logfile writing paramters
 struct disk_arg_t 
 {
     int logfilefd;
-    struct io_uring * ring;
+    struct io_uring ring;
+    struct io_uring_sqe * sqe;
+    struct io_uring_cqe * cqe;
     struct iovec iovecs[MAX_MSG];
-    struct io_uring_sqe sqes[MAX_MSG];
-    struct io_uring_cqe cqes[MAX_MSG];
 };
 
+// Parameters for listener threads
 struct sock_targ_t {
-    int domain;
     uint8_t thread_id;
     void * ipc_arg;
     uint64_t pkt_in;
@@ -118,9 +121,11 @@ struct sock_targ_t {
     uint64_t log_count;
     uint64_t log_drop;
     char strerror_buf[64];
+    int domain;
     int return_code;
 };
 
+// Paramters for utility thread
 struct util_targ_t {
     size_t interval;
     int return_code;
@@ -129,13 +134,6 @@ struct util_targ_t {
 // Argparse
 
 const char *argp_program_version = "Simple UDP Server";
-
-static struct argp argp = {
-    .options = options,
-    .parser = parse_opt,
-    .args_doc = "",
-    .doc = "Simple program for writing log messages from shared memory ring buffer to file"
-};
 
 static struct argp_option options[] = {
     {"disk", 'd', "DISK", 0, "Specify disk as ipc type",0},
@@ -154,8 +152,8 @@ static struct argp_option options[] = {
 struct arguments {
     bool ipc_set;
     bool domain_set;
+    int domain;
     char *logfile;
-    uint8_t thread_count;
     char *shm_key;
     uint16_t shm_line_size;
     uint32_t shm_lines;
@@ -166,6 +164,7 @@ struct arguments {
 static error_t parse_opt(int key, char *arg, struct argp_state *state) {
     struct arguments *arguments = state->input;
     struct sockaddr_in6 addrbuf;
+    struct stat statbuf;
 
     switch (key) {
 
@@ -180,7 +179,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             ipc_type = DISK;
 
             if(arg){
-                if(stat(arg, NULL) != 0){
+                if(stat(arg, &statbuf) != 0){
                     fprintf(stderr,"%s is not a valid filepath\n",arg);
                     argp_usage(state);
                 }
@@ -205,7 +204,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             }
 
             arguments->domain_set = true;
-            domain = AF_INET;
+            arguments->domain = AF_INET;
             
             break;
 
@@ -227,22 +226,22 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             }
 
             arguments->domain_set = true;
-            domain = AF_INET6;
+            arguments->domain = AF_INET6;
             
 
             break;
 
         case 't':
             
-            arguments->thread_count = (uint8_t) strtol(arg,NULL,10);
+            thread_count = (uint8_t) strtol(arg,NULL,10);
             
-            if(get_nprocs() < arguments->thread_count){
-                arguments->thread_count = get_nprocs();
-                fprintf(stderr,"Using maximum number of listener threads = %d\n",arguments->thread_count);
+            if(get_nprocs() < thread_count){
+                thread_count = get_nprocs();
+                fprintf(stderr,"Using maximum number of listener threads = %d\n",thread_count);
             }
 
-            if(arguments->thread_count == 0){
-                arguments->thread_count = 1;
+            if(thread_count == 0){
+                thread_count = 1;
                 fprintf(stderr,"Minimum 1 listener thread required\n");
             }
 
@@ -260,7 +259,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
                 argp_usage(state); 
             }
 
-            if(stat(arg, NULL) != 0){
+            if(stat(arg, &statbuf) != 0){
                     fprintf(stderr,"%s is not a valid filepath\n",arg);
                     argp_usage(state);
             }
@@ -292,9 +291,8 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
 
             if(port < 1023){
                 fprintf(stderr,"Invalid Port %d, using default port %d\n",port,DEFAULT_PORT);
+                port = DEFAULT_PORT;
             }
-
-            port = DEFAULT_PORT;
 
             break;
         case 'q':
@@ -317,10 +315,17 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
     return 0;
 }
 
+static struct argp argp = {
+    .options = options,
+    .parser = parse_opt,
+    .args_doc = "",
+    .doc = "A minimal udp server for testing IPC based logging implementations"
+};
+
 // Helper functions
 
 /* Prints a formatted string to a mutex locked file descriptor */
-void sync_message(const char * fmt, pthread_mutex_t * lock, FILE * fp, va_list targs){
+void synced_message(const char * fmt, pthread_mutex_t * lock, FILE * fp, va_list targs){
     pthread_mutex_lock(lock);
     vfprintf(fp, fmt, targs);
     pthread_mutex_unlock(lock);
@@ -330,7 +335,7 @@ void sync_message(const char * fmt, pthread_mutex_t * lock, FILE * fp, va_list t
 void info_msg(const char* fmt,...){
     va_list targs;
     va_start(targs, fmt);
-    sync_message(fmt,&stdout_lock,stdout,targs);
+    synced_message(fmt,&stdout_lock,stdout,targs);
     va_end(targs);
 }
 
@@ -338,7 +343,7 @@ void info_msg(const char* fmt,...){
 void error_msg(const char * fmt,...){
     va_list targs;
     va_start(targs, fmt);
-    sync_message(fmt,&stderr_lock,stderr,targs);
+    synced_message(fmt,&stderr_lock,stderr,targs);
     va_end(targs);
 }
 
@@ -346,40 +351,14 @@ void error_msg(const char * fmt,...){
 time_t update_datetime(char * datebuf){
     struct tm tm;
     time_t t = time(NULL);
-    localtime_r(&t,&tm);
+    localtime_r(&t, &tm);
     if(pthread_rwlock_wrlock(&datebuf_lock)){
         pthread_rwlock_unlock(&datebuf_lock);
         return RETURN_FAIL;
     }
-    strftime(datebuf,DATE_SIZE+1,STRFTIME_FMT,&tm);
+    strftime(datebuf, DATE_SIZE+1, STRFTIME_FMT, &tm);
     pthread_rwlock_unlock(&datebuf_lock);
     return t;
-}
-
-int ipc_cleanup(void * ipc_arg,enum ipc_type_t ipc_type){
-
-    int retval = IO_IPC_SUCCESS;
-
-    switch (ipc_type)
-    {
-    case DISK:
-        close(((struct disk_arg_t *)ipc_arg)->logfilefd);
-        io_uring_queue_exit(((struct disk_arg_t *)ipc_arg)->ring);
-        break;
-    
-    case SHM:
-        retval = shmrbuf_finalize((union shmrbuf_arg_t *)ipc_arg, SHMRBUF_WRITER);
-        break;
-
-    default:
-        return IO_IPC_ARG_ERR;
-    }
-
-    free(ipc_arg);
-    ipc_arg = NULL;
-
-    return retval;
-
 }
 
 /* Blocks all blockable signals with the option to keep SIGINT and SIGTERM unblocked */
@@ -454,6 +433,7 @@ uint8_t logstr_short(int domain, char * logstr_buf, void * addr){
     
     case AF_INET6:
         addrlen = ipv6_to_str((void *)&((struct sockaddr_in6 *)addr)->sin6_addr,(void *)(logstr_buf));
+        break;
 
     default:
         return 0;
@@ -540,6 +520,20 @@ int bind_socket(int sockfd, struct sockaddr * sockaddr, in_port_t port, int doma
     return RETURN_SUC;
 }
 
+void memory_cleanup_listen_and_reply(struct packet_buf_t ** recvbuf, struct packet_buf_t ** sendbuf, char ** logstr_buf, void ** recv_ipbuf, void ** send_ipbuf){
+    free(*recvbuf);
+    free(*sendbuf);
+    free(*logstr_buf);
+    free(*recv_ipbuf);
+    free(*send_ipbuf);
+    *recvbuf = NULL;
+    *sendbuf = NULL;
+    *logstr_buf = NULL;
+    *recv_ipbuf = NULL;
+    *send_ipbuf = NULL;
+}
+
+
 /* Listen for udp packets. Replies to valid requests and logs invalid requests using ipc method specified by ipy_type*/
 int listen_and_reply(int sockfd, struct sock_targ_t * targs){
 
@@ -549,7 +543,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs){
     void * recv_ipbuf = NULL;
     void * send_ipbuf = NULL;
     int retval_rcv, retval_snd, retval_ipc, i, logbuf_size, ip_bufsize, send_count = 0, invalid_count = 0;
-    uint8_t logstr_len;
+    uint16_t logstr_len;
 
     switch (targs->domain)
     {
@@ -561,27 +555,25 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs){
     case AF_INET6:
         ip_bufsize = sizeof(struct sockaddr_in6);
         logbuf_size = LOG_BUF_SIZE_IP6;
+        break;
 
     default:
         error_msg("Invalid domain: %d in thread arguments\n", targs->domain);
         return RETURN_FAIL;
     }
 
-    if((recvbuf = (struct packet_buf_t *) aligned_alloc(64,sizeof(struct packet_buf_t))) == NULL
-        || (sendbuf = (struct packet_buf_t *) aligned_alloc(64,sizeof(struct packet_buf_t))) == NULL
-        || (logstr_buf = (char *) aligned_alloc(64,logbuf_size*MAX_MSG)) == NULL 
-        || (recv_ipbuf = aligned_alloc(64,ip_bufsize*MAX_MSG)) == NULL
-        || (send_ipbuf = aligned_alloc(64,ip_bufsize*MAX_MSG)) == NULL) {
+    if((recvbuf = (struct packet_buf_t *) calloc(1,sizeof(struct packet_buf_t))) == NULL
+        || (sendbuf = (struct packet_buf_t *) calloc(1,sizeof(struct packet_buf_t))) == NULL
+        || (logstr_buf = (char *) calloc(logbuf_size, MAX_MSG)) == NULL 
+        || (recv_ipbuf = calloc(ip_bufsize, MAX_MSG)) == NULL
+        || (send_ipbuf = calloc(ip_bufsize, MAX_MSG)) == NULL) {
             error_msg("Memory allocation failed : %s",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
-            free(sendbuf);
-            free(logstr_buf);
-            free(recv_ipbuf);
-            free(send_ipbuf);
+            memory_cleanup_listen_and_reply(&recvbuf, &sendbuf, &logstr_buf, &recv_ipbuf, &send_ipbuf);
             return RETURN_FAIL;
         }
 
-    if(memset(&recvbuf->msgs,0,sizeof(recvbuf->msgs)) == NULL
-        || memset(&sendbuf->msgs,0,sizeof(sendbuf->msgs)) == NULL){
+    if(memset(&recvbuf->msgs, 0, sizeof(recvbuf->msgs)) == NULL
+        || memset(&sendbuf->msgs, 0, sizeof(sendbuf->msgs)) == NULL){
         error_msg("Memset error\n");
     }
 
@@ -599,11 +591,6 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs){
         sendbuf->msgs[i].msg_hdr.msg_name = (void *)((char *)(send_ipbuf)+i*ip_bufsize);
         sendbuf->msgs[i].msg_hdr.msg_namelen = ip_bufsize;
 
-        if(ipc_type == DISK){
-            ((struct disk_arg_t *)targs->ipc_arg)->iovecs[i].iov_base = &logstr_buf[i*logbuf_size];
-            ((struct disk_arg_t *)targs->ipc_arg)->iovecs[i].iov_len = logbuf_size;
-        }
-
     }
 
     while(server_running){
@@ -615,11 +602,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs){
                 continue;
 			} else {
                 error_msg("Error in recvmmsg : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
-                free(sendbuf);
-                free(recvbuf);
-                free(logstr_buf);
-                free(recv_ipbuf);
-                free(send_ipbuf);
+                memory_cleanup_listen_and_reply(&recvbuf, &sendbuf, &logstr_buf, &recv_ipbuf, &send_ipbuf);
                 return RETURN_FAIL;
             }
 			
@@ -632,26 +615,29 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs){
 
             struct disk_arg_t * disk_args = ((struct disk_arg_t *)targs->ipc_arg);
             
-            if(((retval_ipc = io_uring_wait_cqe(disk_args->ring,&disk_args->cqe)) < 0) || (disk_args->cqe->res < 0)){
+            if(((retval_ipc = io_uring_wait_cqe(&disk_args->ring,&disk_args->cqe)) < 0) || (disk_args->cqe->res < 0)){
                 error_msg("Error in io_uring write : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
-                free(sendbuf);
-                free(recvbuf);
-                free(logstr_buf);
-                free(recv_ipbuf);
-                free(send_ipbuf);
+                memory_cleanup_listen_and_reply(&recvbuf, &sendbuf, &logstr_buf, &recv_ipbuf, &send_ipbuf);
                 return RETURN_FAIL;
             }
 
-            io_uring_cqe_seen(disk_args->ring, disk_args->cqe);
+            io_uring_cqe_seen(&disk_args->ring, disk_args->cqe);
             
         }
-
-
  
         for(i = 0; i < retval_rcv; i++){
 
+            uint32_t logstr_index = i*logbuf_size;
+
             if(recvbuf->payload_buf[i] == INVALID_PAYLOAD){
-                if((logstr_len = logstr_short(targs->domain,&logstr_buf[invalid_count*logbuf_size],(struct sockaddr *)recvbuf->msgs[i].msg_hdr.msg_name)) == 0){
+
+                if(logshort){
+                    logstr_len = logstr_short(targs->domain,&logstr_buf[logstr_index],(struct sockaddr *)recvbuf->msgs[i].msg_hdr.msg_name);
+                } else {
+                    logstr_len = logstr_long(targs->domain,&logstr_buf[logstr_index],(struct sockaddr *)recvbuf->msgs[i].msg_hdr.msg_name);
+                }
+
+                if(logstr_len == 0){
                     error_msg("Error writing logstring\n");
                     continue;
                 }
@@ -659,22 +645,21 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs){
                 switch (ipc_type)
                 {
                 case DISK:
-                    ((struct disk_arg_t *)targs->ipc_arg)->iovecs[invalid_count++].iov_len = logstr_len;
+                    ((struct disk_arg_t *)targs->ipc_arg)->iovecs[invalid_count].iov_base = &logstr_buf[logstr_index];
+                    ((struct disk_arg_t *)targs->ipc_arg)->iovecs[invalid_count].iov_len = logstr_len;
+                    invalid_count++;
                     break;
                    
                 case SHM:
-                   if((retval_ipc = shm_rbuf_write(((struct shm_rbuf_arg_t *)targs->ipc_arg),&logstr_buf[invalid_count*logbuf_size],logstr_len,targs->thread_id))!=IO_IPC_SUCCESS){
+                   if((retval_ipc = shmrbuf_write(((struct shmrbuf_writer_arg_t *)targs->ipc_arg),&logstr_buf[logstr_index],logstr_len,targs->thread_id)) != logstr_len){
                         if(retval_ipc == IO_IPC_SIZE_ERR){
+                            targs->log_drop++;
                             continue;
                         } 
 
                         else {
-                            error_msg("Error in shm_rbuf_write : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
-                            free(sendbuf);
-                            free(recvbuf);
-                            free(logstr_buf);
-                            free(recv_ipbuf);
-                            free(send_ipbuf);
+                            error_msg("Error in shm_rbuf_write : Error Code %d\n",retval_ipc);
+                            memory_cleanup_listen_and_reply(&recvbuf, &sendbuf, &logstr_buf, &recv_ipbuf, &send_ipbuf);
                             return RETURN_FAIL;
                         }
                    }
@@ -701,18 +686,15 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs){
             {
             case DISK:
 
-                ((struct disk_arg_t *)targs->ipc_arg)->sqe = io_uring_get_sqe(((struct disk_arg_t *)targs->ipc_arg)->ring);
+                ((struct disk_arg_t *)targs->ipc_arg)->sqe = io_uring_get_sqe(&((struct disk_arg_t *)targs->ipc_arg)->ring);
 
-                io_uring_prep_writev(((struct disk_arg_t *)targs->ipc_arg)->sqe,((struct disk_arg_t *)targs->ipc_arg)->logfilefd,((struct disk_arg_t *)targs->ipc_arg)->iovecs,invalid_count,0);
+                io_uring_prep_writev(((struct disk_arg_t *)targs->ipc_arg)->sqe,((struct disk_arg_t *)targs->ipc_arg)->logfilefd,((struct disk_arg_t *)targs->ipc_arg)->iovecs,invalid_count,-1);
 
-                if(io_uring_submit(((struct disk_arg_t *)targs->ipc_arg)->ring) < 0){
+                if(io_uring_submit(&((struct disk_arg_t *)targs->ipc_arg)->ring) < 0){
                     error_msg("Error in io_uring submit : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
-                    free(sendbuf);
-                    free(recvbuf);
-                    free(logstr_buf);
-                    free(recv_ipbuf);
-                    free(send_ipbuf);
-                return RETURN_FAIL;
+                    memory_cleanup_listen_and_reply(&recvbuf, &sendbuf, &logstr_buf, &recv_ipbuf, &send_ipbuf);
+                    targs->log_drop += invalid_count;
+                    return RETURN_FAIL;
                 }
                 
                 break;
@@ -727,17 +709,13 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs){
 
         if(send_count){
 
-            retval_snd = sendmmsg(sockfd,recvbuf->msgs,send_count,0);
+            retval_snd = sendmmsg(sockfd,sendbuf->msgs,send_count,0);
 
             if(retval_snd < 1){
 
                 if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
                     error_msg("Error in sendmmsg : sendcount %d, %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
-                    free(sendbuf);
-                    free(recvbuf);
-                    free(logstr_buf);
-                    free(recv_ipbuf);
-                    free(send_ipbuf);
+                    memory_cleanup_listen_and_reply(&recvbuf, &sendbuf, &logstr_buf, &recv_ipbuf, &send_ipbuf);
                     return RETURN_FAIL;
                 }
             } else {
@@ -756,8 +734,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs){
 /* Routine for socket threads. Opens a socket and listens for incoming packets */
 void * run_socket(void *args){
 
-    int sockfd;
-    int opt = 1;
+    int sockfd, opt = 1;
     struct timeval timeout = {.tv_sec=0,.tv_usec=RECV_TIMEOUT};
     struct sock_targ_t * targs = (struct sock_targ_t *) args;
     struct sockaddr_storage server_addr;
@@ -802,15 +779,15 @@ void * run_socket(void *args){
     switch (targs->domain)
     {
     case AF_INET:
-        if(inet_pton(AF_INET,IP4_ADDRESS,(void *)&((struct sockaddr_in *)&server_addr)->sin_addr)!=1){
-            error_msg("Could not set %s as address, default to INADDR_ANY\n",IP4_ADDRESS);
+        if(inet_pton(AF_INET,ip4_addr,(void *)&((struct sockaddr_in *)&server_addr)->sin_addr)!=1){
+            error_msg("Could not set %s as address, default to INADDR_ANY\n",ip4_addr);
             ((struct sockaddr_in *)&server_addr)->sin_addr.s_addr = INADDR_ANY;
         }    
         break;
 
     case AF_INET6:
-        if(inet_pton(AF_INET6,IP6_ADDRESS,(void *)&((struct sockaddr_in6 *)&server_addr)->sin6_addr)!=1){
-            error_msg("Could not set %s as address, default to IN6ADDR_ANY\n",IP6_ADDRESS);
+        if(inet_pton(AF_INET6,ip6_addr,(void *)&((struct sockaddr_in6 *)&server_addr)->sin6_addr)!=1){
+            error_msg("Could not set %s as address, default to IN6ADDR_ANY\n",ip6_addr);
             ((struct sockaddr_in6 *)&server_addr)->sin6_addr = in6addr_any;
         }
         break;
@@ -852,20 +829,74 @@ void * run_socket(void *args){
 
 }
 
+
+/* Cleanup dependent on ipc type */
+int ipc_cleanup(struct sock_targ_t * sock_targs, uint8_t thread_count, enum ipc_type_t ipc_type){
+
+    int i, retval = IO_IPC_NULLPTR_ERR;
+
+    switch (ipc_type)
+    {
+    case DISK:
+
+        if(sock_targs[0].ipc_arg != NULL){
+            retval = close(((struct disk_arg_t *)sock_targs[0].ipc_arg)->logfilefd);
+        }
+        
+        for(i = 0; i < thread_count; i++){
+            if(sock_targs[i].ipc_arg != NULL)
+            {
+                io_uring_queue_exit(&((struct disk_arg_t *)sock_targs[i].ipc_arg)->ring);
+                free(sock_targs[i].ipc_arg);
+                sock_targs[i].ipc_arg = NULL;
+            }
+        }
+
+        break;
+    
+    case SHM:
+
+        if(sock_targs[0].ipc_arg != NULL){
+            retval = shmrbuf_finalize((union shmrbuf_arg_t *)sock_targs[0].ipc_arg, SHMRBUF_WRITER);
+            free(sock_targs[0].ipc_arg);
+
+            for(i = 0; i < thread_count; i++){
+                sock_targs[i].ipc_arg = NULL;
+            }
+        }
+
+        break;
+
+    default:
+        return IO_IPC_ARG_ERR;
+    }
+
+    return retval;
+
+}
+
+void memory_cleanup_main(pthread_t ** threads, struct sock_targ_t ** sock_targs){
+
+    free(*sock_targs);
+    free(*threads);
+    *sock_targs = NULL;
+    *threads = NULL;
+}
+
 int main(int argc, char ** argv) { 
 
-    void * ipc_arg;
-    int retval, i;
+    int retval, logfilefd;
+    uint8_t i;
     pthread_t * threads;
-    pthread_t util_thread;
     struct sock_targ_t * sock_targs;
+    struct shmrbuf_writer_arg_t * shmrbuf_arg;
     struct util_targ_t util_arg = {.interval=(size_t)UTIL_TIMEOUT};
 
     struct arguments args = {
         .domain_set = false,
         .ipc_set = false,
         .logfile = DEFAULT_LOG,
-        .thread_count = get_nprocs(),
+        .domain = DOMAIN
     };
 
     if(argp_parse(&argp, argc, argv, 0, 0, &args) == ARGP_ERR_UNKNOWN)
@@ -874,58 +905,52 @@ int main(int argc, char ** argv) {
     }
 
 
-    if((threads = calloc(sizeof(pthread_t),args.thread_count-1)) == NULL || (sock_targs = calloc(sizeof(struct sock_targ_t),args.thread_count)) == NULL){
+    if((threads = calloc(sizeof(pthread_t),thread_count)) == NULL || (sock_targs = calloc(sizeof(struct sock_targ_t),thread_count)) == NULL){
         perror("Calloc failed");
         exit(EXIT_FAILURE);
     }
 
-    for(i = 0; i < args.thread_count; i++){
+    for(i = 0; i < thread_count; i++){
         sock_targs[i].thread_id = i;
-        sock_targs[i].domain = DOMAIN;
+        sock_targs[i].domain = args.domain;
         sock_targs[i].log_count = 0;
+        sock_targs[i].log_drop = 0;
         sock_targs[i].pkt_in = 0;
         sock_targs[i].pkt_out = 0;
+        
     }
 
     switch (ipc_type)
     {
     case DISK:
-    
-        if((ipc_arg = calloc(sizeof(int),1)) == NULL){
-            perror("calloc failed");
-            free(threads);
-            free(sock_targs);
-            exit(EXIT_FAILURE);
-        }
 
-        if((*((int *)ipc_arg) = open(DEFAULT_LOG,OPEN_MODE,OPEN_PERM)) < 0){
-            free(threads);
-            free(sock_targs);
+        if((logfilefd = open(args.logfile,OPEN_MODE,OPEN_PERM)) < 0){
             perror("opening logfile failed");
+            memory_cleanup_main(&threads, &sock_targs);
             exit(EXIT_FAILURE);
         }
 
-        for(i = 0; i < args.thread_count; i++){
-            if((sock_targs[i].ipc_arg = aligned_alloc(sizeof(struct disk_arg_t),1)) == NULL){
-                perror("aligned alloc failed");
+        for(i = 0; i < thread_count; i++){
+            if((sock_targs[i].ipc_arg = calloc(1, sizeof(struct disk_arg_t))) == NULL)
+            {
+                perror("calloc failed");
+            }
+            else 
+            {
+                ((struct disk_arg_t *)sock_targs[i].ipc_arg)->logfilefd = logfilefd;
+
+                if(io_uring_queue_init(MAX_MSG, &((struct disk_arg_t *)sock_targs[i].ipc_arg)->ring, 0))
+                {
+                    perror("io_uring queue init failed");
+                } 
+                else 
+                {
+                    continue;
+                }
             }
 
-            else if(memset(((struct disk_arg_t *)ipc_arg)->iovecs,0,MAX_MSG*sizeof(struct iovec)) == NULL){
-                fprintf(stderr,"Memset error\n");
-            }
-
-            else if(io_uring_queue_init(MAX_MSG,((struct disk_arg_t *)sock_targs[i].ipc_arg)->ring,0)){
-                perror("io_uring queue init failed");
-            } else {
-                ((struct disk_arg_t *)sock_targs[i].ipc_arg)->logfilefd = *((int *)ipc_arg);
-                continue;
-            }
-            for(int j = i; j > -1; j--){
-                free(sock_targs[i].ipc_arg);
-            }
-            close(*((int *) ipc_arg));
-            free(threads);
-            free(sock_targs);
+            ipc_cleanup(sock_targs, thread_count, ipc_type);
+            memory_cleanup_main(&threads, &sock_targs);
             exit(EXIT_FAILURE);
         }
 
@@ -933,35 +958,33 @@ int main(int argc, char ** argv) {
 
     case SHM:
 
-        if((ipc_arg = calloc(sizeof(struct shmrbuf_writer_arg_t),1)) == NULL){
+        if((shmrbuf_arg = (struct shmrbuf_writer_arg_t *) calloc(sizeof(struct shmrbuf_writer_arg_t),1)) == NULL){
             perror("calloc failed");
-            free(threads);
-            free(sock_targs);
+            memory_cleanup_main(&threads, &sock_targs);
             exit(EXIT_FAILURE);
         }
 
-        ((struct shmrbuf_writer_arg_t *)(ipc_arg))->lines = (args.shm_line_size) ? args.shm_line_size : SHM_LINES;
-        ((struct shmrbuf_writer_arg_t *)(ipc_arg))->line_size = (logshort) ? ((domain == AF_INET) ? STR_SIZE_IP4 : STR_SIZE_IP6) : ((domain == AF_INET) ? LOG_BUF_SIZE_IP4 : LOG_BUF_SIZE_IP6);
-        ((struct shmrbuf_writer_arg_t *)(ipc_arg))->shm_key = args.shm_key;
-        ((struct shmrbuf_writer_arg_t *)(ipc_arg))->segment_count = args.thread_count;
-        ((struct shmrbuf_writer_arg_t *)(ipc_arg))->overwrite = args.overwrite;
+        shmrbuf_arg->lines = (args.shm_line_size) ? args.shm_line_size : SHM_NLINES;
+        shmrbuf_arg->line_size = (logshort) ? ((args.domain == AF_INET) ? STR_SIZE_IP4 : STR_SIZE_IP6) : ((args.domain == AF_INET) ? LOG_BUF_SIZE_IP4 : LOG_BUF_SIZE_IP6);
+        shmrbuf_arg->shm_key = args.shm_key;
+        shmrbuf_arg->segment_count = thread_count;
+        shmrbuf_arg->overwrite = args.overwrite;
 
-        if((retval = shm_rbuf_init(((struct shm_rbuf_arg_t *)(ipc_arg)))) != IO_IPC_SUCCESS){
+        if((retval = shmrbuf_init((union shmrbuf_arg_t *)shmrbuf_arg, SHMRBUF_WRITER)) != IO_IPC_SUCCESS){
             if(retval > 0){
-                fprintf(stderr,"Error code %d\n",retval);
                 perror("shm_rbuf_init failed");
+                fprintf(stderr,"error code %d\n",retval);
             }
             else {
                 fprintf(stderr,"shm_rbuf_init failed : error code %d\n",retval);
             }
-            free(ipc_arg);
-            free(threads);
-            free(sock_targs);
+            free(shmrbuf_arg);
+            memory_cleanup_main(&threads, &sock_targs);
             exit(EXIT_FAILURE);
         }
 
-        for(i = 0; i < args.thread_count; i++){
-            sock_targs[i].ipc_arg = ipc_arg;
+        for(i = 0; i < thread_count; i++){
+            sock_targs[i].ipc_arg = shmrbuf_arg;
         }
 
         break;
@@ -969,29 +992,26 @@ int main(int argc, char ** argv) {
     
     default:
         fprintf(stderr,"Invalid ipc type value %d\n",ipc_type);
-        free(threads);
-        free(sock_targs);
+        memory_cleanup_main(&threads, &sock_targs);
         exit(EXIT_FAILURE);
     }
 
     if(update_datetime(global_datetime_buf) == RETURN_FAIL){
         fprintf(stderr,"Initializing the global datetime buffer failed\n");
-        ipc_cleanup(ipc_arg,ipc_type);
-        free(threads);
-        free(sock_targs);
+        ipc_cleanup(sock_targs, thread_count, ipc_type);
+        memory_cleanup_main(&threads, &sock_targs);
         exit(EXIT_FAILURE);
     }
 
     
-    if(pthread_create(&util_thread,NULL,util_thread_routine,(void*)&util_arg)){
+    if(pthread_create(&threads[0],NULL,util_thread_routine,(void*)&util_arg)){
         perror("Creating util thread failed");
-        ipc_cleanup(ipc_arg,ipc_type);
-        free(threads);
-        free(sock_targs);
+        ipc_cleanup(sock_targs, thread_count, ipc_type);
+        memory_cleanup_main(&threads, &sock_targs);
         exit(EXIT_FAILURE);
     }
 
-    for(i = 1; i < args.thread_count; i++){
+    for(i = 1; i < thread_count; i++){
 
         if(pthread_create(&threads[i],NULL,run_socket,(void*)&sock_targs[i])){
             perror("Could not create listener thread");
@@ -1000,44 +1020,42 @@ int main(int argc, char ** argv) {
 
    run_socket((void *)&sock_targs[0]);
 
-   for(i = 1; i < args.thread_count; i++){
+   for(i = 0; i < thread_count; i++){
         if(pthread_join(threads[i],NULL)){
             perror("Pthread join failed");
         }
    }
 
-   if(pthread_join(util_thread,NULL)){
-        perror("Pthread join failed");
-   }
+    unsigned long long int total_in_count = 0 ,total_out_count = 0, total_log_count = 0, total_drop_count = 0;
 
-    unsigned long long int total_in_count = 0 ,total_out_count = 0, total_log_count = 0;
+    printf("\n");
 
-   for(i = 0; i < args.thread_count; i++){
+   for(i = 0; i < thread_count; i++){
         if(sock_targs[i].return_code != RETURN_SUC){
-            fprintf(stderr,"Thread %d returned with an error : error code %d\n",i+1,sock_targs[i].return_code);
+            fprintf(stderr,"Thread %d returned with an error : error code %d\n", i, sock_targs[i].return_code);
         }
 
-        printf("Thread %d : packets received  : %lu, packets sent  : %lu, messages logged : %lu\n",i,sock_targs[i].pkt_in,sock_targs[i].pkt_out,sock_targs[i].log_count);
+        printf("Thread %d : packets received  : %lu, packets sent  : %lu, messages logged : %lu, messages dropped : %lu\n", i, sock_targs[i].pkt_in,sock_targs[i].pkt_out, sock_targs[i].log_count, sock_targs[i].log_drop);
 
         total_in_count += sock_targs[i].pkt_in;
         total_out_count += sock_targs[i].pkt_out;
         total_log_count += sock_targs[i].log_count;
+        total_drop_count += sock_targs[i].log_drop;
    }
 
-   printf("Total packets received : %llu, total packets sent : %llu, total messages logged : %llu\n",total_in_count,total_out_count,total_log_count);
+   printf("Total packets received : %llu, total packets sent : %llu, total messages logged : %llu, total messages dropped : %llu\n",total_in_count, total_out_count, total_log_count, total_drop_count);
 
    if(util_arg.return_code == RETURN_FAIL){
         fprintf(stderr,"Util thread returned an error\n");
    }
 
-   retval = ipc_cleanup(ipc_arg,ipc_type);
+   retval = ipc_cleanup(sock_targs, thread_count, ipc_type);
 
     if(retval !=  IO_IPC_SUCCESS){
         fprintf(stderr,"Error in ipc cleanup : error code %d\n",retval);
     }
 
-   free(threads);
-   free(sock_targs);
+   memory_cleanup_main(&threads, &sock_targs);
    
     
    return EXIT_SUCCESS; 

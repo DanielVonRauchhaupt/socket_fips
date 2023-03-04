@@ -103,7 +103,7 @@ union ip_addr_t
 
 
 struct watcher_targs_t {
-	struct shm_rbuf_arg_t * ipc_args;
+	struct shmrbuf_reader_arg_t * ipc_args;
 	uint8_t thread_id;
 	uint32_t wakeup_interval;
 	uint64_t rcv_count;
@@ -869,8 +869,8 @@ void * ban_thread_routine(void * args){
 	bool no_read;
 	int nr_cpus = libbpf_num_possible_cpus();
 
-	buffer_count = targs->ipc_args->segment_count / watcher_count;
-	buffer_count = ((targs->ipc_args->segment_count % watcher_count) < targs->thread_id) ? buffer_count + 1 : buffer_count;
+	buffer_count = targs->ipc_args->head->segment_count / watcher_count;
+	buffer_count = ((targs->ipc_args->head->segment_count % watcher_count) < targs->thread_id) ? buffer_count + 1 : buffer_count;
 
 	if(memset(&reg_context,0,sizeof(reg_context)) == NULL){
 		error_msg("Memset error\n");
@@ -899,7 +899,7 @@ void * ban_thread_routine(void * args){
 		no_read = true;
 
 		for(i = targs->thread_id; i < buffer_count; i++){
-			if((retval = shm_rbuf_read(targs->ipc_args,reg_context.ip_str_buf,sizeof(reg_context.ip_str_buf),targs->thread_id)) > 0){
+			if((retval = shmrbuf_read(targs->ipc_args,reg_context.ip_str_buf,sizeof(reg_context.ip_str_buf),targs->thread_id)) > 0){
 
 				targs->rcv_count++;
 				no_read = false;
@@ -1029,7 +1029,7 @@ int main(int argc, char **argv){
 
 	struct watcher_targs_t * thread_args;
 	struct unban_targs_t unban_targs = {.unban_count = 0,.wakeup_interval=TIMEOUT};
-	struct shm_rbuf_arg_t rbuf_args = {.create=false,.key_path=DEFAULT_LOG,.size=0};
+	struct shmrbuf_reader_arg_t rbuf_args = {.shm_key=DEFAULT_LOG};
 	pthread_t unban_thread_id;
 	pthread_t * thread_ids;
 	arguments.verbose = 0;
@@ -1067,10 +1067,9 @@ int main(int argc, char **argv){
 		exit(EXIT_FAILURE);
 	}
 
-	rbuf_args.create = false;
-	rbuf_args.key_path = DEFAULT_LOG;
+	rbuf_args.shm_key = DEFAULT_LOG;
 
-	if((retval = shm_rbuf_init(&rbuf_args)) != IO_IPC_SUCCESS){
+	if((retval = shmrbuf_init(&rbuf_args, SHMRBUF_READER)) != IO_IPC_SUCCESS){
 		if(retval > 0){
             perror("shm_rbuf_init failed");
         }

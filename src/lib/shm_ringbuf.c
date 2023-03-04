@@ -159,7 +159,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
 
             seg_rhdr->write_index = seg_head;
             seg_rhdr->read_index = seg_head + args->rargs.reader_index;
-            seg_rhdr->data = seg_head + global_hdr->reader_count;
+            seg_rhdr->data = (void *)(seg_head + global_hdr->reader_count);
 
         }
 
