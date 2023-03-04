@@ -24,8 +24,8 @@
 #define IO_IPC_ARG_ERR (-1)
 #define IO_IPC_MEM_ERR (-2)
 #define IO_IPC_NULLPTR_ERR (-3)
-#define IO_IPC_MUTEX_ERR (-3)
-#define IO_IPC_SIZE_ERR (-4)
+#define IO_IPC_MUTEX_ERR (-4)
+#define IO_IPC_SIZE_ERR (-5)
 
 #define PAGESIZE 4096
 

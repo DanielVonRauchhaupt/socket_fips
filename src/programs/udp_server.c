@@ -35,6 +35,7 @@
 #define LOG_SHORT false
 #define IPC_TYPE DISK
 #define NTHREADS 1
+#define NREADERS 1
 
 // Shared memory default configuration
 #define SHM_NLINES 100000
@@ -143,6 +144,7 @@ static struct argp_option options[] = {
     {"logshort", 'l', 0, 0, "Enable short logging",0},
     {"shm", 's', "SHM", 0, "Specify shared memory as ipc type",0},
     {"nlines", 'n', "SHM_NLINES", 0, "Specify shared memory lines per segment",0},
+    {"nreaders", 'r', 0, 0, "Number of readers for shared memory",0},
     {"overwrite", 'o', 0, 0, "Enable overwrite for shared memory",0},
     {"port", 'p', "PORT", 0, "Specify the port to listen at",0},
     {"msgq", 'q', "MSGQ", 0, "Specify message queue as ipc type",0},
@@ -157,6 +159,7 @@ struct arguments {
     char *shm_key;
     uint16_t shm_line_size;
     uint32_t shm_lines;
+    uint8_t shm_reader_count;
     bool overwrite;
     in_port_t ipc_port;
 };
@@ -179,10 +182,6 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             ipc_type = DISK;
 
             if(arg){
-                if(stat(arg, &statbuf) != 0){
-                    fprintf(stderr,"%s is not a valid filepath\n",arg);
-                    argp_usage(state);
-                }
                 arguments->logfile = arg;
             }
 
@@ -264,7 +263,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
                     argp_usage(state);
             }
 
+            arguments->ipc_set = true;
             arguments->shm_key = arg;
+            ipc_type = SHM;
 
             break;
 
@@ -277,6 +278,17 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
                 arguments->shm_line_size = 2;
             }
             
+            break;
+
+        case 'r':
+
+            arguments->shm_reader_count = (uint8_t) strtol(arg,NULL,10);
+
+            if(arguments->shm_reader_count == 0){
+                fprintf(stderr,"Reader count has to be at least 1\n");
+                arguments->shm_reader_count = 1;
+            }
+
             break;
 
         case 'o':
@@ -665,6 +677,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs){
                    }
 
                    invalid_count++;
+                   break;
 
                 default:
                     break;
@@ -896,7 +909,7 @@ int main(int argc, char ** argv) {
         .domain_set = false,
         .ipc_set = false,
         .logfile = DEFAULT_LOG,
-        .domain = DOMAIN
+        .domain = DOMAIN,
     };
 
     if(argp_parse(&argp, argc, argv, 0, 0, &args) == ARGP_ERR_UNKNOWN)
@@ -968,6 +981,7 @@ int main(int argc, char ** argv) {
         shmrbuf_arg->line_size = (logshort) ? ((args.domain == AF_INET) ? STR_SIZE_IP4 : STR_SIZE_IP6) : ((args.domain == AF_INET) ? LOG_BUF_SIZE_IP4 : LOG_BUF_SIZE_IP6);
         shmrbuf_arg->shm_key = args.shm_key;
         shmrbuf_arg->segment_count = thread_count;
+        shmrbuf_arg->reader_count = (args.shm_reader_count) ? args.shm_reader_count : NREADERS;
         shmrbuf_arg->overwrite = args.overwrite;
 
         if((retval = shmrbuf_init((union shmrbuf_arg_t *)shmrbuf_arg, SHMRBUF_WRITER)) != IO_IPC_SUCCESS){

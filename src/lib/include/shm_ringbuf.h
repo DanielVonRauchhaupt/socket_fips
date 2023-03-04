@@ -8,6 +8,8 @@
 #include <io_ipc.h>
 #include <stdatomic.h>
 
+#define SHMRBUF_FLAGS IPC_CREAT | IPC_EXCL | 0644
+
 struct shmrbuf_writer_arg_t {
     const char * shm_key;
     uint16_t line_size;

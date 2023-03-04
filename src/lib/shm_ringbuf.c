@@ -60,14 +60,14 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
         }
 
         key = ftok(args->wargs.shm_key,0);
-        shm_flag |= IPC_CREAT | IPC_EXCL;
+        shm_flag = SHMRBUF_FLAGS;
         size = sizeof(struct shmrbuf_global_hdr_t) +
                args->wargs.segment_count * (args->wargs.lines * args->wargs.line_size +
                (args->wargs.reader_count + 1) * sizeof(atomic_uint_fast32_t));
 
         if(args->wargs.lines * args->wargs.line_size > PAGESIZE)
         {
-            shm_flag |= SHM_HUGETLB;
+            //shm_flag |= SHM_HUGETLB;
         }
 
         break;
@@ -90,7 +90,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
         return errno;
     }
 
-    if(*((int *)(global_hdr = (struct shmrbuf_global_hdr_t *) shmat(shmid,NULL,0))) == -1)
+    if((global_hdr = (struct shmrbuf_global_hdr_t *) shmat(shmid,NULL,0)) == (void *) -1)
     {
         int reval = errno;
         shm_cleanup(args, role);
@@ -102,8 +102,10 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
         global_hdr->lines = args->wargs.lines;
         global_hdr->line_size = args->wargs.line_size;
         global_hdr->segment_count = args->wargs.segment_count;
+        global_hdr->reader_count = args->wargs.reader_count;
         global_hdr->overwrite = args->wargs.overwrite;
         args->wargs.head = global_hdr;
+        args->wargs.shmid = shmid;
 
         if((args->wargs.segment_hdrs = (struct shmrbuf_seg_whdr_t *) calloc(sizeof(struct shmrbuf_seg_whdr_t),global_hdr->segment_count)) == NULL){
             shm_cleanup(args, role);
@@ -120,6 +122,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
         }   
 
         args->rargs.head = global_hdr;
+        args->rargs.shmid = shmid;
 
         if((args->rargs.reader_index = atomic_fetch_add(&global_hdr->reader_index,1)) >= global_hdr->reader_count){
             shm_cleanup(args, role);
@@ -147,7 +150,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
 
             seg_whdr->write_index = seg_head;
             seg_whdr->first_reader = seg_head + 1;
-            seg_whdr->data = (void *)(seg_head + global_hdr->reader_count);
+            seg_whdr->data = (void *)(seg_head + 1 + global_hdr->reader_count);
         
             memset(seg_whdr->write_index,0,segment_size);
 
@@ -215,7 +218,7 @@ int shmrbuf_write(struct shmrbuf_writer_arg_t * args, void * src, uint16_t wsize
         return IO_IPC_MEM_ERR;
     }
 
-    atomic_store(segment->write_index,write_index);    
+    atomic_store(segment->write_index,new_write_index);    
 
     return wsize;
 }
