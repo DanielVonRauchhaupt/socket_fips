@@ -137,17 +137,17 @@ struct util_targ_t {
 const char *argp_program_version = "Simple UDP Server";
 
 static struct argp_option options[] = {
-    {"disk", 'd', "DISK", 0, "Specify disk as ipc type",0},
-    {"ipv4", '4', "IPV4", 0, "Specify IPv4 address",0},
-    {"ipv6", '6', "IPV6", 0, "Specify IPv6 address",0},
-    {"threads", 't', "THREADS", 0, "Specify the number of listener threads to use",0},
-    {"logshort", 'l', 0, 0, "Enable short logging",0},
-    {"shm", 's', "SHM", 0, "Specify shared memory as ipc type",0},
-    {"nlines", 'n', "SHM_NLINES", 0, "Specify shared memory lines per segment",0},
-    {"nreaders", 'r', 0, 0, "Number of readers for shared memory",0},
-    {"overwrite", 'o', 0, 0, "Enable overwrite for shared memory",0},
+    {"disk", 'd', "LOGFILE", 0, "Specify disk as ipc type",0},
+    {"ipv4", '4', "ADDRESS", 0, "Specify IPv4 address",0},
+    {"ipv6", '6', "ADDRESS", 0, "Specify IPv6 address",0},
+    {"threads", 't', "N", 0, "Specify the number of listener threads to use",0},
+    {"logshort", 'l', NULL, 0, "Enable short logging",0},
+    {"shm", 's', "KEY", 0, "Specify shared memory as ipc type",0},
+    {"nlines", 'n', "NUM", 0, "Specify shared memory lines per segment",0},
+    {"nreaders", 'r', "N", 0, "Number of readers for shared memory",0},
+    {"overwrite", 'o', NULL, 0, "Enable overwrite for shared memory",0},
     {"port", 'p', "PORT", 0, "Specify the port to listen at",0},
-    {"msgq", 'q', "MSGQ", 0, "Specify message queue as ipc type",0},
+    {"msgq", 'q', "PORT", 0, "Specify message queue as ipc type",0},
     {0}
 };
 

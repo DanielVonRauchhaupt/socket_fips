@@ -34,60 +34,45 @@
 
 #define RETURN_FAIL (-1)
 #define RETURN_SUCC (0)
-#define MT false
+#define NTHREADS 1
 #define WATCHER_COUNT 1
-#define HUGE_PAGE_SIZE 2048 * 1000
 
-#define BAN_TIME 60
-#define BAN_THRESHOLD 1
-
+#define DEFAULT_BAN_TIME 60
+#define DEFAULT_BAN_THRESHOLD 1
+#define DEFAULT_IPC_TYPE DISK
 #define DEFAULT_IFACE "enp24s0f0np0"
-
-#define DEFAULT_LOG "/mnt/scratch/PR/logs/udpsvr.log"
+#define DEFAULT_LOG "udpsvr.log"
 
 #define UNUSED(x)(void)(x)
 
-#define MATCH_REGEX "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} client (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+) exceeded request rate limit"
-#define IP_REGEX "(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+)"
+#define DEFAULT_MATCH_REGEX "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} client (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+) exceeded request rate limit"
+#define DEFAULT_IP_REGEX "(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+)"
 
 #define LOGBUF_SIZE 256
 
+// global variables
 static volatile sig_atomic_t server_running = true;
 static bool verbose = false;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct ip_hashtable_t * htable;
 static struct ip_llist_t * banned_list; 
-static int watcher_count = 1;
-
+static enum ipc_type_t ipc_type = DEFAULT_IPC_TYPE;
+static uint8_t thread_count = NTHREADS;
+static uint16_t bantime = DEFAULT_BAN_TIME;
+static uint16_t limit = DEFAULT_BAN_THRESHOLD;
+static bool matching = false;
+static char * shm_key;
+static char * logfile = DEFAULT_LOG;
+static char * regex = DEFAULT_MATCH_REGEX;
+static char * interface = DEFAULT_IFACE;
 static int ipv4_ebpf_map;
 static int ipv6_ebpf_map;
 
 #define NANOSECONDS_PER_MILLISECOND 1000000
 #define TIMEOUT 500 * NANOSECONDS_PER_MILLISECOND
 
-const char *argp_program_version = "ip_blacklist 0.0";
-static const char argp_program_doc[] =
-"BPF xdp_ddos01 application.\n"
-"\n"
-"eBPF program is loaded into the kernel and attached at the given device."
-"It parses Ethernet packets and drops them in case of finding the source IP"
-"address in either an IPv4 or IPv6 blacklist in form of maps or based on the destination"
-"port for TCP/UDP  (another map). Blocked addresses are either added by Fail2Ban or another userspace"
-"program: bcmdline. The latter can also be used to add destination ports\n"
-"or have a look at packet statistics"
-"\n"
-"USAGE: ./ip_blacklist [v|d|c] DEVICE\n";
-
-static char args_doc[] = "DEVICE";
-
-static const struct argp_option opts[] = {
-	{ "verbose", 'v', NULL, 0, "Verbose libbpf debug output. Errors will be printed regardless", 0},
-	{ "reload", 'r', NULL, 0, "unload eBPF program, clean filesystem and reload program into chosen device",0},
-	{ "detach",'d',NULL,0, "detach eBPF program from chosen device",0},
-	{ "clean", 'c',NULL,0, "detach eBPF program from chosen device and clean up mounted eBPF file system",0},
-	{0},
-};
+// Structs
 
 struct unban_targs_t{
 	uint32_t wakeup_interval;
@@ -117,44 +102,136 @@ struct regex_context_t {
 	int8_t domain;
 };
 
+// Argparse
+
+const char *argp_program_version = "simplefail2ban 0.0";
+static const char argp_program_doc[] =
+"simplefail2ban.\n"
+"\n"
+"A minimal eBPF based IPS for testing purposes";
+
+static char args_doc[] = "INTERFACE";
+
+static const struct argp_option opts[] = {
+
+	{ "disk", 'd', "LOGFILE", 0, "Specifies disk as the chosen ipc type", 0},
+	{"shm", 's', "KEY", 0, "Specifies shared memory as the ipc type", 0},
+	{"threads", 't', "N", 0, "Specify the number of banning threads to use",0},
+	{ "limit", 'l', "N", 0, "Number of matches before a client is banned", 0},
+	{ "bantime", 'b', "N", 0, "Number of seconds a client should be banned", 0},
+	{ "regex", 'r', "REGEX", 0, "Regular Expression for matching", 0},
+	{ "verbose", 'v', NULL, 0, "Verbose libbpf debug output. Errors will be printed regardless", 0},
+	{0},
+};
+
 struct arguments
 {
-  char* device;
-  bool verbose;
-            
+  bool ipc_set;
 };
 
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
 	struct arguments *arguments = state->input;
+
 	switch (key) {
-	case 'v':
-		verbose = 1;
-		arguments->verbose = 1;
+	
+	case 'd':
+
+		if(arguments->ipc_set){
+			fprintf(stderr,"Only one IPC type can be specified\n");
+			argp_usage(state);
+		}
+
+		arguments->ipc_set = true;
+		ipc_type = DISK;
+
+		if(arg != NULL){
+			logfile = arg;
+		}
+
 		break;
+
+	case 's':
+
+		if(arguments->ipc_set){
+			fprintf(stderr,"Only one IPC type can be specified\n");
+			argp_usage(state);
+		}
+
+		arguments->ipc_set = true;
+		ipc_type = SHM;
+
+		if(arg == NULL){
+			fprintf(stderr,"SHM requires a key parameter\n");
+			argp_usage(state);
+		}
+
+		shm_key = arg;
+
+		break;
+
+	case 't':
+            
+            thread_count = (uint8_t) strtol(arg,NULL,10);
+            
+            if(get_nprocs() < thread_count){
+                thread_count = get_nprocs();
+                fprintf(stderr,"Using maximum number of banning threads = %d\n",thread_count);
+            }
+
+            if(thread_count == 0){
+                thread_count = 1;
+                fprintf(stderr,"Minimum 1 banning thread required\n");
+            }
+
+            break;
+
+	case 'l':
+            
+            limit = (uint16_t) strtol(arg,NULL,10);
+
+            break;
+
+	case 'b':
+            
+            bantime = (uint16_t) strtol(arg,NULL,10);
+
+            break;
+
+	case 'r':
+
+			matching = true;
+
+			if(arg != NULL){
+				regex = arg;
+			}
+
+            break;
+
+	case 'v':
+		verbose = true;
+		break;
+
 	case ARGP_KEY_ARG:
-      if (state->arg_num >=2 ){
-        /* Too many arguments. */
-        fprintf(stderr, "Too many arguments. See usage\n");
-		argp_usage (state);
+      	if (state->arg_num >=2 ){
+			fprintf(stderr, "Too many arguments. See usage\n");
+			argp_usage (state);
 	  	}
-		arguments->device = arg;
+		
+		interface = arg;
+
 		break;
 	case ARGP_KEY_END:
       if (state->arg_num < 1){
-		arguments->device = DEFAULT_IFACE;
-        /* Not enough arguments. */
-	    //fprintf(stderr, "Not enough arguments. See usage\n");
-        //argp_usage (state);
-        //return ARGP_ERR_UNKNOWN;
-		break;
+		interface = DEFAULT_IFACE;
 	  }
-	  else{
+	 
       break;
-	  }
+
 	default:
 		return ARGP_ERR_UNKNOWN;
 	}
+
 	return 0;
 }
 static const struct argp argp = {
@@ -185,7 +262,7 @@ static void bump_memlock_rlimit(void)
 	}
 }
 
-int ebpf_cleanup(const char * device,bool unpin,bool verbose){
+int ebpf_cleanup(const char * device, bool unpin){
 
     struct ip_blacklist_bpf * skel;
 
@@ -590,9 +667,9 @@ static int ebpf_setup(const char * device, bool verbose){
 
     unsigned int xdp_fd;
 
-    if((bpf_xdp_query_id(ifindex,0,&xdp_fd))!=-1){
+    if((bpf_xdp_query_id(ifindex,0,&xdp_fd)) != -1){
         
-        ebpf_cleanup(device,false,verbose);
+        ebpf_cleanup(device,false);
     }
 
     skel = ip_blacklist_bpf__open();
@@ -687,8 +764,6 @@ void * unban_thread_routine(void * args){
 	struct ip_listnode_t * current_tail, * iterator, * prev, * next;
 	int retval, nr_cpus = libbpf_num_possible_cpus();
 
-
-
 	if(block_signals(true)){
         error_msg("Failed to block signals\n");
     }
@@ -742,7 +817,7 @@ void * unban_thread_routine(void * args){
 					brk = true;
 				}
 
-				if((ts - iterator->timestamp) > BAN_TIME){
+				if((ts - iterator->timestamp) > limit){
 
 					if(brk){
 						if(pthread_mutex_lock(&banned_list->tail_lock)){
@@ -869,8 +944,8 @@ void * ban_thread_routine(void * args){
 	bool no_read;
 	int nr_cpus = libbpf_num_possible_cpus();
 
-	buffer_count = targs->ipc_args->head->segment_count / watcher_count;
-	buffer_count = ((targs->ipc_args->head->segment_count % watcher_count) < targs->thread_id) ? buffer_count + 1 : buffer_count;
+	buffer_count = targs->ipc_args->head->segment_count / thread_count;
+	buffer_count = ((targs->ipc_args->head->segment_count % thread_count) < targs->thread_id) ? buffer_count + 1 : buffer_count;
 
 	if(memset(&reg_context,0,sizeof(reg_context)) == NULL){
 		error_msg("Memset error\n");
@@ -880,7 +955,7 @@ void * ban_thread_routine(void * args){
         error_msg("Failed to block signals\n");
     }
 
-	if (hs_compile(MATCH_REGEX, HS_FLAG_SOM_LEFTMOST, HS_MODE_BLOCK, NULL, &database, &compile_error) != HS_SUCCESS) {
+	if (hs_compile(regex, HS_FLAG_SOM_LEFTMOST, HS_MODE_BLOCK, NULL, &database, &compile_error) != HS_SUCCESS) {
         error_msg("Hyperscan compilation failed with error code %d\n", compile_error->expression);
         hs_free_compile_error(compile_error);
 		targs->retval = EXIT_FAIL;
@@ -953,7 +1028,7 @@ void * ban_thread_routine(void * args){
 					continue;
 				}
 
-				if(retval > BAN_THRESHOLD){
+				if(retval > limit){
 					time_t ts = time(NULL);
 
 					switch (reg_context.domain)
@@ -1026,48 +1101,51 @@ int main(int argc, char **argv){
 	UNUSED(file_verdict);
 	
     struct arguments arguments;
-
 	struct watcher_targs_t * thread_args;
 	struct unban_targs_t unban_targs = {.unban_count = 0,.wakeup_interval=TIMEOUT};
-	struct shmrbuf_reader_arg_t rbuf_args = {.shm_key=DEFAULT_LOG};
-	pthread_t unban_thread_id;
 	pthread_t * thread_ids;
-	arguments.verbose = 0;
-	arguments.device = "";
-	int i, thread_count, retval;
-    thread_count = (MT && WATCHER_COUNT > 0) ? WATCHER_COUNT : 1;
-
-	/* Parse command line arguments */
+	int i, retval;
 	retval = argp_parse(&argp, argc, argv, 0, NULL, &arguments);
-	if (retval)
+	if (retval == ARGP_ERR_UNKNOWN){
 		return retval;
-
-    if(ebpf_setup(arguments.device,false)){
+	}
+		
+	/*
+    if(ebpf_setup(interface,false)){
 		fprintf(stderr,"ebpf setup failed\n");
 		exit(EXIT_FAILURE);
 	}
 
 	if((ipv4_ebpf_map = open_bpf_map(file_blacklist_ipv4)) == RETURN_FAIL || (ipv6_ebpf_map = open_bpf_map(file_blacklist_ipv6)) == RETURN_FAIL){
 		fprintf(stderr,"ERR: Failed to open bpf map  : %s\n",strerror(errno));
-		ebpf_cleanup(arguments.device,true,true);
+		ebpf_cleanup(interface,true,true);
 		exit(EXIT_FAILURE);
 	}
+	*/
 
 	if((thread_ids = calloc(sizeof(pthread_t),thread_count-1)) == NULL || (thread_args = calloc(sizeof(struct unban_targs_t),thread_count)) == NULL){
 		perror("Calloc failed");
-		ebpf_cleanup(arguments.device,true,true);
+		ebpf_cleanup(interface,true);
 		exit(EXIT_FAILURE);
 	}
 
-	if((ip_hashtable_init(&htable) < 0) || (ip_llist_init(&banned_list) < 0)){
-		fprintf(stderr,"Failed to initialize storage datastructures\n");
+	if((retval = ip_hashtable_init(&htable)) < 0)
+	{
+		fprintf(stderr,"ip_hashtable_init failed with error code %d\n", retval);
 		free(thread_ids);
 		free(thread_args);
-		ebpf_cleanup(arguments.device,true,true);
+		ebpf_cleanup(interface,true);
 		exit(EXIT_FAILURE);
 	}
-
-	rbuf_args.shm_key = DEFAULT_LOG;
+	
+	if((retval = ip_llist_init(&banned_list)) < 0){
+		fprintf(stderr,"ip_llist_init failed with error code %d\n", retval);
+		ip_hashtable_destroy(&htable);
+		free(thread_ids);
+		free(thread_args);
+		ebpf_cleanup(interface,true);
+		exit(EXIT_FAILURE);
+	}
 
 	if((retval = shmrbuf_init(&rbuf_args, SHMRBUF_READER)) != IO_IPC_SUCCESS){
 		if(retval > 0){
@@ -1080,12 +1158,12 @@ int main(int argc, char **argv){
 		ip_hashtable_destroy(&htable);
 		free(thread_ids);
 		free(thread_args);
-		ebpf_cleanup(arguments.device,true,true);
+		ebpf_cleanup(interface,true);
 		exit(EXIT_FAILURE);
 	}
 
 
-	if(pthread_create(&unban_thread_id,NULL,unban_thread_routine,&unban_targs)){
+	if(pthread_create(&thread_ids[0],NULL,unban_thread_routine,&unban_targs)){
 		perror("pthread create failed for unban thread");
 	} else {
 
@@ -1106,14 +1184,10 @@ int main(int argc, char **argv){
 
 		ban_thread_routine(&thread_args[0]);
 
-		for(i = 0; i < (thread_count-1); i++){
-			if(pthread_join(thread_ids[i],NULL)){
-				perror("pthread join failed for watcher thread");
+		for(i = 0; i < (thread_count); i++){
+			if(pthread_join(thread_ids[i], NULL)){
+				perror("pthread join failed");
 			}
-		}
-
-		if(pthread_join(unban_thread_id,NULL)){
-			perror("pthread join failed for unban thread");
 		}
 
 	}
@@ -1137,7 +1211,8 @@ int main(int argc, char **argv){
 
 	printf("Total messages received %ld : total clients banned %ld : total clients unbanned %ld\n",total_rcv_count,total_ban_count,unban_targs.unban_count);
 
-    if(ebpf_cleanup(arguments.device,true,false)){
+	/*
+    if(ebpf_cleanup(interface,true)){
 		fprintf(stderr,"ebpf cleanup failed\n");
 		ip_llist_destroy(&banned_list);
 		ip_hashtable_destroy(&htable);
@@ -1145,6 +1220,7 @@ int main(int argc, char **argv){
 		free(thread_args);
 		exit(EXIT_FAILURE);
 	}
+	*/
     
 	ip_llist_destroy(&banned_list);
 	ip_hashtable_destroy(&htable);
