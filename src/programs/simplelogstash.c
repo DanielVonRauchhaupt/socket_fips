@@ -78,7 +78,7 @@ void write_routine(const char * logfile){
     struct io_uring_sqe * sqe;
     struct io_uring_cqe * cqe;
     struct iovec iovs[QUEUE_SIZE];
-    char logstrbuf[QUEUE_SIZE][sizeof(TESTSTRING)];
+    char logstrbuf[QUEUE_SIZE][sizeof(TESTSTRING)-1];
 
     if((logfile_fd = open(logfile, OPEN_FLAGS, OPEN_PERM)) < 0)
     {
@@ -103,11 +103,11 @@ void write_routine(const char * logfile){
 
     for(int i = 0; i < QUEUE_SIZE; i++){
 
-        memcpy(logstrbuf[i],TESTSTRING,sizeof(TESTSTRING));
+        memcpy(logstrbuf[i],TESTSTRING,sizeof(TESTSTRING)-1);
 
         
         iovs[i].iov_base = logstrbuf[i];
-        iovs[i].iov_len = sizeof(TESTSTRING);
+        iovs[i].iov_len = sizeof(TESTSTRING)-1;
 
     }
 

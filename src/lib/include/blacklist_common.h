@@ -1,5 +1,19 @@
 #ifndef __XDP_DDOS01_BLACKLIST_COMMON_H
 #define __XDP_DDOS01_BLACKLIST_COMMON_H
+#define _GNU_SOURCE 1
+#include <stdbool.h>
+#include <linux/if_link.h>
+#include <net/if.h>
+#include <errno.h>
+#include <sys/resource.h>
+#include <arpa/inet.h>
+#include <bpf/libbpf.h>
+#include <bpf/bpf.h>
+
+#include "ip_blacklist.skel.h"
+
+static bool verbose = false;
+
 //#define DEBUG 1
 //#define LONGTERM 1
 //#define SUBNET
@@ -64,5 +78,18 @@ enum {
 	DDOS_FILTER_UDP,
 	DDOS_FILTER_MAX
 };
+
+
+// Functions
+
+int ebpf_cleanup(const char * device, bool unpin);
+
+int blacklist_subnet_modify(int fd_cache,int fd_subnetblacklist, __uint128_t * ip6addr, unsigned int action, int nr_cpus, char * strerror_buf, int strerror_size);
+
+int blacklist_modify(int fd, void * ip_addr, unsigned int action, unsigned int domain,int nr_cpus, char * strerror_buf, int strerror_size);
+
+int blacklist_port_modify(int fd, int countfd, int dport, unsigned int action, int proto, int nr_cpus, char * strerror_buf, int strerror_size);
+
+int ebpf_setup(const char * device, bool verbose);
 
 #endif
