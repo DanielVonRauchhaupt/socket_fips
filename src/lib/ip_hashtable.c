@@ -9,7 +9,7 @@ static void destroy_hbin(struct ip_hashbin_t ** hbin){
     if(hbin == NULL){
         return;
     }
-
+    
     free((*hbin)->key);
     pthread_mutex_destroy(&(*hbin)->lock);
     free(*hbin);

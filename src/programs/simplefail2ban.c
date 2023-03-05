@@ -3,10 +3,6 @@
 #include <net/if.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <sys/resource.h>
-#include <bpf/libbpf.h>
-#include <bpf/bpf.h>
-#include <linux/if_link.h>
 #include <string.h>
 #include <pthread.h>
 #include <hs.h>
@@ -23,6 +19,8 @@
 #include <signal.h>
 #include <sys/shm.h>
 #include <sys/sysinfo.h>
+#include <stdlib.h>
+#include <fcntl.h>
 
 // Local includes
 #include <ip_hashtable.h>
@@ -49,6 +47,10 @@
 
 // Helpers
 #define UNUSED(x)(void)(x)
+
+// Open options
+#define OPEN_MODE O_RDONLY
+#define OPEN_PERM 0644
 
 // global variables
 static volatile sig_atomic_t server_running = true;
@@ -88,7 +90,7 @@ union ip_addr_t
 
 
 struct ban_targs_t {
-	struct shmrbuf_reader_arg_t * ipc_args;
+	void * ipc_args;
 	uint8_t thread_id;
 	uint32_t wakeup_interval;
 	uint64_t rcv_count;
@@ -313,13 +315,14 @@ void * unban_thread_routine(void * args){
 	struct unban_targs_t * targs = (struct unban_targs_t *) args;
 	time_t ts;
 	struct timespec timeout = {.tv_sec=0,.tv_nsec=targs->wakeup_interval};
-	char strerror_buf[64];
+	char * strerror_buf;
 	struct ip_listnode_t * current_tail, * iterator, * prev, * next;
 	int retval, nr_cpus = libbpf_num_possible_cpus();
 
 	if(block_signals(true)){
         error_msg("Failed to block signals\n");
     }
+	
     if(signal(SIGINT,sig_handler) == SIG_ERR || signal(SIGTERM,sig_handler) == SIG_ERR){
         char strerror_buf[64];
         error_msg("Failed to set signal handler : %s\n",strerror_r(errno,strerror_buf,64));
@@ -642,7 +645,34 @@ void * ban_thread_routine(void * args){
 
 }
 
+int ipc_cleanup(struct ban_targs_t * targs, uint8_t thread_count, enum ipc_type_t ipc_type)
+{
+	int retval = IO_IPC_NULLPTR_ERR;
 
+	switch (ipc_type)
+	{
+	case DISK:
+		
+		if(targs != NULL && targs[0].ipc_args != NULL){
+			retval = fclose(targs[0].ipc_args);
+		}
+
+		break;
+
+	case SHM:
+
+		if(targs != NULL && targs[0].ipc_args != NULL){
+			retval = shmrbuf_finalize((union shmrbuf_arg_t *)targs[0].ipc_args, SHMRBUF_READER);
+			free(targs[0].ipc_args);
+		}
+	
+	default:
+		return IO_IPC_ARG_ERR;
+	}
+
+	return retval;
+
+}
 
 
 int main(int argc, char **argv){
@@ -656,13 +686,21 @@ int main(int argc, char **argv){
     struct arguments args;
 	struct ban_targs_t * thread_args;
 	struct unban_targs_t unban_targs = {.unban_count = 0,.wakeup_interval=TIMEOUT};
+	struct shmrbuf_reader_arg_t * rbuf_arg;
 	pthread_t * thread_ids;
-	int i, retval;
+	int retval;
+	uint8_t i;
 	retval = argp_parse(&argp, argc, argv, 0, NULL, &args);
+
 	if (retval == ARGP_ERR_UNKNOWN){
 		return retval;
 	}
 		
+	if(thread_count > 1 && ipc_type == DISK){
+		fprintf(stderr,"No multithreading availably for DISK IPC\n");
+		thread_count = 1;
+	}
+
 	/*
     if(ebpf_setup(interface,false)){
 		fprintf(stderr,"ebpf setup failed\n");
@@ -676,7 +714,7 @@ int main(int argc, char **argv){
 	}
 	*/
 
-	if((thread_ids = calloc(sizeof(pthread_t),thread_count-1)) == NULL || (thread_args = calloc(sizeof(struct unban_targs_t),thread_count)) == NULL){
+	if((thread_ids = calloc(sizeof(pthread_t),thread_count)) == NULL || (thread_args = calloc(sizeof(struct unban_targs_t),thread_count)) == NULL){
 		perror("Calloc failed");
 		ebpf_cleanup(interface,true);
 		exit(EXIT_FAILURE);
@@ -700,35 +738,89 @@ int main(int argc, char **argv){
 		exit(EXIT_FAILURE);
 	}
 
-	if((retval = shmrbuf_init(NULL, SHMRBUF_READER)) != IO_IPC_SUCCESS){
-		if(retval > 0){
-            perror("shm_rbuf_init failed");
-        }
-        else {
-            fprintf(stderr,"shm_rbuf_init failed : error code %d\n",retval);
-        }
-		ip_llist_destroy(&banned_list);
-		ip_hashtable_destroy(&htable);
-		free(thread_ids);
-		free(thread_args);
-		ebpf_cleanup(interface,true);
-		exit(EXIT_FAILURE);
-	}
+	switch (ipc_type)
+	{
+	case DISK:
+		
+		if((thread_args[0].ipc_args = fopen(logfile,"r")) == NULL){
+			perror("fopen failed for logfile");
+			ip_hashtable_destroy(&htable);
+			ip_llist_destroy(&banned_list);
+			free(thread_ids);
+			free(thread_args);
+			ebpf_cleanup(interface,true);
+			exit(EXIT_FAILURE);
+		}
 
+		break;
+	
+	case SHM:
 
-	if(pthread_create(&thread_ids[0],NULL,unban_thread_routine,&unban_targs)){
-		perror("pthread create failed for unban thread");
-	} else {
+		if((rbuf_arg = (struct shmrbuf_reader_arg_t *)calloc(sizeof(struct shmrbuf_reader_arg_t),1)) == NULL){
+			perror("calloc failed");
+			ip_llist_destroy(&banned_list);
+			ip_hashtable_destroy(&htable);
+			free(thread_ids);
+			free(thread_args);
+			ebpf_cleanup(interface,true);
+			exit(EXIT_FAILURE);
+		}
+
+		rbuf_arg->shm_key = shm_key;
+
+		if((retval = shmrbuf_init(rbuf_arg, SHMRBUF_READER)) != IO_IPC_SUCCESS){
+			if(retval > 0){
+				perror("shm_rbuf_init failed");
+			}
+			else {
+				fprintf(stderr,"shm_rbuf_init failed : error code %d\n",retval);
+			}
+			ip_llist_destroy(&banned_list);
+			ip_hashtable_destroy(&htable);
+			free(rbuf_arg);
+			free(thread_ids);
+			free(thread_args);
+			ebpf_cleanup(interface,true);
+			exit(EXIT_FAILURE);
+		}
 
 		for(i = 0; i < thread_count; i++){
+			thread_args[i].ipc_args = (void*) rbuf_arg;
+		}
+
+		break;
+
+	default:
+		break;
+	}
+
+	if(pthread_create(&thread_ids[0],NULL,unban_thread_routine,&unban_targs))
+	{
+		perror("pthread create failed for unban thread");
+		ipc_cleanup(thread_args, thread_count, ipc_type);
+		ip_hashtable_destroy(&htable);
+		ip_llist_destroy(&banned_list);
+		free(thread_args);
+		free(thread_ids);
+		ebpf_cleanup(interface, true);
+		exit(EXIT_FAILURE);
+	} 
+	
+	else 
+	{
+
+		for(i = 0; i < thread_count; i++)
+		{
 			thread_args[i].ban_count = 0;
 			thread_args[i].ipc_args = NULL;
 			thread_args[i].rcv_count = 0;
 			thread_args[i].thread_id = i;
 			thread_args[i].wakeup_interval = TIMEOUT;
 
-			if(i > 0){
-				if(pthread_create(&thread_ids[i],NULL,ban_thread_routine,&thread_args[i])){
+			if(i > 0)
+			{
+				if(pthread_create(&thread_ids[i],NULL,ban_thread_routine,&thread_args[i]))
+				{
 					perror("pthread create failed");
 				}
 			}
@@ -737,8 +829,10 @@ int main(int argc, char **argv){
 
 		ban_thread_routine(&thread_args[0]);
 
-		for(i = 0; i < (thread_count); i++){
-			if(pthread_join(thread_ids[i], NULL)){
+		for(i = 0; i < (thread_count); i++)
+		{
+			if(pthread_join(thread_ids[i], NULL))
+			{
 				perror("pthread join failed");
 			}
 		}
@@ -775,8 +869,17 @@ int main(int argc, char **argv){
 	}
 	*/
     
-	ip_llist_destroy(&banned_list);
-	ip_hashtable_destroy(&htable);
+	if((retval = ipc_cleanup(thread_args, thread_count, ipc_type)) != IO_IPC_SUCCESS){
+		fprintf(stderr,"ipc_cleanup failed with error code : %d\n", retval);
+	}
+	
+	if((retval = ip_llist_destroy(&banned_list)) != IP_LLIST_SUCCESS){
+		fprintf(stderr, "ip_llist_destroy failed with error code %d\n", retval);
+	}
+
+	if((retval = ip_hashtable_destroy(&htable)) != IP_HTABLE_SUCCESS){
+		fprintf(stderr, "ip_hashtable_destroy failed with error code %d\n", retval);
+	}
 
 	free(thread_ids);
 	free(thread_args);	
