@@ -1,5 +1,7 @@
 #include "blacklist_common.h"
 
+bool verbose = false;
+
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
 	if (level == LIBBPF_DEBUG && !verbose)

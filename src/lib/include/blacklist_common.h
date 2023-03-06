@@ -12,8 +12,6 @@
 
 #include "ip_blacklist.skel.h"
 
-static bool verbose = false;
-
 //#define DEBUG 1
 //#define LONGTERM 1
 //#define SUBNET

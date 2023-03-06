@@ -73,7 +73,3 @@ target_include_directories(simplefail2ban
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/
 ) 
 target_link_libraries(simplefail2ban ebpf_blacklist ip_hashtable ip_llist ip_to_str shm_ringbuf hs Threads::Threads) 
-
-add_executable(test_getline ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/test_getline.c)
-
-target_link_libraries(test_getline Threads::Threads)

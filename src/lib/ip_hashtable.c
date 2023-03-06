@@ -90,7 +90,7 @@ int ip_hashtable_init(struct ip_hashtable_t ** htable){
     
     for(int i = 0; i < NBINS; i++){
         if(pthread_mutex_init(&(*htable)->hbins[i].lock,NULL)){
-            ip_hashtable_destroy(*htable);
+            ip_hashtable_destroy(htable);
             return IP_HTABLE_MUTEX_ERR;
         }
     }

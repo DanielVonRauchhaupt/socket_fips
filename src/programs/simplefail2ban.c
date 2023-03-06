@@ -35,9 +35,13 @@
 #define DEFAULT_IPC_TYPE DISK
 #define DEFAULT_IFACE "lo"
 #define DEFAULT_LOG "udpsvr.log"
-#define DEFAULT_MATCH_REGEX "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} client (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+) exceeded request rate limit"
-#define IP_REGEX "(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+)"
+#define DEFAULT_MATCH_REGEX "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} client \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+ exceeded request rate limit"
+#define IP_REGEX "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+"
 #define LOGBUF_SIZE 256
+
+// Hyperscan
+#define MATCH_REGEX_ID 0
+#define IP_REGEX_ID 1
 
 // Return values
 #define RETURN_FAIL (-1)
@@ -58,6 +62,7 @@ static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct ip_hashtable_t * htable;
 static struct ip_llist_t * banned_list; 
+static hs_database_t * database;
 static enum ipc_type_t ipc_type = DEFAULT_IPC_TYPE;
 static uint8_t thread_count = NTHREADS;
 static uint16_t bantime = DEFAULT_BAN_TIME;
@@ -95,14 +100,14 @@ struct ban_targs_t {
 	uint32_t wakeup_interval;
 	uint64_t rcv_count;
 	uint64_t ban_count;
+	char * logmsg_buf;
+	char strerror_buf[64];
+	union ip_addr_t ip_addr;
+	int8_t domain;
+	bool match;
 	int retval;
 };
 
-struct regex_context_t {
-	char ip_str_buf[LOGBUF_SIZE];
-	union ip_addr_t ip_addr;
-	int8_t domain;
-};
 
 // Argparse
 
@@ -138,7 +143,8 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 	
 	case 'd':
 
-		if(arguments->ipc_set){
+		if(arguments->ipc_set)
+		{
 			fprintf(stderr,"Only one IPC type can be specified\n");
 			argp_usage(state);
 		}
@@ -146,7 +152,8 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 		arguments->ipc_set = true;
 		ipc_type = DISK;
 
-		if(arg != NULL){
+		if(arg != NULL)
+		{
 			logfile = arg;
 		}
 
@@ -154,7 +161,8 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 
 	case 's':
 
-		if(arguments->ipc_set){
+		if(arguments->ipc_set)
+		{
 			fprintf(stderr,"Only one IPC type can be specified\n");
 			argp_usage(state);
 		}
@@ -162,7 +170,8 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 		arguments->ipc_set = true;
 		ipc_type = SHM;
 
-		if(arg == NULL){
+		if(arg == NULL)
+		{
 			fprintf(stderr,"SHM requires a key parameter\n");
 			argp_usage(state);
 		}
@@ -175,12 +184,14 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
             
             thread_count = (uint8_t) strtol(arg,NULL,10);
             
-            if(get_nprocs() < thread_count){
+            if(get_nprocs() < thread_count)
+			{
                 thread_count = get_nprocs();
                 fprintf(stderr,"Using maximum number of banning threads = %d\n",thread_count);
             }
 
-            if(thread_count == 0){
+            if(thread_count == 0)
+			{
                 thread_count = 1;
                 fprintf(stderr,"Minimum 1 banning thread required\n");
             }
@@ -203,14 +214,16 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 
 			matching = true;
 
-			if(arg != NULL){
+			if(arg != NULL)
+			{
 				regex = arg;
 			}
 
             break;
 
 	case ARGP_KEY_ARG:
-      	if (state->arg_num >=2 ){
+      	if (state->arg_num >=2 )
+		{
 			fprintf(stderr, "Too many arguments. See usage\n");
 			argp_usage (state);
 	  	}
@@ -219,7 +232,8 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 
 		break;
 	case ARGP_KEY_END:
-      if (state->arg_num < 1){
+      if (state->arg_num < 1)
+	  {
 		interface = DEFAULT_IFACE;
 	  }
 	 
@@ -231,6 +245,7 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 
 	return 0;
 }
+
 static const struct argp argp = {
 	.options = opts,
 	.parser = parse_arg,
@@ -239,14 +254,16 @@ static const struct argp argp = {
 };
 
 /* Prints a formatted string to a mutex locked file descriptor */
-void sync_message(const char * fmt, pthread_mutex_t * lock, FILE * fp, va_list targs){
+void sync_message(const char * fmt, pthread_mutex_t * lock, FILE * fp, va_list targs)
+{
     pthread_mutex_lock(lock);
     vfprintf(fp, fmt, targs);
     pthread_mutex_unlock(lock);
 }
 
 /* Prints a formatted message to stdout (Thread safe) */
-void info_msg(const char* fmt,...){
+void info_msg(const char* fmt,...)
+{
     va_list targs;
     va_start(targs, fmt);
     sync_message(fmt,&stdout_lock,stdout,targs);
@@ -254,7 +271,8 @@ void info_msg(const char* fmt,...){
 }
 
 /* Prints a formatted message to stderr (Thread safe) */
-void error_msg(const char * fmt,...){
+void error_msg(const char * fmt,...)
+{
     va_list targs;
     va_start(targs, fmt);
     sync_message(fmt,&stderr_lock,stderr,targs);
@@ -275,7 +293,8 @@ uint64_t gettime(void)
 }
 
 
-void sig_handler(int signal){
+void sig_handler(int signal)
+{
     UNUSED(signal);
     server_running = false;
 }
@@ -290,19 +309,24 @@ int open_bpf_map(const char *file)
 	return fd;
 }
 
-int8_t block_signals(bool keep){
+int8_t block_signals(bool keep)
+{
     sigset_t set;
-    if(sigfillset(&set)){
+    if(sigfillset(&set))
+	{
         return RETURN_FAIL;
     }
 
-    if(keep){
-        if(sigdelset(&set,SIGINT) || sigdelset(&set,SIGTERM)){
+    if(keep)
+	{
+        if(sigdelset(&set,SIGINT) || sigdelset(&set,SIGTERM))
+		{
             return RETURN_FAIL;
         }
     }
 
-    if(pthread_sigmask(SIG_BLOCK, &set, NULL)){
+    if(pthread_sigmask(SIG_BLOCK, &set, NULL))
+	{
         return RETURN_FAIL;
     }
 
@@ -310,77 +334,91 @@ int8_t block_signals(bool keep){
 }
 
 
-void * unban_thread_routine(void * args){
+void * unban_thread_routine(void * args)
+{
 
 	struct unban_targs_t * targs = (struct unban_targs_t *) args;
 	time_t ts;
 	struct timespec timeout = {.tv_sec=0,.tv_nsec=targs->wakeup_interval};
-	char * strerror_buf;
+	char strerror_buf[64];
 	struct ip_listnode_t * current_tail, * iterator, * prev, * next;
 	int retval, nr_cpus = libbpf_num_possible_cpus();
 
-	if(block_signals(true)){
+	if(block_signals(true))
+	{
         error_msg("Failed to block signals\n");
     }
 	
-    if(signal(SIGINT,sig_handler) == SIG_ERR || signal(SIGTERM,sig_handler) == SIG_ERR){
-        char strerror_buf[64];
-        error_msg("Failed to set signal handler : %s\n",strerror_r(errno,strerror_buf,64));
+    if(signal(SIGINT,sig_handler) == SIG_ERR || signal(SIGTERM,sig_handler) == SIG_ERR)
+	{
+        error_msg("Failed to set signal handler : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
     }
 
 	while (server_running)
 	{
 		time(&ts);
 
-		if(ts == -1){
+		if(ts == -1)
+		{
 			error_msg("Failed to obtain timestamp : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 			targs->retval = EXIT_FAIL;
-			pthread_exit(&targs->retval);
+			return &targs->retval;
 		}
 
-		if(pthread_mutex_lock(&banned_list->tail_lock)){
+		if(pthread_mutex_lock(&banned_list->tail_lock))
+		{
 			pthread_mutex_unlock(&banned_list->tail_lock);
 			error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 			targs->retval = EXIT_FAIL;
-			pthread_exit(&targs->retval);
+			return &targs->retval;
 		}
 
 		current_tail = banned_list->tail;
 
-		if(pthread_mutex_unlock(&banned_list->tail_lock)){
+		if(pthread_mutex_unlock(&banned_list->tail_lock))
+		{
 			error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 			targs->retval = EXIT_FAIL;
-			pthread_exit(&targs->retval);
+			return &targs->retval;
 		}
 
-		if(current_tail == NULL || banned_list->head == NULL){
-			if(current_tail != NULL){
+		if(current_tail == NULL || banned_list->head == NULL)
+		{
+			if(current_tail != NULL)
+			{
 				error_msg("Banned list head is null but list is not empty\n");
 
 
 
 			}
-		} else {
+		} 
+		else 
+		{
 
 			iterator = banned_list->head;
 			prev = NULL;
 			next = NULL;
 			bool brk = false;
 
-			while(iterator != NULL){
+			while(iterator != NULL)
+			{
 
-				if(iterator == current_tail){
+				if(iterator == current_tail)
+				{
 					brk = true;
 				}
 
-				if((ts - iterator->timestamp) > limit){
+				if((ts - iterator->timestamp) > limit)
+				{
 
-					if(brk){
-						if(pthread_mutex_lock(&banned_list->tail_lock)){
+					if(brk)
+					{
+						if(pthread_mutex_lock(&banned_list->tail_lock))
+						{
 							pthread_mutex_unlock(&banned_list->tail_lock);
 							error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 							targs->retval = EXIT_FAIL;
-							pthread_exit(&targs->retval);
+							return &targs->retval;
 						}
 					}
 
@@ -401,28 +439,34 @@ void * unban_thread_routine(void * args){
 						error_msg("Invalid domain in banned list %d\n",iterator->domain);
 					}
 
-					if(retval < 0){
+					if(retval < 0)
+					{
 						error_msg("Error modifying ebf map : error code %d\n",retval);
 					} else {
 						targs->unban_count++;
 					}
 
-					if(brk){
-						if(pthread_mutex_unlock(&banned_list->tail_lock)){
+					if(brk)
+					{
+						if(pthread_mutex_unlock(&banned_list->tail_lock))
+						{
 							error_msg("Failed to release banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 								targs->retval = EXIT_FAIL;
-								pthread_exit(&targs->retval);
+								return &targs->retval;
 						}
 
-						if(prev == NULL){
+						if(prev == NULL)
+						{
 							banned_list->head = NULL;
 						}
 
-						if(iterator->next == NULL){
+						if(iterator->next == NULL)
+						{
 							banned_list->tail = NULL;
 						}
 
-						if((retval = ip_llist_remove(&iterator,prev)) < 0){
+						if((retval = ip_llist_remove(&iterator,prev)) < 0)
+						{
 							error_msg("Error removing tail node from banned list : error code %d\n",retval);
 						}
 
@@ -431,13 +475,15 @@ void * unban_thread_routine(void * args){
 
 					next = iterator->next;
 
-					if((retval = ip_llist_remove(&iterator,prev)) < 0){
+					if((retval = ip_llist_remove(&iterator,prev)) < 0)
+					{
 						error_msg("Error removing node from banned list : error code %d\n",retval);
 					}
 
 					iterator = next;
 
-					if(prev == NULL){
+					if(prev == NULL)
+					{
 						banned_list->head = next;
 					}
 				}
@@ -462,156 +508,270 @@ void * unban_thread_routine(void * args){
 }
 
 int regex_match_handler(unsigned int id, unsigned long long from, unsigned long long to,
-                  unsigned int flags, void *ctx){
+                  unsigned int flags, void *ctx)
+				  {
 
 	UNUSED(flags);
-	struct regex_context_t * context = (struct regex_context_t *)ctx;
 
-	if(id != 1){
+	struct ban_targs_t * context = (struct ban_targs_t *)ctx;
+
+	if(id == MATCH_REGEX_ID)
+	{
+		context->match = true;
 		return 0;
 	}
 
-	context->ip_str_buf[to] = '\0';
+	if(id == IP_REGEX_ID)
+	{
+		context->logmsg_buf[to] = '\0';
 
-	if (inet_pton(AF_INET,&context->ip_str_buf[from],&context->ip_addr.ipv4) == 1) {
-		context->domain = AF_INET;
-        return 1;
-    } else if (inet_pton(AF_INET6, &context->ip_str_buf[from],&context->ip_addr.ipv6) == 1) {
-		context->domain = AF_INET6;
-        return 1;
-    } else {
-		context->domain = -1;
-		return 0;
-    }
+		if (inet_pton(AF_INET,&context->logmsg_buf[from],&context->ip_addr.ipv4) == 1) 
+		{
+			context->domain = AF_INET;
+			return 1;
+		} 
+		else if (inet_pton(AF_INET6, &context->logmsg_buf[from],&context->ip_addr.ipv6) == 1) 
+		{
+			context->domain = AF_INET6;
+			return 1;
+		} 
+		else 
+		{
+			context->domain = -1;
+			return 0;
+    	}
+	}
+
+	return 0;
 }
 
 
-void * ban_thread_routine(void * args){
+void * ban_thread_routine(void * args)
+{
 
 	struct ban_targs_t * targs = (struct ban_targs_t *)args;
-
-	hs_database_t * database;
-	hs_compile_error_t * compile_error;
+	struct shmrbuf_reader_arg_t * shm_arg;
 	hs_scratch_t * scratch = NULL; 
-	struct regex_context_t reg_context;
 	struct timespec tspec = {.tv_sec=0,.tv_nsec=targs->wakeup_interval};
-	int retval, i, buffer_count;
+	uint8_t i, seg_index, steal_index, seg_count, steal_count, upper_seg;
+	size_t size = LOGBUF_SIZE - 1;
+	ssize_t retval;
 	char strerror_buf[64];
-	bool no_read;
+	bool read;
 	int nr_cpus = libbpf_num_possible_cpus();
 
-	buffer_count = targs->ipc_args->head->segment_count / thread_count;
-	buffer_count = ((targs->ipc_args->head->segment_count % thread_count) < targs->thread_id) ? buffer_count + 1 : buffer_count;
-
-	if(memset(&reg_context,0,sizeof(reg_context)) == NULL){
-		error_msg("Memset error\n");
-	}
-
-	if(block_signals(false)){
-        error_msg("Failed to block signals\n");
-    }
-
-	if (hs_compile(regex, HS_FLAG_SOM_LEFTMOST, HS_MODE_BLOCK, NULL, &database, &compile_error) != HS_SUCCESS) {
-        error_msg("Hyperscan compilation failed with error code %d\n", compile_error->expression);
-        hs_free_compile_error(compile_error);
+	if((targs->logmsg_buf = calloc(sizeof(char),LOGBUF_SIZE)) == NULL)
+	{
+		error_msg("calloc failed : %s\n",strerror_r(errno, targs->strerror_buf, sizeof(targs->strerror_buf)));
 		targs->retval = EXIT_FAIL;
         return &targs->retval;
-    } 
+	}
 
-    if (hs_alloc_scratch(database, &scratch) != HS_SUCCESS) {
-        error_msg("Hyperscan allocation of scratch space failed\n");
-        hs_free_database(database);
-        targs->retval = EXIT_FAIL;
+	switch (ipc_type)
+	{
+	case DISK:
+	
+		break;
+
+	case SHM:
+
+		shm_arg = (struct shmrbuf_reader_arg_t *) targs->ipc_args;
+
+		if(targs->thread_id > shm_arg->head->segment_count - 1)
+		{
+			targs->retval = RETURN_SUCC;
+			return &targs->retval;
+		}
+
+		seg_count = shm_arg->head->segment_count / thread_count;
+		steal_count = shm_arg->head->segment_count - seg_count;
+		seg_count = ((shm_arg->head->segment_count % thread_count) < targs->thread_id) ? seg_count + 1 : seg_count;
+		upper_seg = targs->thread_id + seg_count;
+		seg_index = targs->thread_id;
+		steal_index = 0;
+
+		break;
+
+	default:
+		error_msg("invalid ipc type : %d\n",ipc_type);
+		free(targs->logmsg_buf);
+		targs->logmsg_buf = NULL;
+		targs->retval = EXIT_FAIL;
         return &targs->retval;
+	}
+
+	if(block_signals(false))
+	{
+        error_msg("failed to block signals\n");
     }
+
+	if(matching)
+	{
+		if (hs_alloc_scratch(database, &scratch) != HS_SUCCESS)
+		{
+			error_msg("hyperscan scratch space allocation failed\n");
+			free(targs->logmsg_buf);
+			targs->logmsg_buf = NULL;
+			targs->retval = EXIT_FAIL;
+			return &targs->retval;
+    	}	
+	}
+    
 
 	while (server_running)
 	{
-		no_read = true;
+		read = false;
+		targs->match = false;
 
-		for(i = targs->thread_id; i < buffer_count; i++){
-			if((retval = shmrbuf_read(targs->ipc_args,reg_context.ip_str_buf,sizeof(reg_context.ip_str_buf),targs->thread_id)) > 0){
+		switch (ipc_type)
+		{
+		case DISK:
+				
+			if((retval = getline(&targs->logmsg_buf, &size, (FILE *)targs->ipc_args)) == -1)
+			{
+				error_msg("getline failed : %s\n", strerror_r(errno, targs->strerror_buf, sizeof(targs->strerror_buf)));
+				if(matching)
+					{ hs_free_scratch(scratch); }
+				free(targs->logmsg_buf);
+				targs->logmsg_buf = NULL;
+				targs->retval = EXIT_FAIL;
+				return &targs->retval;
+			}
 
-				targs->rcv_count++;
-				no_read = false;
-				/*
-				if((retval=hs_scan(database,reg_context.ip_str_buf,LOGBUF_SIZE,0,scratch,regex_match_handler,&reg_context)) != HS_SCAN_TERMINATED){
-					if(retval != HS_SUCCESS){
-						error_msg("Hyperscan error for logstring %s : error code %d\n",reg_context.ip_str_buf,retval);
-						hs_free_database(database);
-						hs_free_scratch(scratch);
+			read = retval > 0;
+
+			break;
+
+		case SHM:
+
+				for(i = 0; i < seg_count; i++)
+				{
+					
+					if((retval = shmrbuf_read(shm_arg, targs->logmsg_buf, sizeof(targs->logmsg_buf), seg_index++)) < 0)
+					{
+						error_msg("Thread %d : error in shmrbuf_read : segment %d : error code %d\n");
+						if(matching)
+							{ hs_free_scratch(scratch); }
+						free(targs->logmsg_buf);
+						targs->logmsg_buf = NULL;
 						targs->retval = EXIT_FAIL;
 						return &targs->retval;
 					}
-					continue;
-				}
-				*/
 
-				reg_context.ip_str_buf[retval-1] = '\0';
+					seg_index = (seg_index == upper_seg) ? targs->thread_id : seg_index;
 
-				if (inet_pton(AF_INET,reg_context.ip_str_buf,&reg_context.ip_addr.ipv4) == 1) {
-					reg_context.domain = AF_INET;
-				} else if (inet_pton(AF_INET6, reg_context.ip_str_buf,&reg_context.ip_addr.ipv6) == 1) {
-					reg_context.domain = AF_INET6;
-				} else {
-					reg_context.domain = -1;
+					if(retval > 0)
+					{
+						read = true;
+						break;
+					}
+
 				}
 
-				switch (reg_context.domain)
+				if(read){break;}
+
+				for(i = 0; i < steal_count; i++)
 				{
-				case AF_INET:
+					if(steal_index >= targs->thread_id && steal_index < upper_seg)
+					{
+						steal_index = (upper_seg < shm_arg->head->segment_count) ? upper_seg : 0;
+					}
+
+					if((retval = shmrbuf_read(shm_arg, targs->logmsg_buf, sizeof(targs->logmsg_buf), steal_index++)) < 0)
+					{
+						error_msg("Thread %d : error in shmrbuf_read : segment %d : error code %d\n");
+						if(matching)
+							{ hs_free_scratch(scratch); }
+						free(targs->logmsg_buf);
+						targs->logmsg_buf = NULL;
+						targs->retval = EXIT_FAIL;
+						return &targs->retval;
+					}
+
+					steal_index = (steal_index == shm_arg->head->segment_count) ? 0 : steal_index + 1;
+
+					if(retval > 0)
+					{
+						read = true;
+						break;
+					}
 					
-					retval = ip_hashtable_insert(htable,&reg_context.ip_addr.ipv4,AF_INET);
+				}
+
+		default:
+			break;
+		}
+
+		if(read){
+
+			targs->rcv_count++;
+
+			if(hs_scan(database, targs->logmsg_buf, LOGBUF_SIZE, 0, scratch, regex_match_handler, targs) != HS_SUCCESS)
+			{
+				error_msg("Hyperscan error for logstring %s : error code %d\n",targs->logmsg_buf,retval);
+				continue;
+			}
+
+			else if(!targs->match || targs->domain == -1)
+			{
+				continue;
+			}
+			
+			switch (targs->domain)
+			{
+			case AF_INET:
+					
+					retval = ip_hashtable_insert(htable,&targs->ip_addr.ipv4,AF_INET);
 
 					break;
 
 				case AF_INET6:
 
-					retval = ip_hashtable_insert(htable,&reg_context.ip_addr.ipv6,AF_INET6);
+					retval = ip_hashtable_insert(htable,&targs->ip_addr.ipv6,AF_INET6);
 
 					break;
-				
-				case -1:
-					error_msg("Invalid address in logstring : %s\n",reg_context.ip_str_buf);
-					continue;
-				
+			
 				default:
 					continue;
 				}
 
-				if(retval < 1){
-					error_msg("Error in htable query for logstring : %s : Error Code %d\n",reg_context.ip_str_buf,retval);
+				if(retval < 1)
+				{
+					error_msg("Error in htable query for logstring : %s : Error Code %d\n",targs->logmsg_buf,retval);
 					continue;
 				}
 
-				if(retval > limit){
+				if(retval == limit)
+				{
 					time_t ts = time(NULL);
 
-					switch (reg_context.domain)
+					switch (targs->domain)
 					{
 					case AF_INET:
-						if((retval = ip_llist_append(banned_list,&reg_context.ip_addr.ipv4,&ts,AF_INET)) < 0){
-							error_msg("Error appending to banned list for logstring : %s : Error Code %d\n",reg_context.ip_str_buf,retval);
+						if((retval = ip_llist_append(banned_list,&targs->ip_addr.ipv6,&ts,AF_INET)) < 0)
+						{
+							error_msg("Error appending to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
 								continue;
 						}
-					    retval = blacklist_modify(ipv4_ebpf_map,&reg_context.ip_addr.ipv4,ACTION_ADD,AF_INET,nr_cpus,strerror_buf,sizeof(strerror_buf));
+					    retval = blacklist_modify(ipv4_ebpf_map,&targs->ip_addr.ipv6,ACTION_ADD,AF_INET,nr_cpus,strerror_buf,sizeof(strerror_buf));
 						break;
 					
 					case AF_INET6:
-						if((retval = ip_llist_append(banned_list,&reg_context.ip_addr.ipv6,&ts,AF_INET6)) < 0){
-							error_msg("Error appending to banned list for logstring : %s : Error Code %d\n",reg_context.ip_str_buf,retval);
+						if((retval = ip_llist_append(banned_list,&targs->ip_addr.ipv6,&ts,AF_INET6)) < 0)
+						{
+							error_msg("Error appending to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
 								continue;
 						}
-					    retval = blacklist_modify(ipv6_ebpf_map,&reg_context.ip_addr.ipv6,ACTION_ADD,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
+					    retval = blacklist_modify(ipv6_ebpf_map,&targs->ip_addr.ipv6,ACTION_ADD,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
 						break;
 
 					default:
 						continue;
 					}
 
-					if(retval != EXIT_OK){
+					if(retval != EXIT_OK)
+					{
 						error_msg("Error modifying blacklist : Error code %d\n",retval);
-						no_read = false;
 						continue;
 					}
 
@@ -619,27 +779,18 @@ void * ban_thread_routine(void * args){
 				
 				} 
 
-			}
-
-			else if(retval < 0) {
-				error_msg("Error in read function : error code %d\n",retval);
-			}
-
 		}
 
-		if(no_read){
-			
+		else 
+		{
 			nanosleep(&tspec,NULL);
-
 		}
-
-		continue;
 
 	}
-	
-	hs_free_database(database);
-	hs_free_scratch(scratch);
 
+	hs_free_scratch(scratch);
+	free(targs->logmsg_buf);
+	targs->logmsg_buf = NULL;
 	targs->retval = EXIT_SUCCESS;
 	return &targs->retval;
 
@@ -647,13 +798,16 @@ void * ban_thread_routine(void * args){
 
 int ipc_cleanup(struct ban_targs_t * targs, uint8_t thread_count, enum ipc_type_t ipc_type)
 {
+	UNUSED(thread_count);
+
 	int retval = IO_IPC_NULLPTR_ERR;
 
 	switch (ipc_type)
 	{
 	case DISK:
 		
-		if(targs != NULL && targs[0].ipc_args != NULL){
+		if(targs != NULL && targs[0].ipc_args != NULL)
+		{
 			retval = fclose(targs[0].ipc_args);
 		}
 
@@ -661,10 +815,13 @@ int ipc_cleanup(struct ban_targs_t * targs, uint8_t thread_count, enum ipc_type_
 
 	case SHM:
 
-		if(targs != NULL && targs[0].ipc_args != NULL){
+		if(targs != NULL && targs[0].ipc_args != NULL)
+		{
 			retval = shmrbuf_finalize((union shmrbuf_arg_t *)targs[0].ipc_args, SHMRBUF_READER);
 			free(targs[0].ipc_args);
 		}
+
+		break;
 	
 	default:
 		return IO_IPC_ARG_ERR;
@@ -675,7 +832,8 @@ int ipc_cleanup(struct ban_targs_t * targs, uint8_t thread_count, enum ipc_type_
 }
 
 
-int main(int argc, char **argv){
+int main(int argc, char **argv)
+{
 
 	UNUSED(file_port_blacklist);
 	UNUSED(file_port_blacklist_count);
@@ -687,35 +845,76 @@ int main(int argc, char **argv){
 	struct ban_targs_t * thread_args;
 	struct unban_targs_t unban_targs = {.unban_count = 0,.wakeup_interval=TIMEOUT};
 	struct shmrbuf_reader_arg_t * rbuf_arg;
+	hs_platform_info_t * platform_info;
+	hs_compile_error_t * compile_error;
 	pthread_t * thread_ids;
 	int retval;
 	uint8_t i;
 	retval = argp_parse(&argp, argc, argv, 0, NULL, &args);
 
-	if (retval == ARGP_ERR_UNKNOWN){
+	if (retval == ARGP_ERR_UNKNOWN)
+	{
 		return retval;
 	}
 		
-	if(thread_count > 1 && ipc_type == DISK){
-		fprintf(stderr,"No multithreading availably for DISK IPC\n");
+	if(thread_count > 1 && ipc_type == DISK)
+	{
+		fprintf(stderr,"No multithreading available for DISK IPC\n");
 		thread_count = 1;
 	}
 
+	if (matching) 
+	{
+		const char * const regexes[] = {regex, IP_REGEX};
+		const unsigned int flags[] = {HS_FLAG_SINGLEMATCH , HS_FLAG_SINGLEMATCH | HS_FLAG_SOM_LEFTMOST};
+		const unsigned int ids[] = {0 , 1};
+
+
+		if((platform_info = (hs_platform_info_t *) calloc(sizeof(hs_platform_info_t), 1)) == NULL)
+		{
+			perror("calloc failed");
+		}
+
+		else if(hs_populate_platform(platform_info) != HS_SUCCESS)
+		{
+			fprintf(stderr, "hs_populate_platform failed\n");
+			free(platform_info);
+			platform_info = NULL;
+		}
+
+		if(hs_compile_multi(regexes, flags, ids, 2, HS_MODE_BLOCK, platform_info, &database, &compile_error) != HS_SUCCESS)
+		{
+			fprintf(stderr,"Hyperscan compilation failed with error code %d\n", compile_error->expression);
+			hs_free_compile_error(compile_error);
+			exit(EXIT_FAILURE);
+		}
+
+		if(platform_info != NULL)
+		{
+			free(platform_info);
+			platform_info = NULL;
+		}
+    } 
+
 	/*
-    if(ebpf_setup(interface,false)){
+    if(ebpf_setup(interface,false))
+	{
 		fprintf(stderr,"ebpf setup failed\n");
 		exit(EXIT_FAILURE);
 	}
 
-	if((ipv4_ebpf_map = open_bpf_map(file_blacklist_ipv4)) == RETURN_FAIL || (ipv6_ebpf_map = open_bpf_map(file_blacklist_ipv6)) == RETURN_FAIL){
+	if((ipv4_ebpf_map = open_bpf_map(file_blacklist_ipv4)) == RETURN_FAIL || (ipv6_ebpf_map = open_bpf_map(file_blacklist_ipv6)) == RETURN_FAIL)
+	{
 		fprintf(stderr,"ERR: Failed to open bpf map  : %s\n",strerror(errno));
 		ebpf_cleanup(interface,true);
 		exit(EXIT_FAILURE);
 	}
 	*/
 
-	if((thread_ids = calloc(sizeof(pthread_t),thread_count)) == NULL || (thread_args = calloc(sizeof(struct unban_targs_t),thread_count)) == NULL){
+	if((thread_ids = calloc(sizeof(pthread_t),thread_count)) == NULL || (thread_args = calloc(sizeof(struct unban_targs_t),thread_count)) == NULL)
+	{
 		perror("Calloc failed");
+		hs_free_database(database);
 		ebpf_cleanup(interface,true);
 		exit(EXIT_FAILURE);
 	}
@@ -725,15 +924,18 @@ int main(int argc, char **argv){
 		fprintf(stderr,"ip_hashtable_init failed with error code %d\n", retval);
 		free(thread_ids);
 		free(thread_args);
+		hs_free_database(database);
 		ebpf_cleanup(interface,true);
 		exit(EXIT_FAILURE);
 	}
 	
-	if((retval = ip_llist_init(&banned_list)) < 0){
+	if((retval = ip_llist_init(&banned_list)) < 0)
+	{
 		fprintf(stderr,"ip_llist_init failed with error code %d\n", retval);
 		ip_hashtable_destroy(&htable);
 		free(thread_ids);
 		free(thread_args);
+		hs_free_database(database);
 		ebpf_cleanup(interface,true);
 		exit(EXIT_FAILURE);
 	}
@@ -742,12 +944,14 @@ int main(int argc, char **argv){
 	{
 	case DISK:
 		
-		if((thread_args[0].ipc_args = fopen(logfile,"r")) == NULL){
+		if((thread_args[0].ipc_args = fopen(logfile,"r")) == NULL)
+		{
 			perror("fopen failed for logfile");
 			ip_hashtable_destroy(&htable);
 			ip_llist_destroy(&banned_list);
 			free(thread_ids);
 			free(thread_args);
+			hs_free_database(database);
 			ebpf_cleanup(interface,true);
 			exit(EXIT_FAILURE);
 		}
@@ -756,20 +960,24 @@ int main(int argc, char **argv){
 	
 	case SHM:
 
-		if((rbuf_arg = (struct shmrbuf_reader_arg_t *)calloc(sizeof(struct shmrbuf_reader_arg_t),1)) == NULL){
+		if((rbuf_arg = (struct shmrbuf_reader_arg_t *)calloc(sizeof(struct shmrbuf_reader_arg_t),1)) == NULL)
+		{
 			perror("calloc failed");
 			ip_llist_destroy(&banned_list);
 			ip_hashtable_destroy(&htable);
 			free(thread_ids);
 			free(thread_args);
+			hs_free_database(database);
 			ebpf_cleanup(interface,true);
 			exit(EXIT_FAILURE);
 		}
 
 		rbuf_arg->shm_key = shm_key;
 
-		if((retval = shmrbuf_init(rbuf_arg, SHMRBUF_READER)) != IO_IPC_SUCCESS){
-			if(retval > 0){
+		if((retval = shmrbuf_init((union shmrbuf_arg_t *)rbuf_arg, SHMRBUF_READER)) != IO_IPC_SUCCESS)
+		{
+			if(retval > 0)
+			{
 				perror("shm_rbuf_init failed");
 			}
 			else {
@@ -780,11 +988,13 @@ int main(int argc, char **argv){
 			free(rbuf_arg);
 			free(thread_ids);
 			free(thread_args);
+			hs_free_database(database);
 			ebpf_cleanup(interface,true);
 			exit(EXIT_FAILURE);
 		}
 
-		for(i = 0; i < thread_count; i++){
+		for(i = 0; i < thread_count; i++)
+		{
 			thread_args[i].ipc_args = (void*) rbuf_arg;
 		}
 
@@ -802,6 +1012,7 @@ int main(int argc, char **argv){
 		ip_llist_destroy(&banned_list);
 		free(thread_args);
 		free(thread_ids);
+		hs_free_database(database);
 		ebpf_cleanup(interface, true);
 		exit(EXIT_FAILURE);
 	} 
@@ -841,8 +1052,10 @@ int main(int argc, char **argv){
 
 	uint64_t total_rcv_count = 0, total_ban_count = 0;
 
-	for(i = 0; i < thread_count; i++){
-		if(thread_args[i].retval != RETURN_SUCC){
+	for(i = 0; i < thread_count; i++)
+	{
+		if(thread_args[i].retval != RETURN_SUCC)
+		{
 			fprintf(stderr,"Watcher thread %d returned with error code %d\n",i,thread_args[i].retval);
 		}
 		printf("Thread %d : messages received %ld : clients banned %ld\n",i,thread_args[i].rcv_count,thread_args[i].ban_count);
@@ -852,33 +1065,38 @@ int main(int argc, char **argv){
 
 	}
 
-	if(unban_targs.retval != RETURN_SUCC){
+	if(unban_targs.retval != RETURN_SUCC)
+	{
 		fprintf(stderr,"Unban thread returned with error code %d\n",thread_args[i].retval);
 	}
 
 	printf("Total messages received %ld : total clients banned %ld : total clients unbanned %ld\n",total_rcv_count,total_ban_count,unban_targs.unban_count);
 
 	/*
-    if(ebpf_cleanup(interface,true)){
-		fprintf(stderr,"ebpf cleanup failed\n");
-		ip_llist_destroy(&banned_list);
-		ip_hashtable_destroy(&htable);
-		free(thread_ids);
-		free(thread_args);
-		exit(EXIT_FAILURE);
+    if((retval = ebpf_cleanup(interface,true)) < 0)
+	{
+		fprintf(stderr,"ebpf cleanup failed : error code %d\n");
 	}
 	*/
     
-	if((retval = ipc_cleanup(thread_args, thread_count, ipc_type)) != IO_IPC_SUCCESS){
+	if((retval = ipc_cleanup(thread_args, thread_count, ipc_type)) != IO_IPC_SUCCESS)
+	{
 		fprintf(stderr,"ipc_cleanup failed with error code : %d\n", retval);
 	}
 	
-	if((retval = ip_llist_destroy(&banned_list)) != IP_LLIST_SUCCESS){
+	if((retval = ip_llist_destroy(&banned_list)) != IP_LLIST_SUCCESS)
+	{
 		fprintf(stderr, "ip_llist_destroy failed with error code %d\n", retval);
 	}
 
-	if((retval = ip_hashtable_destroy(&htable)) != IP_HTABLE_SUCCESS){
+	if((retval = ip_hashtable_destroy(&htable)) != IP_HTABLE_SUCCESS)
+	{
 		fprintf(stderr, "ip_hashtable_destroy failed with error code %d\n", retval);
+	}
+
+	if((retval = hs_free_database(database)) != HS_SUCCESS)
+	{
+		fprintf(stderr, "hs_free_database failed with error code %d\n", retval);
 	}
 
 	free(thread_ids);
