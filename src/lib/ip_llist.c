@@ -64,16 +64,11 @@ int ip_llist_init(struct ip_llist_t ** llist){
         return IP_LLIST_MEM_ERR;
     }
 
-    if(pthread_mutex_init(&(*llist)->tail_lock,NULL)){
-        pthread_mutex_destroy(&(*llist)->tail_lock);
-        return IP_LLIST_MUTEX_ERR;
-    }
-
     return IP_LLIST_SUCCESS;
 }
 
 
-int ip_llist_append(struct ip_llist_t * llist, void * key, time_t * ts, int domain){
+int ip_llist_push(struct ip_llist_t * llist, void * key, time_t * ts, int domain){
 
     if(llist == NULL || key == NULL){
         return IP_LLIST_NULLPTR_ERR;
@@ -86,22 +81,21 @@ int ip_llist_append(struct ip_llist_t * llist, void * key, time_t * ts, int doma
         return retval;
     }
 
-    if(pthread_mutex_lock(&llist->tail_lock)){
-        pthread_mutex_unlock(&llist->tail_lock);
+    if(pthread_mutex_lock(&llist->lock)){
+        pthread_mutex_unlock(&llist->lock);
         return IP_LLIST_MUTEX_ERR;
     }
 
-    if(llist->tail == NULL){
+    if(llist->head == NULL){
         llist->head = new;
-        llist->tail = new;
     } 
 
     else{
-        llist->tail->next = new;
-        llist->tail = new;
+        new->next = llist->head;
+        llist->head = new;
     }
 
-    if(pthread_mutex_unlock(&llist->tail_lock)){
+    if(pthread_mutex_unlock(&llist->lock)){
         return IP_LLIST_MUTEX_ERR;
     }
 
@@ -128,24 +122,21 @@ int ip_llist_remove(struct ip_listnode_t ** node, struct ip_listnode_t * prev){
 
 int ip_llist_destroy(struct ip_llist_t ** llist){
 
-    if(llist == NULL || *llist){
+    if(llist == NULL || *llist == NULL){
         return IP_LLIST_NULLPTR_ERR;
     }
 
-    int error,retval = IP_LLIST_SUCCESS;
+    int error,retval;
     struct ip_listnode_t * prev, * it = (*llist)->head;
 
     while (it != NULL)
     {
         prev = it;
         it = it->next;
-        if((retval = ip_llist_remove(prev,NULL)) < 0){
+        if((retval = ip_llist_remove(&prev,NULL)) < 0)
+        {
             error = retval;
         }
-    }
-
-    if(pthread_mutex_destroy(&(*llist)->tail_lock)){
-        error = IP_LLIST_MUTEX_ERR;
     }
 
     free(*llist);

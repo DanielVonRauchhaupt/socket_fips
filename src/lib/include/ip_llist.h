@@ -36,8 +36,7 @@ struct ip_listnode_t
 struct ip_llist_t
 {
     struct ip_listnode_t * head;
-    struct ip_listnode_t * tail;
-    pthread_mutex_t tail_lock;
+    pthread_mutex_t lock;
 };
 
 
@@ -47,9 +46,9 @@ struct ip_llist_t
 int ip_llist_init(struct ip_llist_t ** llist);
 
 /*
-    Appends a new node with addr and timestamp to the end of the list
+    Adds a new node with addr and timestamp to the start of the list (thread safe)
 */
-int ip_llist_append(struct ip_llist_t * llist, void * addr, time_t * timestamp, int domain);
+int ip_llist_push(struct ip_llist_t * llist, void * addr, time_t * timestamp, int domain);
 
 /*
     Removes a node from the list (Not MT safe if called on the tail node)

@@ -1,3 +1,4 @@
+#define _GNU_SOURCE 1
 #include <argp.h>
 #include <errno.h>
 #include <net/if.h>
@@ -38,6 +39,7 @@
 #define DEFAULT_MATCH_REGEX "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} client \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+ exceeded request rate limit"
 #define IP_REGEX "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+"
 #define LOGBUF_SIZE 256
+
 
 // Hyperscan
 #define MATCH_REGEX_ID 0
@@ -341,7 +343,7 @@ void * unban_thread_routine(void * args)
 	time_t ts;
 	struct timespec timeout = {.tv_sec=0,.tv_nsec=targs->wakeup_interval};
 	char strerror_buf[64];
-	struct ip_listnode_t * current_tail, * iterator, * prev, * next;
+	struct ip_listnode_t *iterator, * prev;
 	int retval, nr_cpus = libbpf_num_possible_cpus();
 
 	if(block_signals(true))
@@ -365,141 +367,101 @@ void * unban_thread_routine(void * args)
 			return &targs->retval;
 		}
 
-		if(pthread_mutex_lock(&banned_list->tail_lock))
+		if(pthread_mutex_lock(&banned_list->lock))
 		{
-			pthread_mutex_unlock(&banned_list->tail_lock);
+			pthread_mutex_unlock(&banned_list->lock);
 			error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 			targs->retval = EXIT_FAIL;
 			return &targs->retval;
 		}
 
-		current_tail = banned_list->tail;
+		iterator = banned_list->head;
 
-		if(pthread_mutex_unlock(&banned_list->tail_lock))
+		if(iterator != NULL)
 		{
-			error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
-			targs->retval = EXIT_FAIL;
-			return &targs->retval;
-		}
-
-		if(current_tail == NULL || banned_list->head == NULL)
-		{
-			if(current_tail != NULL)
+			if((ts - iterator->timestamp) > limit)
 			{
-				error_msg("Banned list head is null but list is not empty\n");
-
-
-
+				banned_list->head = NULL;
 			}
-		} 
-		else 
-		{
-
-			iterator = banned_list->head;
-			prev = NULL;
-			next = NULL;
-			bool brk = false;
-
-			while(iterator != NULL)
+			else 
 			{
+				prev = iterator;
+				iterator = iterator->next;
+			}
 
-				if(iterator == current_tail)
+			if(pthread_mutex_unlock(&banned_list->lock))
+			{
+				error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
+				targs->retval = EXIT_FAIL;
+				return &targs->retval;
+			}
+
+			if(prev != NULL){
+
+				while(iterator != NULL)
 				{
-					brk = true;
-				}
-
-				if((ts - iterator->timestamp) > limit)
-				{
-
-					if(brk)
+					if((ts - iterator->timestamp) > limit)
 					{
-						if(pthread_mutex_lock(&banned_list->tail_lock))
-						{
-							pthread_mutex_unlock(&banned_list->tail_lock);
-							error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
-							targs->retval = EXIT_FAIL;
-							return &targs->retval;
-						}
-					}
-
-					switch (iterator->domain)
-					{
-					case AF_INET:
-						
-						retval = blacklist_modify(ipv4_ebpf_map,iterator->key,ACTION_DEL,AF_INET,nr_cpus,strerror_buf,sizeof(strerror_buf));
-						break;
-					
-					case AF_INET6:
-
-						retval = blacklist_modify(ipv6_ebpf_map,iterator->key,ACTION_DEL,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
-						break; 
-
-					default:
-						retval = -1;
-						error_msg("Invalid domain in banned list %d\n",iterator->domain);
-					}
-
-					if(retval < 0)
-					{
-						error_msg("Error modifying ebf map : error code %d\n",retval);
-					} else {
-						targs->unban_count++;
-					}
-
-					if(brk)
-					{
-						if(pthread_mutex_unlock(&banned_list->tail_lock))
-						{
-							error_msg("Failed to release banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
-								targs->retval = EXIT_FAIL;
-								return &targs->retval;
-						}
-
-						if(prev == NULL)
-						{
-							banned_list->head = NULL;
-						}
-
-						if(iterator->next == NULL)
-						{
-							banned_list->tail = NULL;
-						}
-
-						if((retval = ip_llist_remove(&iterator,prev)) < 0)
-						{
-							error_msg("Error removing tail node from banned list : error code %d\n",retval);
-						}
-
+						prev->next = NULL;
 						break;
 					}
-
-					next = iterator->next;
-
-					if((retval = ip_llist_remove(&iterator,prev)) < 0)
-					{
-						error_msg("Error removing node from banned list : error code %d\n",retval);
-					}
-
-					iterator = next;
-
-					if(prev == NULL)
-					{
-						banned_list->head = next;
-					}
-				}
-
-				else {
 					prev = iterator;
 					iterator = iterator->next;
 				}
 
 			}
 
+			while(iterator != NULL)
+			{
+				switch (iterator->domain)
+				{
+				case AF_INET:
+						
+					retval = blacklist_modify(ipv4_ebpf_map,iterator->key,ACTION_DEL,AF_INET,nr_cpus,strerror_buf,sizeof(strerror_buf));
+					break;
+					
+				case AF_INET6:
+
+					retval = blacklist_modify(ipv6_ebpf_map,iterator->key,ACTION_DEL,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
+					break; 
+
+				default:
+					retval = -1;
+					error_msg("Invalid domain in banned list %d\n",iterator->domain);
+				}
+
+				if(retval < 0)
+				{
+					error_msg("Error modifying ebf map : error code %d\n",retval);
+				} 
+
+				else 
+				{
+					targs->unban_count++;
+				}
+
+				prev = iterator;
+				iterator = iterator->next;
+					
+				if((retval = ip_llist_remove(&prev,NULL)) < 0)
+				{
+					error_msg("Error removing ´ node from banned list : error code %d\n",retval);
+				}	
+
+			}
+				
+		}
+		else 
+		{
+			if(pthread_mutex_unlock(&banned_list->lock))
+			{
+				error_msg("Failed to claim banned list lock : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
+				targs->retval = EXIT_FAIL;
+				return &targs->retval;
+			}
 		}
 
 		nanosleep(&timeout,NULL);
-
-
 	}
 	
 	targs->retval = EXIT_SUCCESS;
@@ -748,18 +710,18 @@ void * ban_thread_routine(void * args)
 					switch (targs->domain)
 					{
 					case AF_INET:
-						if((retval = ip_llist_append(banned_list,&targs->ip_addr.ipv6,&ts,AF_INET)) < 0)
+						if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv6, &ts, AF_INET)) < 0)
 						{
-							error_msg("Error appending to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
+							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
 								continue;
 						}
-					    retval = blacklist_modify(ipv4_ebpf_map,&targs->ip_addr.ipv6,ACTION_ADD,AF_INET,nr_cpus,strerror_buf,sizeof(strerror_buf));
+					    retval = blacklist_modify(ipv4_ebpf_map, &targs->ip_addr.ipv6, ACTION_ADD, AF_INET, nr_cpus, strerror_buf, sizeof(strerror_buf));
 						break;
 					
 					case AF_INET6:
-						if((retval = ip_llist_append(banned_list,&targs->ip_addr.ipv6,&ts,AF_INET6)) < 0)
+						if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv6, &ts, AF_INET6)) < 0)
 						{
-							error_msg("Error appending to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
+							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
 								continue;
 						}
 					    retval = blacklist_modify(ipv6_ebpf_map,&targs->ip_addr.ipv6,ACTION_ADD,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
@@ -1023,7 +985,6 @@ int main(int argc, char **argv)
 		for(i = 0; i < thread_count; i++)
 		{
 			thread_args[i].ban_count = 0;
-			thread_args[i].ipc_args = NULL;
 			thread_args[i].rcv_count = 0;
 			thread_args[i].thread_id = i;
 			thread_args[i].wakeup_interval = TIMEOUT;
