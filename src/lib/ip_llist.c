@@ -1,14 +1,17 @@
 #include "include/ip_llist.h"
 #include <stddef.h>
 
-static int create_lnode(struct ip_listnode_t ** lnode,void * key, time_t * ts, int domain){
+static int create_lnode(struct ip_listnode_t ** lnode,void * key, time_t * ts, int domain)
+{
 
-    if(lnode == NULL || key == NULL || ts == NULL){
+    if(lnode == NULL || key == NULL || ts == NULL)
+    {
         return IP_LLIST_NULLPTR_ERR;
     }
 
-    if((*lnode = (struct ip_listnode_t * ) calloc(sizeof(struct ip_listnode_t),1)) == NULL){
-            return IP_LLIST_MEM_ERR;
+    if((*lnode = (struct ip_listnode_t * ) calloc(sizeof(struct ip_listnode_t),1)) == NULL)
+    {
+        return IP_LLIST_MEM_ERR;
     }
 
     (*lnode)->timestamp = *ts;
@@ -16,7 +19,8 @@ static int create_lnode(struct ip_listnode_t ** lnode,void * key, time_t * ts, i
     switch (domain)
     {
     case AF_INET:
-        if(((*lnode)->key = calloc(sizeof(uint32_t),1)) == NULL){
+        if(((*lnode)->key = calloc(sizeof(uint32_t),1)) == NULL)
+        {
             free(lnode);
             return IP_LLIST_MEM_ERR;
         }
@@ -27,7 +31,8 @@ static int create_lnode(struct ip_listnode_t ** lnode,void * key, time_t * ts, i
     
     case AF_INET6:
 
-        if(((*lnode)->key = calloc(sizeof(__uint128_t),1)) == NULL){
+        if(((*lnode)->key = calloc(sizeof(__uint128_t),1)) == NULL)
+        {
             free(lnode);
             return IP_LLIST_MEM_ERR;
         }
@@ -42,9 +47,11 @@ static int create_lnode(struct ip_listnode_t ** lnode,void * key, time_t * ts, i
     }
 }
 
-static void destroy_lnode(struct ip_listnode_t ** lnode){
+static void destroy_lnode(struct ip_listnode_t ** lnode)
+{
 
-    if(*lnode == NULL){
+    if(*lnode == NULL)
+    {
         return;
     }
     
@@ -54,13 +61,16 @@ static void destroy_lnode(struct ip_listnode_t ** lnode){
     
 }
 
-int ip_llist_init(struct ip_llist_t ** llist){
+int ip_llist_init(struct ip_llist_t ** llist)
+{
 
-    if(llist == NULL){
+    if(llist == NULL)
+    {
         return IP_LLIST_NULLPTR_ERR;
     }
 
-    if((*llist = calloc(sizeof(struct ip_llist_t),1)) == NULL){
+    if((*llist = calloc(sizeof(struct ip_llist_t),1)) == NULL)
+    {
         return IP_LLIST_MEM_ERR;
     }
 
@@ -68,25 +78,30 @@ int ip_llist_init(struct ip_llist_t ** llist){
 }
 
 
-int ip_llist_push(struct ip_llist_t * llist, void * key, time_t * ts, int domain){
+int ip_llist_push(struct ip_llist_t * llist, void * key, time_t * ts, int domain)
+{
 
-    if(llist == NULL || key == NULL){
+    if(llist == NULL || key == NULL)
+    {
         return IP_LLIST_NULLPTR_ERR;
     }
 
     int retval;    
     struct ip_listnode_t * new;
 
-    if((retval = create_lnode(&new,key,ts,domain))){
+    if((retval = create_lnode(&new,key,ts,domain)))
+    {
         return retval;
     }
 
-    if(pthread_mutex_lock(&llist->lock)){
+    if(pthread_mutex_lock(&llist->lock))
+    {
         pthread_mutex_unlock(&llist->lock);
         return IP_LLIST_MUTEX_ERR;
     }
 
-    if(llist->head == NULL){
+    if(llist->head == NULL)
+    {
         llist->head = new;
     } 
 
@@ -95,7 +110,8 @@ int ip_llist_push(struct ip_llist_t * llist, void * key, time_t * ts, int domain
         llist->head = new;
     }
 
-    if(pthread_mutex_unlock(&llist->lock)){
+    if(pthread_mutex_unlock(&llist->lock))
+    {
         return IP_LLIST_MUTEX_ERR;
     }
 
@@ -103,13 +119,16 @@ int ip_llist_push(struct ip_llist_t * llist, void * key, time_t * ts, int domain
 }
 
 
-int ip_llist_remove(struct ip_listnode_t ** node, struct ip_listnode_t * prev){
+int ip_llist_remove(struct ip_listnode_t ** node, struct ip_listnode_t * prev)
+{
 
-    if(node == NULL || *node == NULL){
+    if(node == NULL || *node == NULL)
+    {
         return IP_LLIST_NULLPTR_ERR;
     }
 
-    if(prev != NULL){
+    if(prev != NULL)
+    {
         prev->next = (*node)->next;
     }
 
@@ -120,13 +139,15 @@ int ip_llist_remove(struct ip_listnode_t ** node, struct ip_listnode_t * prev){
 }
 
 
-int ip_llist_destroy(struct ip_llist_t ** llist){
+int ip_llist_destroy(struct ip_llist_t ** llist)
+{
 
-    if(llist == NULL || *llist == NULL){
+    if(llist == NULL || *llist == NULL)
+    {
         return IP_LLIST_NULLPTR_ERR;
     }
 
-    int error,retval;
+    int error = 0,retval;
     struct ip_listnode_t * prev, * it = (*llist)->head;
 
     while (it != NULL)
@@ -143,7 +164,8 @@ int ip_llist_destroy(struct ip_llist_t ** llist){
 
     *llist = NULL;
     
-    if(error){
+    if(error)
+    {
         return error;
     }
 

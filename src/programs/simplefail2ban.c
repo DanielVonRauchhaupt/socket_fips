@@ -442,8 +442,13 @@ void * unban_thread_routine(void * args)
 
 				prev = iterator;
 				iterator = iterator->next;
+
+				if((retval = ip_hashtable_remove(htable, prev->key, prev->domain)) < 0)
+				{
+					error_msg("Error removing key from hashtable : error code %d\n",retval);
+				}
 					
-				if((retval = ip_llist_remove(&prev,NULL)) < 0)
+				if((retval = ip_llist_remove(&prev, NULL)) < 0)
 				{
 					error_msg("Error removing ´ node from banned list : error code %d\n",retval);
 				}	
@@ -873,7 +878,8 @@ int main(int argc, char **argv)
 	}
 	*/
 
-	if((thread_ids = calloc(sizeof(pthread_t),thread_count)) == NULL || (thread_args = calloc(sizeof(struct unban_targs_t),thread_count)) == NULL)
+	if((thread_ids = (pthread_t *) calloc(sizeof(pthread_t),thread_count)) == NULL ||
+	   (thread_args = (struct ban_targs_t *) calloc(sizeof(struct ban_targs_t),thread_count)) == NULL)
 	{
 		perror("Calloc failed");
 		hs_free_database(database);
@@ -1001,7 +1007,7 @@ int main(int argc, char **argv)
 
 		ban_thread_routine(&thread_args[0]);
 
-		for(i = 0; i < (thread_count); i++)
+		for(i = 0; i < thread_count; i++)
 		{
 			if(pthread_join(thread_ids[i], NULL))
 			{
@@ -1012,6 +1018,8 @@ int main(int argc, char **argv)
 	}
 
 	uint64_t total_rcv_count = 0, total_ban_count = 0;
+
+	printf("\n");
 
 	for(i = 0; i < thread_count; i++)
 	{
