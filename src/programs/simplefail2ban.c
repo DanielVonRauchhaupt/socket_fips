@@ -128,6 +128,7 @@ static const struct argp_option opts[] = {
 	{"threads", 't', "N", 0, "Specify the number of banning threads to use",0},
 	{ "limit", 'l', "N", 0, "Number of matches before a client is banned", 0},
 	{ "bantime", 'b', "N", 0, "Number of seconds a client should be banned", 0},
+	{ "match", 'm', NULL, 0, "Use regex matching on logstrings", 0},
 	{ "regex", 'r', "REGEX", 0, "Regular Expression for matching", 0},
 	{0},
 };
@@ -222,6 +223,11 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 			}
 
             break;
+
+	case 'm':
+
+			matching = true;
+			break;
 
 	case ARGP_KEY_ARG:
       	if (state->arg_num >=2 )
@@ -594,18 +600,7 @@ void * ban_thread_routine(void * args)
 		{
 		case DISK:
 				
-			if((retval = getline(&targs->logmsg_buf, &size, (FILE *)targs->ipc_args)) == -1)
-			{
-				error_msg("getline failed : %s\n", strerror_r(errno, targs->strerror_buf, sizeof(targs->strerror_buf)));
-				if(matching)
-					{ hs_free_scratch(scratch); }
-				free(targs->logmsg_buf);
-				targs->logmsg_buf = NULL;
-				targs->retval = EXIT_FAIL;
-				return &targs->retval;
-			}
-
-			read = retval > 0;
+			read = 0 < getline(&targs->logmsg_buf, &size, (FILE *)targs->ipc_args);
 
 			break;
 
@@ -673,15 +668,32 @@ void * ban_thread_routine(void * args)
 
 			targs->rcv_count++;
 
-			if(hs_scan(database, targs->logmsg_buf, LOGBUF_SIZE, 0, scratch, regex_match_handler, targs) != HS_SUCCESS)
+			if(matching)
 			{
-				error_msg("Hyperscan error for logstring %s : error code %d\n",targs->logmsg_buf,retval);
-				continue;
+				if(hs_scan(database, targs->logmsg_buf, LOGBUF_SIZE, 0, scratch, regex_match_handler, targs) != HS_SUCCESS)
+				{
+					error_msg("Hyperscan error for logstring %s : error code %d\n",targs->logmsg_buf,retval);
+					continue;
+				}
+				else if(!targs->match || targs->domain == -1)
+				{
+					continue;
+				}
 			}
-
-			else if(!targs->match || targs->domain == -1)
+			else 
 			{
-				continue;
+				if (inet_pton(AF_INET, targs->logmsg_buf, &targs->ip_addr.ipv4) == 1) 
+				{
+					targs->domain = AF_INET;
+				} 
+				else if (inet_pton(AF_INET6, targs->logmsg_buf, &targs->ip_addr.ipv6) == 1) 
+				{
+					targs->domain = AF_INET6;
+				} 
+				else 
+				{
+					continue;
+				}
 			}
 			
 			switch (targs->domain)
@@ -833,7 +845,7 @@ int main(int argc, char **argv)
 	if (matching) 
 	{
 		const char * const regexes[] = {regex, IP_REGEX};
-		const unsigned int flags[] = {HS_FLAG_SINGLEMATCH , HS_FLAG_SINGLEMATCH | HS_FLAG_SOM_LEFTMOST};
+		const unsigned int flags[] = {HS_FLAG_SINGLEMATCH , HS_FLAG_SOM_LEFTMOST};
 		const unsigned int ids[] = {0 , 1};
 
 
@@ -851,7 +863,7 @@ int main(int argc, char **argv)
 
 		if(hs_compile_multi(regexes, flags, ids, 2, HS_MODE_BLOCK, platform_info, &database, &compile_error) != HS_SUCCESS)
 		{
-			fprintf(stderr,"Hyperscan compilation failed with error code %d\n", compile_error->expression);
+			fprintf(stderr,"Hyperscan compilation failed with error code %d, %s\n", compile_error->expression, compile_error->message);
 			hs_free_compile_error(compile_error);
 			exit(EXIT_FAILURE);
 		}
@@ -863,7 +875,6 @@ int main(int argc, char **argv)
 		}
     } 
 
-	/*
     if(ebpf_setup(interface,false))
 	{
 		fprintf(stderr,"ebpf setup failed\n");
@@ -876,7 +887,6 @@ int main(int argc, char **argv)
 		ebpf_cleanup(interface,true);
 		exit(EXIT_FAILURE);
 	}
-	*/
 
 	if((thread_ids = (pthread_t *) calloc(sizeof(pthread_t),thread_count)) == NULL ||
 	   (thread_args = (struct ban_targs_t *) calloc(sizeof(struct ban_targs_t),thread_count)) == NULL)
@@ -1041,12 +1051,10 @@ int main(int argc, char **argv)
 
 	printf("Total messages received %ld : total clients banned %ld : total clients unbanned %ld\n",total_rcv_count,total_ban_count,unban_targs.unban_count);
 
-	/*
     if((retval = ebpf_cleanup(interface,true)) < 0)
 	{
-		fprintf(stderr,"ebpf cleanup failed : error code %d\n");
+		fprintf(stderr,"ebpf cleanup failed : error code %d\n", retval);
 	}
-	*/
     
 	if((retval = ipc_cleanup(thread_args, thread_count, ipc_type)) != IO_IPC_SUCCESS)
 	{
