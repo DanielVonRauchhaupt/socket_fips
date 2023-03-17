@@ -40,7 +40,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
         return IO_IPC_NULLPTR_ERR;
     }
 
-    key_t key;
+    key_t key = -1;
     int shm_flag = 0, shmid;
     size_t size = 0;
     struct shmrbuf_global_hdr_t * global_hdr;
@@ -65,11 +65,6 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
                args->wargs.segment_count * (args->wargs.lines * args->wargs.line_size +
                (args->wargs.reader_count + 1) * sizeof(atomic_uint_fast32_t));
 
-        if(args->wargs.lines * args->wargs.line_size > PAGESIZE)
-        {
-            //shm_flag |= SHM_HUGETLB;
-        }
-
         break;
 
     case SHMRBUF_READER:
@@ -79,15 +74,25 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
             return IO_IPC_ARG_ERR;
         }
 
+        key = ftok(args->wargs.shm_key,0);
+
         break;
     
     default:
         return IO_IPC_ARG_ERR;
     }
 
-    if(key == -1 || ((shmid = shmget(key,size,shm_flag)) == -1))
+    if(key == -1)
     {
         return errno;
+    }
+
+    if(size <= PAGESIZE || (shmid = shmget(key,size, shm_flag | SHM_HUGETLB)) == -1)
+    {
+        if((shmid = shmget(key,size,shm_flag)) == -1)
+        {
+            return errno;
+        }
     }
 
     if((global_hdr = (struct shmrbuf_global_hdr_t *) shmat(shmid,NULL,0)) == (void *) -1)
@@ -161,8 +166,8 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
             struct shmrbuf_seg_rhdr_t * seg_rhdr = &args->rargs.segment_hdrs[i];
 
             seg_rhdr->write_index = seg_head;
-            seg_rhdr->read_index = seg_head + args->rargs.reader_index;
-            seg_rhdr->data = (void *)(seg_head + global_hdr->reader_count);
+            seg_rhdr->read_index = seg_head + (args->rargs.reader_index + 1);
+            seg_rhdr->data = (void *)(seg_head + global_hdr->reader_count + 1);
 
         }
 
@@ -247,8 +252,8 @@ int shmrbuf_read(struct shmrbuf_reader_arg_t * args, void * rbuf, uint16_t bufsi
         return IO_IPC_MUTEX_ERR;
     }
 
-    uint32_t read_index = *segment->write_index;
-    uint32_t new_read_index = (read_index == args->head->lines - 1) ? 0 : new_read_index + 1;
+    uint32_t read_index = *segment->read_index;
+    uint32_t new_read_index = (read_index == args->head->lines - 1) ? 0 : read_index + 1;
     uint16_t rsize = MIN(args->head->line_size,bufsize);
 
     if(write_index == read_index){

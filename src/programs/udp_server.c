@@ -29,8 +29,8 @@
 // Default configuration
 #define DEFAULT_PORT 8080
 #define DEFAULT_LOG "udpsvr.log"
-#define IP4_ADDRESS "127.0.0.1"//"10.3.10.131"
-#define IP6_ADDRESS "::1"//"2001:db8:db8::1" 
+#define IP4_ADDRESS "10.3.10.131"
+#define IP6_ADDRESS "2001:db8:db8::1" 
 #define DOMAIN AF_INET
 #define LOG_SHORT false
 #define IPC_TYPE DISK
@@ -59,7 +59,7 @@
 #define STR_SIZE_IP6 (sizeof("DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD") - 1)
 #define LOG_STR_FMT_IP4 "YYYY-MM-DD HH:MM:SS client DDD.DDD.DDD.DDD exceeded request rate limit\n"
 #define LOG_BUF_SIZE_IP4 (sizeof(LOG_STR_FMT_IP4) - 1)
-#define LOG_STR_FMT_IP6 "YYYY-MM-DD HH:MM:SS client DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD exeeded request rate limit\n" 
+#define LOG_STR_FMT_IP6 "YYYY-MM-DD HH:MM:SS client DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD:DDDD exceeded request rate limit\n" 
 #define LOG_BUF_SIZE_IP6 (sizeof(LOG_STR_FMT_IP6) - 1)
 #define HOST_PREFIX " client "
 #define HOST_PREFIX_SIZE (sizeof(HOST_PREFIX)-1)
@@ -137,17 +137,17 @@ struct util_targ_t {
 const char *argp_program_version = "Simple UDP Server";
 
 static struct argp_option options[] = {
-    {"disk", 'd', "LOGFILE", 0, "Specify disk as ipc type",0},
-    {"ipv4", '4', "ADDRESS", 0, "Specify IPv4 address",0},
-    {"ipv6", '6', "ADDRESS", 0, "Specify IPv6 address",0},
-    {"threads", 't', "N", 0, "Specify the number of listener threads to use",0},
+    {"file", 'f', "LOGFILE", OPTION_ARG_OPTIONAL, "Specify disk as ipc type",0},
+    {"ip4", '4', "ADDRESS", OPTION_ARG_OPTIONAL, "Specify IPv4 address",0},
+    {"ip6", '6', "ADDRESS", OPTION_ARG_OPTIONAL, "Specify IPv6 address",0},
+    {"threads", 't', "N", OPTION_ARG_OPTIONAL, "Specify the number of listener threads to use",0},
     {"logshort", 'l', NULL, 0, "Enable short logging",0},
-    {"shm", 's', "KEY", 0, "Specify shared memory as ipc type",0},
+    {"shm", 's', "KEY", OPTION_ARG_OPTIONAL, "Specify shared memory as ipc type",0},
     {"nlines", 'n', "NUM", 0, "Specify shared memory lines per segment",0},
     {"nreaders", 'r', "N", 0, "Number of readers for shared memory",0},
     {"overwrite", 'o', NULL, 0, "Enable overwrite for shared memory",0},
     {"port", 'p', "PORT", 0, "Specify the port to listen at",0},
-    {"msgq", 'q', "PORT", 0, "Specify message queue as ipc type",0},
+    {"msgq", 'q', "PORT", OPTION_ARG_OPTIONAL, "Specify message queue as ipc type",0},
     {0}
 };
 
@@ -171,7 +171,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
 
     switch (key) {
 
-        case 'd':
+        case 'f':
 
             if(arguments->ipc_set)
             {
@@ -240,18 +240,26 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
 
         case 't':
             
-            thread_count = (uint8_t) strtol(arg,NULL,10);
+            if(arg)
+            {
+                thread_count = (uint8_t) strtol(arg,NULL,10);
             
-            if(get_nprocs() < thread_count)
+                if(get_nprocs() < thread_count)
+                {
+                    thread_count = get_nprocs();
+                    fprintf(stderr,"Using maximum number of listener threads = %d\n",thread_count);
+                }
+
+                if(thread_count == 0)
+                {
+                    thread_count = 1;
+                    fprintf(stderr,"Minimum 1 listener thread required\n");
+                }
+            }
+            
+            else 
             {
                 thread_count = get_nprocs();
-                fprintf(stderr,"Using maximum number of listener threads = %d\n",thread_count);
-            }
-
-            if(thread_count == 0)
-            {
-                thread_count = 1;
-                fprintf(stderr,"Minimum 1 listener thread required\n");
             }
 
             break;
@@ -269,14 +277,22 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
                 argp_usage(state); 
             }
 
-            if(stat(arg, &statbuf) != 0)
+            if(arg)
             {
+                if(stat(arg, &statbuf) != 0)
+                {   
                     fprintf(stderr,"%s is not a valid filepath\n",arg);
                     argp_usage(state);
+                }
+                arguments->shm_key = arg;
+            }
+
+            else 
+            {
+                arguments->shm_key = DEFAULT_LOG;
             }
 
             arguments->ipc_set = true;
-            arguments->shm_key = arg;
             ipc_type = SHM;
 
             break;

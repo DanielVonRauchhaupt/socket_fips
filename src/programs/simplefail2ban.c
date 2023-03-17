@@ -33,17 +33,19 @@
 // Default configuration
 #define DEFAULT_BAN_TIME 60
 #define DEFAULT_BAN_THRESHOLD 1
+#define DEFAULT_THREAD_COUNT 4
 #define DEFAULT_IPC_TYPE DISK
-#define DEFAULT_IFACE "lo"
+#define DEFAULT_IFACE "enp24s0f0np0"
 #define DEFAULT_LOG "udpsvr.log"
-#define DEFAULT_MATCH_REGEX "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} client \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+ exceeded request rate limit"
-#define IP_REGEX "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+"
+#define DEFAULT_MATCH_REGEX "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} client (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+) exceeded request rate limit"
+#define IP4_REGEX "((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.){3}(25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)"
+#define IP6_REGEX "([a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4})|([a-f0-9:]{0,35}::[a-f0-9:]{0,35})"
 #define LOGBUF_SIZE 256
-
 
 // Hyperscan
 #define MATCH_REGEX_ID 0
-#define IP_REGEX_ID 1
+#define IP4_REGEX_ID 1
+#define IP6_REGEX_ID 2
 
 // Return values
 #define RETURN_FAIL (-1)
@@ -70,7 +72,7 @@ static uint8_t thread_count = NTHREADS;
 static uint16_t bantime = DEFAULT_BAN_TIME;
 static uint16_t limit = DEFAULT_BAN_THRESHOLD;
 static bool matching = false;
-static char * shm_key;
+static char * shm_key = DEFAULT_LOG;
 static char * logfile = DEFAULT_LOG;
 static char * regex = DEFAULT_MATCH_REGEX;
 static char * interface = DEFAULT_IFACE;
@@ -82,7 +84,7 @@ static int ipv6_ebpf_map;
 
 // Structs
 
-// Parameters fro unbanning thread
+// Parameters for unbanning thread
 struct unban_targs_t{
 	uint32_t wakeup_interval;
 	uint64_t unban_count;
@@ -123,13 +125,12 @@ static char args_doc[] = "INTERFACE";
 
 static const struct argp_option opts[] = {
 
-	{ "disk", 'd', "LOGFILE", 0, "Specifies disk as the chosen ipc type", 0},
-	{"shm", 's', "KEY", 0, "Specifies shared memory as the ipc type", 0},
-	{"threads", 't', "N", 0, "Specify the number of banning threads to use",0},
+	{ "file", 'f', "FILE", OPTION_ARG_OPTIONAL, "Specifies disk as the chosen ipc type", 0},
+	{"shm", 's', "KEY", OPTION_ARG_OPTIONAL, "Specifies shared memory as the ipc type", 0},
+	{"threads", 't', "N", OPTION_ARG_OPTIONAL, "Specify the number of banning threads to use",0},
 	{ "limit", 'l', "N", 0, "Number of matches before a client is banned", 0},
 	{ "bantime", 'b', "N", 0, "Number of seconds a client should be banned", 0},
-	{ "match", 'm', NULL, 0, "Use regex matching on logstrings", 0},
-	{ "regex", 'r', "REGEX", 0, "Regular Expression for matching", 0},
+	{ "match", 'm', "REGEX", OPTION_ARG_OPTIONAL, "Use regex matching on logstrings", 0},
 	{0},
 };
 
@@ -144,7 +145,7 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 
 	switch (key) {
 	
-	case 'd':
+	case 'f':
 
 		if(arguments->ipc_set)
 		{
@@ -173,31 +174,42 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 		arguments->ipc_set = true;
 		ipc_type = SHM;
 
-		if(arg == NULL)
+		if(arg)
 		{
-			fprintf(stderr,"SHM requires a key parameter\n");
-			argp_usage(state);
+			shm_key = arg;
 		}
 
-		shm_key = arg;
+		else 
+		{
+			shm_key = DEFAULT_LOG;
+		}
+		
 
 		break;
 
 	case 't':
-            
-            thread_count = (uint8_t) strtol(arg,NULL,10);
-            
-            if(get_nprocs() < thread_count)
+            if(arg)
 			{
-                thread_count = get_nprocs();
-                fprintf(stderr,"Using maximum number of banning threads = %d\n",thread_count);
-            }
+				thread_count = (uint8_t) strtol(arg,NULL,10);
+            
+				if(get_nprocs() < thread_count)
+				{
+					thread_count = get_nprocs();
+					fprintf(stderr,"Using maximum number of banning threads = %d\n",thread_count);
+				}
 
-            if(thread_count == 0)
+				if(thread_count == 0)
+				{
+					thread_count = 1;
+					fprintf(stderr,"Minimum 1 banning thread required\n");
+				}
+			}
+
+			else 
 			{
-                thread_count = 1;
-                fprintf(stderr,"Minimum 1 banning thread required\n");
-            }
+				thread_count = DEFAULT_THREAD_COUNT;
+			}
+            
 
             break;
 
@@ -385,7 +397,7 @@ void * unban_thread_routine(void * args)
 
 		if(iterator != NULL)
 		{
-			if((ts - iterator->timestamp) > limit)
+			if((ts - iterator->timestamp) > bantime)
 			{
 				banned_list->head = NULL;
 			}
@@ -406,7 +418,7 @@ void * unban_thread_routine(void * args)
 
 				while(iterator != NULL)
 				{
-					if((ts - iterator->timestamp) > limit)
+					if((ts - iterator->timestamp) > bantime)
 					{
 						prev->next = NULL;
 						break;
@@ -488,34 +500,57 @@ int regex_match_handler(unsigned int id, unsigned long long from, unsigned long 
 
 	struct ban_targs_t * context = (struct ban_targs_t *)ctx;
 
-	if(id == MATCH_REGEX_ID)
+	switch (id)
 	{
+	case MATCH_REGEX_ID:
 		context->match = true;
-		return 0;
-	}
+		return (context->domain != -1 ) ? 1 : 0;
+	
+	case IP4_REGEX_ID:
 
-	if(id == IP_REGEX_ID)
-	{
-		context->logmsg_buf[to] = '\0';
+		from = to;
+
+		while(to + 1 < LOGBUF_SIZE && context->logmsg_buf[to + 1] != ' ')
+		{ to++; }
+
+		while(from > 0 && context->logmsg_buf[from - 1] != ' ')
+		{ from--; }
+
+		context->logmsg_buf[to+1] = '\0';
 
 		if (inet_pton(AF_INET,&context->logmsg_buf[from],&context->ip_addr.ipv4) == 1) 
 		{
 			context->domain = AF_INET;
-			return 1;
-		} 
-		else if (inet_pton(AF_INET6, &context->logmsg_buf[from],&context->ip_addr.ipv6) == 1) 
+			context->logmsg_buf[to+1] = ' ';
+			return (context->match) ? 1 : 0;
+		}
+		context->domain = -1;
+		context->logmsg_buf[to+1] = ' ';
+		return 0;
+
+	case IP6_REGEX_ID:
+
+		from = to;
+
+		while(from > 0 && context->logmsg_buf[from - 1] != ' ')
+		{ from--; }
+
+		context->logmsg_buf[to+1] = '\0';
+
+		if (inet_pton(AF_INET6, &context->logmsg_buf[from],&context->ip_addr.ipv6) == 1) 
 		{
 			context->domain = AF_INET6;
-			return 1;
-		} 
-		else 
-		{
-			context->domain = -1;
-			return 0;
-    	}
+			context->logmsg_buf[to+1] = ' ';
+			return (context->match) ? 1 : 0;
+		}
+		context->domain = -1;
+		context->logmsg_buf[to+1] = ' ';
+		return 0;
+
+	default:
+		return 1;
 	}
 
-	return 0;
 }
 
 
@@ -594,13 +629,15 @@ void * ban_thread_routine(void * args)
 	while (server_running)
 	{
 		read = false;
-		targs->match = false;
 
 		switch (ipc_type)
 		{
 		case DISK:
 				
-			read = 0 < getline(&targs->logmsg_buf, &size, (FILE *)targs->ipc_args);
+			if((retval = getline(&targs->logmsg_buf, &size, (FILE *)targs->ipc_args)) > 0){
+				read = true;
+				targs->logmsg_buf[retval-1] = '\0';
+			}
 
 			break;
 
@@ -609,7 +646,7 @@ void * ban_thread_routine(void * args)
 				for(i = 0; i < seg_count; i++)
 				{
 					
-					if((retval = shmrbuf_read(shm_arg, targs->logmsg_buf, sizeof(targs->logmsg_buf), seg_index++)) < 0)
+					if((retval = shmrbuf_read(shm_arg, targs->logmsg_buf, LOGBUF_SIZE, seg_index++)) < 0)
 					{
 						error_msg("Thread %d : error in shmrbuf_read : segment %d : error code %d\n");
 						if(matching)
@@ -670,7 +707,10 @@ void * ban_thread_routine(void * args)
 
 			if(matching)
 			{
-				if(hs_scan(database, targs->logmsg_buf, LOGBUF_SIZE, 0, scratch, regex_match_handler, targs) != HS_SUCCESS)
+				targs->match = false;
+				targs->domain = -1;
+
+				if((retval = hs_scan(database, targs->logmsg_buf, LOGBUF_SIZE, 0, scratch, regex_match_handler, targs)) != HS_SUCCESS && retval != HS_SCAN_TERMINATED)
 				{
 					error_msg("Hyperscan error for logstring %s : error code %d\n",targs->logmsg_buf,retval);
 					continue;
@@ -838,15 +878,15 @@ int main(int argc, char **argv)
 		
 	if(thread_count > 1 && ipc_type == DISK)
 	{
-		fprintf(stderr,"No multithreading available for DISK IPC\n");
+		fprintf(stderr,"No multithreading available for FILE IPC\n");
 		thread_count = 1;
 	}
 
 	if (matching) 
 	{
-		const char * const regexes[] = {regex, IP_REGEX};
-		const unsigned int flags[] = {HS_FLAG_SINGLEMATCH , HS_FLAG_SOM_LEFTMOST};
-		const unsigned int ids[] = {0 , 1};
+		const char * const regexes[] = {regex, IP4_REGEX, IP6_REGEX};
+		const unsigned int flags[] = {HS_FLAG_SINGLEMATCH , HS_FLAG_SINGLEMATCH, HS_FLAG_SINGLEMATCH};
+		const unsigned int ids[] = {0 , 1, 2};
 
 
 		if((platform_info = (hs_platform_info_t *) calloc(sizeof(hs_platform_info_t), 1)) == NULL)
@@ -861,7 +901,7 @@ int main(int argc, char **argv)
 			platform_info = NULL;
 		}
 
-		if(hs_compile_multi(regexes, flags, ids, 2, HS_MODE_BLOCK, platform_info, &database, &compile_error) != HS_SUCCESS)
+		if(hs_compile_multi(regexes, flags, ids, 3, HS_MODE_BLOCK, platform_info, &database, &compile_error) != HS_SUCCESS)
 		{
 			fprintf(stderr,"Hyperscan compilation failed with error code %d, %s\n", compile_error->expression, compile_error->message);
 			hs_free_compile_error(compile_error);
@@ -1066,15 +1106,18 @@ int main(int argc, char **argv)
 		fprintf(stderr, "ip_llist_destroy failed with error code %d\n", retval);
 	}
 
-	if((retval = ip_hashtable_destroy(&htable)) != IP_HTABLE_SUCCESS)
+	if((retval = ip_hashtable_destroy(&htable)) < 0)
 	{
 		fprintf(stderr, "ip_hashtable_destroy failed with error code %d\n", retval);
 	}
 
-	if((retval = hs_free_database(database)) != HS_SUCCESS)
+	if(matching)
 	{
-		fprintf(stderr, "hs_free_database failed with error code %d\n", retval);
-	}
+		if((retval = hs_free_database(database)) != HS_SUCCESS)
+		{
+			fprintf(stderr, "hs_free_database failed with error code %d\n", retval);
+		}
+	}	
 
 	free(thread_ids);
 	free(thread_args);	
