@@ -510,32 +510,32 @@ int regex_match_handler(unsigned int id, unsigned long long from, unsigned long 
 
 		from = to;
 
-		while(to + 1 < LOGBUF_SIZE && context->logmsg_buf[to + 1] != ' ')
+		while(to + 1 < LOGBUF_SIZE && context->logmsg_buf[to] != ' ')
 		{ to++; }
 
-		while(from > 0 && context->logmsg_buf[from - 1] != ' ')
+		while(from > 0 && context->logmsg_buf[from] != ' ')
 		{ from--; }
 
-		context->logmsg_buf[to+1] = '\0';
+		context->logmsg_buf[to] = '\0';
 
 		if (inet_pton(AF_INET,&context->logmsg_buf[from],&context->ip_addr.ipv4) == 1) 
 		{
 			context->domain = AF_INET;
-			context->logmsg_buf[to+1] = ' ';
+			context->logmsg_buf[to] = ' ';
 			return (context->match) ? 1 : 0;
 		}
 		context->domain = -1;
-		context->logmsg_buf[to+1] = ' ';
+		context->logmsg_buf[to] = ' ';
 		return 0;
 
 	case IP6_REGEX_ID:
 
 		from = to;
 
-		while(from > 0 && context->logmsg_buf[from - 1] != ' ')
+		while(from > 0 && context->logmsg_buf[from] != ' ')
 		{ from--; }
 
-		context->logmsg_buf[to+1] = '\0';
+		context->logmsg_buf[to + 1] = '\0';
 
 		if (inet_pton(AF_INET6, &context->logmsg_buf[from],&context->ip_addr.ipv6) == 1) 
 		{
@@ -593,7 +593,7 @@ void * ban_thread_routine(void * args)
 
 		seg_count = shm_arg->head->segment_count / thread_count;
 		steal_count = shm_arg->head->segment_count - seg_count;
-		seg_count = ((shm_arg->head->segment_count % thread_count) < targs->thread_id) ? seg_count + 1 : seg_count;
+		seg_count = ((shm_arg->head->segment_count % thread_count) > targs->thread_id) ? seg_count + 1 : seg_count;
 		upper_seg = targs->thread_id + seg_count;
 		seg_index = targs->thread_id;
 		steal_index = 0;
@@ -648,7 +648,7 @@ void * ban_thread_routine(void * args)
 					
 					if((retval = shmrbuf_read(shm_arg, targs->logmsg_buf, LOGBUF_SIZE, seg_index++)) < 0)
 					{
-						error_msg("Thread %d : error in shmrbuf_read : segment %d : error code %d\n");
+						error_msg("Thread %d : error in shmrbuf_read : segment %d : error code %d\n", targs->thread_id, seg_index - 1, retval);
 						if(matching)
 							{ hs_free_scratch(scratch); }
 						free(targs->logmsg_buf);
@@ -678,7 +678,7 @@ void * ban_thread_routine(void * args)
 
 					if((retval = shmrbuf_read(shm_arg, targs->logmsg_buf, sizeof(targs->logmsg_buf), steal_index++)) < 0)
 					{
-						error_msg("Thread %d : error in shmrbuf_read : segment %d : error code %d\n");
+						error_msg("Thread %d : error in shmrbuf_read : segment %d : error code %d\n", targs->thread_id, steal_index - 1, retval);
 						if(matching)
 							{ hs_free_scratch(scratch); }
 						free(targs->logmsg_buf);
@@ -687,7 +687,7 @@ void * ban_thread_routine(void * args)
 						return &targs->retval;
 					}
 
-					steal_index = (steal_index == shm_arg->head->segment_count) ? 0 : steal_index + 1;
+					steal_index = (steal_index == shm_arg->head->segment_count) ? 0 : steal_index;
 
 					if(retval > 0)
 					{
@@ -1079,8 +1079,8 @@ int main(int argc, char **argv)
 		}
 		printf("Thread %d : messages received %ld : clients banned %ld\n",i,thread_args[i].rcv_count,thread_args[i].ban_count);
 	
-		total_rcv_count += thread_args[0].rcv_count;
-		total_ban_count += thread_args[0].ban_count;
+		total_rcv_count += thread_args[i].rcv_count;
+		total_ban_count += thread_args[i].ban_count;
 
 	}
 

@@ -301,10 +301,10 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
 
             arguments->shm_lines = (uint32_t) strtol(arg,NULL,10);
 
-            if(arguments->shm_line_size < 2)
+            if(arguments->shm_lines < 2)
             {
                 fprintf(stderr,"Number of lines should be at least 2\n");
-                arguments->shm_line_size = 2;
+                arguments->shm_lines = 2;
             }
             
             break;
@@ -1070,7 +1070,7 @@ int main(int argc, char ** argv) {
             exit(EXIT_FAILURE);
         }
 
-        shmrbuf_arg->lines = (args.shm_line_size) ? args.shm_line_size : SHM_NLINES;
+        shmrbuf_arg->lines = (args.shm_lines) ? args.shm_lines : SHM_NLINES;
         shmrbuf_arg->line_size = (logshort) ? ((args.domain == AF_INET) ? STR_SIZE_IP4 : STR_SIZE_IP6) : ((args.domain == AF_INET) ? LOG_BUF_SIZE_IP4 : LOG_BUF_SIZE_IP6);
         shmrbuf_arg->shm_key = args.shm_key;
         shmrbuf_arg->segment_count = thread_count;

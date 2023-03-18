@@ -212,7 +212,7 @@ int shmrbuf_write(struct shmrbuf_writer_arg_t * args, void * src, uint16_t wsize
 
         for(int i = 0; i < args->reader_count; i++){
             if(new_write_index == atomic_load(segment->first_reader + i)){
-                return IO_IPC_MEM_ERR;
+                return IO_IPC_SIZE_ERR;
             }
 
         }
