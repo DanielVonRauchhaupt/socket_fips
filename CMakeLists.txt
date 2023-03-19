@@ -18,7 +18,7 @@ find_package(Threads REQUIRED)
 
 # UDP Server Programm
 add_executable(udp_server ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/udp_server.c)
-target_compile_options(udp_server PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(udp_server PRIVATE -Wall -Wextra -Wpedantic -g -pg -02)
 target_include_directories(udp_server
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
 )
@@ -31,7 +31,7 @@ target_link_libraries(udp_server
 
 # SimpleLogstash Programm
 add_executable(simplelogstash ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplelogstash.c)
-target_compile_options(simplelogstash PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(simplelogstash PRIVATE -Wall -Wextra -Wpedantic -02 -g -pg)
 
 target_include_directories(simplelogstash
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
@@ -63,13 +63,13 @@ target_link_libraries(ebpf_blacklist ip_blacklist_skel)
 
 # SimpleFail2ban Programm
 add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)                                                         
-target_compile_options(simplefail2ban PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(simplefail2ban PRIVATE -Wall -Wextra -Wpedantic -g -pg -02)
 
 target_include_directories(simplefail2ban
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src      
-    PUBLIC /usr/include/hs          
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src            
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/list/src  
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs
+    PUBLIC /usr/include/hs
 ) 
-target_link_libraries(simplefail2ban ebpf_blacklist ip_hashtable ip_llist ip_to_str shm_ringbuf hs Threads::Threads) 
+target_link_libraries(simplefail2ban ebpf_blacklist ip_hashtable ip_llist ip_to_str shm_ringbuf hs uring Threads::Threads) 

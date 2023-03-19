@@ -4,13 +4,17 @@
 # the address range IP_PREFIX.IP_START - IP_PREFIX.IP_END
 # to the arp table, mapping to the MAC of the target
 
+
+
 TARGET_IPADDR="10.3.10.132"
-ETHER_ADDR=$(arp -a | grep $TARGET_IPADDR | cut -d ' ' -f4)
-IP_PREFIX="10.3.10"
-IP_START=151
-IP_END=190
+ping $TARGET_IPADDR -c 1 -q
+IP_PREFIX="10.3.11"
+INTERFACE=$(ip route | grep "$IP_PREFIX.*" | cut -d ' ' -f3)
+ETHER_ADDR=$(ip neigh show | grep $TARGET_IPADDR | cut -d ' ' -f5)
+IP_START=1
+IP_END=254
 
 for ((i=IP_START;i<=IP_END;i++))
 do
-    arp -n -s "$IP_PREFIX.$i" $ETHER_ADDR
+   ip neigh add "$IP_PREFIX.$i" lladdr $ETHER_ADDR dev $INTERFACE
 done 

@@ -10,7 +10,8 @@
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
 #include <sys/uio.h>
-#include <sys/uio.h>
+#include <netinet/in.h>
+#include <netinet/udp.h>
 #include <pthread.h>
 #include <errno.h>
 #include <signal.h>
@@ -681,7 +682,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
         // Check if previos io_uring submission was successful
         if(ipc_type == DISK && ((struct disk_arg_t *)targs->ipc_arg)->sqe!= NULL)
         {
-
+            ((struct disk_arg_t *)targs->ipc_arg)->sqe = NULL;
             struct disk_arg_t * disk_args = ((struct disk_arg_t *)targs->ipc_arg);
             
             if(((retval_ipc = io_uring_wait_cqe(&disk_args->ring,&disk_args->cqe)) < 0) || (disk_args->cqe->res < 0))
@@ -799,7 +800,9 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
                     memory_cleanup_listen_and_reply(&recvbuf, &sendbuf, &logstr_buf, &recv_ipbuf, &send_ipbuf);
                     return RETURN_FAIL;
                 }
-            } else {
+            } 
+            else 
+            {
                 targs->pkt_out += retval_snd;
             }
 
@@ -836,7 +839,8 @@ void * run_socket(void *args)
         error_msg("Failed to block signals\n");
     }
 
-    if ((sockfd = socket(targs->domain, SOCK_DGRAM, IPPROTO_UDP)) < 0) { 
+    if ((sockfd = socket(targs->domain, SOCK_DGRAM, IPPROTO_UDP)) < 0) 
+    { 
         error_msg("Could not open socket : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
         targs->return_code = RETURN_FAIL;
         return &targs->return_code;
@@ -907,7 +911,9 @@ void * run_socket(void *args)
             targs->return_code = RETURN_FAIL;
             return &targs->return_code;
         }  
-    } else {
+    } 
+    else 
+    {
         if(listen_and_reply(sockfd,targs))
         {
             error_msg("Listen and reply failed\n");

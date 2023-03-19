@@ -22,6 +22,7 @@
 #include <sys/sysinfo.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <liburing.h>
 
 // Local includes
 #include <ip_hashtable.h>
@@ -89,6 +90,17 @@ struct unban_targs_t{
 	uint32_t wakeup_interval;
 	uint64_t unban_count;
 	int retval;
+};
+
+
+struct file_io_t {
+	int logfile_fd;
+	off_t offset;
+    struct io_uring ring;
+    struct io_uring_sqe * sqe;
+    struct io_uring_cqe * cqe;
+	char fbuf1[100 * LOGBUF_SIZE];
+	char fbuf2[100 * LOGBUF_SIZE];
 };
 
 union ip_addr_t
@@ -510,11 +522,9 @@ int regex_match_handler(unsigned int id, unsigned long long from, unsigned long 
 
 		from = to;
 
-		while(to + 1 < LOGBUF_SIZE && context->logmsg_buf[to] != ' ')
-		{ to++; }
+		while(to + 1 < LOGBUF_SIZE && context->logmsg_buf[to] != ' ') {to++;}
 
-		while(from > 0 && context->logmsg_buf[from] != ' ')
-		{ from--; }
+		while(from > 0 && context->logmsg_buf[from-1] != ' ') {from--;}
 
 		context->logmsg_buf[to] = '\0';
 
@@ -662,6 +672,18 @@ void * ban_thread_routine(void * args)
 					if(retval > 0)
 					{
 						read = true;
+
+						// Remove newline char
+						while(--retval > 0)
+						{
+							if(targs->logmsg_buf[retval] == '\n')
+							{
+								targs->logmsg_buf[retval] = '\0';
+								break;
+							}
+						}
+
+
 						break;
 					}
 
@@ -692,6 +714,17 @@ void * ban_thread_routine(void * args)
 					if(retval > 0)
 					{
 						read = true;
+
+						// Remove newline char
+						while(--retval > 0)
+						{
+							if(targs->logmsg_buf[retval] == '\n')
+							{
+								targs->logmsg_buf[retval] = '\0';
+								break;
+							}
+						}
+
 						break;
 					}
 					
@@ -815,38 +848,76 @@ void * ban_thread_routine(void * args)
 
 }
 
-int ipc_cleanup(struct ban_targs_t * targs, uint8_t thread_count, enum ipc_type_t ipc_type)
+int main_cleanup(struct ban_targs_t ** targs, struct pthread_t ** tids)
 {
-	UNUSED(thread_count);
+	int retval;
 
-	int retval = IO_IPC_NULLPTR_ERR;
-
-	switch (ipc_type)
+	if(targs != NULL && *targs != NULL)
 	{
-	case DISK:
+
+		switch (ipc_type)
+		{
+		case DISK:
+			
+			if()
+			{
+				retval = close(((struct file_io_t *)(*targs)[0].ipc_args)->logfile_fd);
+			}
+
+			break;
+
+		case SHM:
+
+			if(targs != NULL && targs[0].ipc_args != NULL)
+			{
+				retval = shmrbuf_finalize((union shmrbuf_arg_t *)targs[0].ipc_args, SHMRBUF_READER);
+				free(targs[0].ipc_args);
+			}
+
+			break;
 		
-		if(targs != NULL && targs[0].ipc_args != NULL)
-		{
-			retval = fclose(targs[0].ipc_args);
+		default:
+			return IO_IPC_ARG_ERR;
 		}
 
-		break;
+		free(*targs);
+		free(*tids);	
+		*targs = NULL;
+		*tids = NULL;
 
-	case SHM:
-
-		if(targs != NULL && targs[0].ipc_args != NULL)
-		{
-			retval = shmrbuf_finalize((union shmrbuf_arg_t *)targs[0].ipc_args, SHMRBUF_READER);
-			free(targs[0].ipc_args);
-		}
-
-		break;
-	
-	default:
-		return IO_IPC_ARG_ERR;
 	}
 
-	return retval;
+	
+
+
+	if((retval = ebpf_cleanup(interface,true)) < 0)
+	{
+		fprintf(stderr,"ebpf cleanup failed : error code %d\n", retval);
+	}
+
+	if(banned_list != NULL)
+	{
+		if((retval = ip_llist_destroy(&banned_list)) != IP_LLIST_SUCCESS)
+		{
+			fprintf(stderr, "ip_llist_destroy failed with error code %d\n", retval);
+		}
+	}
+	
+	if(htable != NULL)
+	{
+		if((retval = ip_hashtable_destroy(&htable)) < 0)
+		{
+			fprintf(stderr, "ip_hashtable_destroy failed with error code %d\n", retval);
+		}
+	}
+
+	if(database != NULL)
+	{
+		if((retval = hs_free_database(database)) != HS_SUCCESS)
+		{
+			fprintf(stderr, "hs_free_database failed with error code %d\n", retval);
+		}
+	}	
 
 }
 
@@ -854,15 +925,18 @@ int ipc_cleanup(struct ban_targs_t * targs, uint8_t thread_count, enum ipc_type_
 int main(int argc, char **argv)
 {
 
+	// Avoid unused variable warning
 	UNUSED(file_port_blacklist);
 	UNUSED(file_port_blacklist_count);
 	UNUSED(file_blacklist_ipv6_subnet);
 	UNUSED(file_blacklist_ipv6_subnetcache);
 	UNUSED(file_verdict);
 	
+	// Variables
     struct arguments args;
 	struct ban_targs_t * thread_args;
 	struct unban_targs_t unban_targs = {.unban_count = 0,.wakeup_interval=TIMEOUT};
+	struct file_io_t * file_io_args;
 	struct shmrbuf_reader_arg_t * rbuf_arg;
 	hs_platform_info_t * platform_info;
 	hs_compile_error_t * compile_error;
@@ -961,18 +1035,38 @@ int main(int argc, char **argv)
 	switch (ipc_type)
 	{
 	case DISK:
-		
-		if((thread_args[0].ipc_args = fopen(logfile,"r")) == NULL)
+
+		if((file_io_args = (struct file_io_t *) calloc(sizeof(struct file_io_t), 1)) == NULL)
 		{
-			perror("fopen failed for logfile");
-			ip_hashtable_destroy(&htable);
-			ip_llist_destroy(&banned_list);
-			free(thread_ids);
-			free(thread_args);
-			hs_free_database(database);
-			ebpf_cleanup(interface,true);
-			exit(EXIT_FAILURE);
+			perror("calloc failed");
 		}
+
+		else if((file_io_args->logfile_fd = open(logfile, O_RDONLY, 0644)) == -1)
+		{
+			perror("open failed");
+			free(file_io_args);
+		}
+
+		else if(io_uring_queue_init(2, &file_io_args->ring, 0) == -1)
+		{
+			perror("ic_uring_queue_init failed");
+			close(file_io_args->logfile_fd);
+			free(file_io_args);
+		}
+
+		else 
+		{
+			thread_args[0].ipc_args = (void*) file_io_args;
+			break;
+		}
+
+		ip_hashtable_destroy(&htable);
+		ip_llist_destroy(&banned_list);
+		free(thread_ids);
+		free(thread_args);
+		hs_free_database(database);
+		ebpf_cleanup(interface,true);
+		exit(EXIT_FAILURE);
 
 		break;
 	
@@ -1090,36 +1184,5 @@ int main(int argc, char **argv)
 	}
 
 	printf("Total messages received %ld : total clients banned %ld : total clients unbanned %ld\n",total_rcv_count,total_ban_count,unban_targs.unban_count);
-
-    if((retval = ebpf_cleanup(interface,true)) < 0)
-	{
-		fprintf(stderr,"ebpf cleanup failed : error code %d\n", retval);
-	}
-    
-	if((retval = ipc_cleanup(thread_args, thread_count, ipc_type)) != IO_IPC_SUCCESS)
-	{
-		fprintf(stderr,"ipc_cleanup failed with error code : %d\n", retval);
-	}
-	
-	if((retval = ip_llist_destroy(&banned_list)) != IP_LLIST_SUCCESS)
-	{
-		fprintf(stderr, "ip_llist_destroy failed with error code %d\n", retval);
-	}
-
-	if((retval = ip_hashtable_destroy(&htable)) < 0)
-	{
-		fprintf(stderr, "ip_hashtable_destroy failed with error code %d\n", retval);
-	}
-
-	if(matching)
-	{
-		if((retval = hs_free_database(database)) != HS_SUCCESS)
-		{
-			fprintf(stderr, "hs_free_database failed with error code %d\n", retval);
-		}
-	}	
-
-	free(thread_ids);
-	free(thread_args);	
 
 }	
