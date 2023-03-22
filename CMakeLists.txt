@@ -43,15 +43,6 @@ target_link_libraries(simplelogstash
     PUBLIC uring
 )
 
-#liburing test
-add_executable(uring_test ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/uring_test.c)
-target_compile_options(uring_test PRIVATE -Wall -Wextra -Wpedantic)
-
-target_link_libraries(uring_test 
-    PUBLIC uring
-)
-
-
 # BPF Setup
 set(BPFOBJECT_BPFTOOL_EXE ${CMAKE_CURRENT_BINARY_DIR}/external/bpftool/bootstrap/bpftool)
 set(BPFOBJECT_VMLINUX_H ${CMAKE_CURRENT_SOURCE_DIR}/external/vmlinux/vmlinux.h)

@@ -29,6 +29,7 @@
 #include <ip_llist.h>
 #include <io_ipc.h>
 #include <blacklist_common.h>
+#include <uring_getline.h>
 #include "ip_blacklist.skel.h"
 
 // Default configuration

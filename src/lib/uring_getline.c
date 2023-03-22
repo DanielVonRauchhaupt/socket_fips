@@ -1,28 +1,4 @@
-#include <stdlib.h>
-#include <fcntl.h>
-#include <liburing.h>
-#include <stdio.h>
-#include <time.h>
-
-#define LOGBUF_SIZE 256 * 100
-
-#define DEFAULT_LOG "logmsg.log"
-#define OPEN_FLAGS O_RDONLY
-#define OPEN_PERM 0644
-
-
-struct file_io_t {
-	int logfile_fd;
-	off_t offset;
-    struct io_uring ring;
-    bool scnd_buf;
-    struct io_uring_sqe * sqe;
-    struct io_uring_cqe * cqe;
-    uint32_t offset1, offset2;
-    uint32_t rsize1, rsize2;
-	char fbuf1[LOGBUF_SIZE];
-	char fbuf2[LOGBUF_SIZE];
-};
+#include "include/uring_getline.h"
 
 static inline char * _rdline(u_int32_t * offset, uint32_t * rsize, char * buf, uint32_t * lsize)
 {
@@ -32,6 +8,8 @@ static inline char * _rdline(u_int32_t * offset, uint32_t * rsize, char * buf, u
     {
         if(buf[(*offset)++] == '\n') {break;}
     }
+
+    while(buf[start] == '\0' && start < *offset) {start++;}
 
     *lsize = *offset - start;
 
@@ -64,18 +42,25 @@ static inline bool _rdawait(struct file_io_t * fio_arg, char * buf, uint32_t buf
         return false;
     }
 
-    *size = fio_arg->cqe->res;
-
-    while(*size > 0)
-    {
-        if(buf[((*size)--) - 1] == '\n') {break;}
-    } 
-
-    fio_arg->offset += *size;
-
+    uint32_t rsize = (uint32_t) fio_arg->cqe->res;
     io_uring_cqe_seen(&fio_arg->ring, fio_arg->cqe);
 
-    return (uint32_t) fio_arg->cqe->res == bufsize;
+    if((*size = rsize))
+    {
+
+        while(*size > 0)
+        {
+            if(buf[((*size)) - 1] == '\n') {break;}
+            (*size)--;
+        } 
+
+        fio_arg->offset += *size;
+
+        return rsize == bufsize;
+
+    }
+
+    return false;
 }
 
 char * uring_getline(struct file_io_t * fio_arg, uint32_t * lsize)
@@ -146,9 +131,9 @@ char * uring_getline(struct file_io_t * fio_arg, uint32_t * lsize)
         {
             _rdstart(fio_arg, fio_arg->fbuf1, sizeof(fio_arg->fbuf1));
 
-            if(_rdawait(fio_arg, fio_arg->fbuf1, sizeof(fio_arg->fbuf1), &fio_arg->rsize2))
+            if(_rdawait(fio_arg, fio_arg->fbuf1, sizeof(fio_arg->fbuf1), &fio_arg->rsize1))
             {
-                _rdstart(fio_arg, fio_arg->fbuf1, sizeof(fio_arg->fbuf1));
+                _rdstart(fio_arg, fio_arg->fbuf2, sizeof(fio_arg->fbuf2));
             }
 
             if(fio_arg->rsize1 > 0)
@@ -168,50 +153,5 @@ char * uring_getline(struct file_io_t * fio_arg, uint32_t * lsize)
 
         return NULL;
     }
-
-}
-
-
-int main(void)
-{
-
-    struct file_io_t * io_arg;
-    char * line;
-    uint32_t line_size = 0;
-    struct timespec ts = {.tv_nsec=0,.tv_sec=1};
-
-    if((io_arg = calloc(sizeof(struct file_io_t), 1)) == NULL)
-    {
-        perror("calloc");
-        exit(EXIT_FAILURE);
-    }
-
-    if((io_arg->logfile_fd = open(DEFAULT_LOG, OPEN_FLAGS, OPEN_PERM)) == -1)
-    {
-        perror("open");
-        exit(EXIT_FAILURE);
-    }
-
-    if(io_uring_queue_init(2, &io_arg->ring, 0) < 0)
-    {
-        perror("io_uring_queue_init failed");
-        exit(EXIT_FAILURE);
-    }
-
-    while(true)
-    {
-        if((line = uring_getline(io_arg, &line_size)) != NULL)
-        {
-            printf("line : %s, size : %d\n", line, line_size);
-        }
-
-        else
-        {
-            nanosleep(&ts,NULL);
-        }
-
-    }
-
-
 
 }
