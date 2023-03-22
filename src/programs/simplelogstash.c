@@ -28,7 +28,7 @@
 
 // Global variables
 static char * logfile = DEFAULT_LOG;
-static char * shmkey = NULL;
+static char * shmkey = "udpsvr.log";
 
 static uint64_t rcv_count = 0;
 static uint64_t write_count = 0;
@@ -43,7 +43,7 @@ struct io_buf_t
 
 static struct argp_option options[] = 
 {
-    {"filename", 'f', "FILENAME", 0, "Specify the logfile",0},
+    {"file", 'f', "FILEPATH", 0, "Specify the logfile",0},
     {0}
 };
 
@@ -60,7 +60,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
             if (state->arg_num == 0) 
             {
                 shmkey = arg;
-            } else {
+            } 
+            else 
+            {
                 argp_usage(state);
             }
             break;
@@ -187,7 +189,7 @@ int write_routine(void){
 
     if((retval = shmrbuf_init((union shmrbuf_arg_t *)&rbuf_arg, SHMRBUF_READER)) != IO_IPC_SUCCESS)
     {
-        if(retval > 0) {perror("shmrbuf_init");}
+        if(retval > 0) {perror("shmrbuf_init failed");}
         else { fprintf(stderr, "shmrbuf_init failed with error code %d\n", retval);}
         io_uring_queue_exit(&ring);
         close(logfile_fd);
@@ -230,7 +232,7 @@ int write_routine(void){
             rcv_count += read_index;
 
             if((sqe = io_uring_get_sqe(&ring)) == NULL){
-                perror("io_uring_get_sqe");
+                perror("io_uring_get_sqe failed");
                 error = true;
             }
 
@@ -247,7 +249,7 @@ int write_routine(void){
 
                 if(io_uring_submit(&ring) == -1)
                 {
-                    perror("io_uring_submit");
+                    perror("io_uring_submit failed");
                     error = true;
                 }
                 else 
@@ -272,7 +274,7 @@ int write_routine(void){
 
     if((retval = shmrbuf_finalize((union shmrbuf_arg_t *)&rbuf_arg, SHMRBUF_READER)) != IO_IPC_SUCCESS)
     {
-        fprintf(stderr,"shmrbuf_finalize failed with error code %d", retval);
+        fprintf(stderr,"shmrbuf_finalize failed with error code %d\n", retval);
         error = true;
     }
 
@@ -297,7 +299,7 @@ int main(int argc, char **argv) {
 
     if(block_signals() == -1)
     {
-        fprintf(stderr, "block signals failed");
+        fprintf(stderr, "block signals failed\n");
     }
 
     if(signal(SIGINT,sig_handler) == SIG_ERR || signal(SIGTERM,sig_handler) == SIG_ERR)
@@ -308,10 +310,10 @@ int main(int argc, char **argv) {
 
     if(write_routine() == -1)
     {
-        fprintf(stderr, "write_routine failed");
+        fprintf(stderr, "write_routine failed\n");
         exit(EXIT_FAILURE);
     }
 
-    printf("Total messages read : %ld, total messages written : %ld\n", rcv_count, write_count);
+    printf("\nTotal messages read : %ld, total messages written : %ld\n", rcv_count, write_count);
     exit(EXIT_SUCCESS);    
 }

@@ -933,7 +933,7 @@ int main(int argc, char **argv)
 	UNUSED(file_verdict);
 	
 	// Variables
-    struct arguments args;
+    struct arguments args = {.ipc_set=false};
 	struct ban_targs_t * thread_args;
 	struct unban_targs_t unban_targs = {.unban_count = 0,.wakeup_interval=TIMEOUT};
 	struct file_io_t * file_io_args;
