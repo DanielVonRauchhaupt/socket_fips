@@ -532,10 +532,11 @@ int regex_match_handler(unsigned int id, unsigned long long from, unsigned long 
 
 		from = to;
 
-		while(from > 0 && context->logmsg_buf[from] != ' ')
-		{ from--; }
+		while(to + 1 < LOGBUF_SIZE && context->logmsg_buf[to] != ' ') {to++;}
 
-		context->logmsg_buf[to + 1] = '\0';
+		while(from > 0 && context->logmsg_buf[from-1] != ' ') { from--; }
+
+		context->logmsg_buf[to] = '\0';
 
 		if (inet_pton(AF_INET6, &context->logmsg_buf[from],&context->ip_addr.ipv6) == 1) 
 		{

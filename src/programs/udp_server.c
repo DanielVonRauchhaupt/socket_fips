@@ -615,12 +615,12 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
     {
     case AF_INET:
         ip_bufsize = sizeof(struct sockaddr_in);
-        logbuf_size = LOG_BUF_SIZE_IP4;
+        logbuf_size = (logshort) ? (STR_SIZE_IP4 + 1) : LOG_BUF_SIZE_IP4;
         break;
     
     case AF_INET6:
         ip_bufsize = sizeof(struct sockaddr_in6);
-        logbuf_size = LOG_BUF_SIZE_IP6;
+        logbuf_size = (logshort) ? (STR_SIZE_IP6 + 1) : LOG_BUF_SIZE_IP6;
         break;
 
     default:
@@ -1077,7 +1077,7 @@ int main(int argc, char ** argv) {
         }
 
         shmrbuf_arg->lines = (args.shm_lines) ? args.shm_lines : SHM_NLINES;
-        shmrbuf_arg->line_size = (logshort) ? ((args.domain == AF_INET) ? STR_SIZE_IP4 : STR_SIZE_IP6) : ((args.domain == AF_INET) ? LOG_BUF_SIZE_IP4 : LOG_BUF_SIZE_IP6);
+        shmrbuf_arg->line_size = (logshort) ? ((args.domain == AF_INET) ? STR_SIZE_IP4+1 : STR_SIZE_IP6+1) : ((args.domain == AF_INET) ? LOG_BUF_SIZE_IP4 : LOG_BUF_SIZE_IP6);
         shmrbuf_arg->shm_key = args.shm_key;
         shmrbuf_arg->segment_count = thread_count;
         shmrbuf_arg->reader_count = (args.shm_reader_count) ? args.shm_reader_count : NREADERS;
