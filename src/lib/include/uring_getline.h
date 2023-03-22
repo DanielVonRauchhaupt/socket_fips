@@ -1,4 +1,5 @@
-
+#ifndef _URING_GETLINE_H
+#define _URING_GETLINE_H
 #include <stdlib.h>
 #include <fcntl.h>
 #include <liburing.h>
@@ -24,3 +25,5 @@ struct file_io_t {
 };
 
 int uring_getline(struct file_io_t * fio_arg, char ** lineptr);
+
+#endif
