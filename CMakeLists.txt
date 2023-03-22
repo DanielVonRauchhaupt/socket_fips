@@ -18,7 +18,7 @@ find_package(Threads REQUIRED)
 
 # UDP Server Programm
 add_executable(udp_server ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/udp_server.c)
-target_compile_options(udp_server PRIVATE -Wall -Wextra -Wpedantic -g -pg -02)
+target_compile_options(udp_server PUBLIC -Wall -Wextra -Wpedantic)
 target_include_directories(udp_server
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
 )
@@ -31,7 +31,7 @@ target_link_libraries(udp_server
 
 # SimpleLogstash Programm
 add_executable(simplelogstash ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplelogstash.c)
-target_compile_options(simplelogstash PRIVATE -Wall -Wextra -Wpedantic -02 -g -pg)
+target_compile_options(simplelogstash PRIVATE -Wall -Wextra -Wpedantic)
 
 target_include_directories(simplelogstash
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
@@ -42,6 +42,15 @@ target_link_libraries(simplelogstash
     PUBLIC shm_ringbuf
     PUBLIC uring
 )
+
+#liburing test
+add_executable(uring_test ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/uring_test.c)
+target_compile_options(uring_test PRIVATE -Wall -Wextra -Wpedantic)
+
+target_link_libraries(uring_test 
+    PUBLIC uring
+)
+
 
 # BPF Setup
 set(BPFOBJECT_BPFTOOL_EXE ${CMAKE_CURRENT_BINARY_DIR}/external/bpftool/bootstrap/bpftool)
@@ -63,7 +72,7 @@ target_link_libraries(ebpf_blacklist ip_blacklist_skel)
 
 # SimpleFail2ban Programm
 add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)                                                         
-target_compile_options(simplefail2ban PRIVATE -Wall -Wextra -Wpedantic -g -pg -02)
+target_compile_options(simplefail2ban PRIVATE -Wall -Wextra -Wpedantic)
 
 target_include_directories(simplefail2ban
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src            
@@ -72,4 +81,13 @@ target_include_directories(simplefail2ban
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs
     PUBLIC /usr/include/hs
 ) 
-target_link_libraries(simplefail2ban ebpf_blacklist ip_hashtable ip_llist ip_to_str shm_ringbuf hs uring Threads::Threads) 
+
+target_link_libraries(simplefail2ban
+    PUBLIC ebpf_blacklist
+    PUBLIC ip_hashtable
+    PUBLIC ip_llist
+    PUBLIC ip_to_str
+    PUBLIC shm_ringbuf
+    PUBLIC hs
+    PUBLIC uring
+    PUBLIC Threads::Threads) 

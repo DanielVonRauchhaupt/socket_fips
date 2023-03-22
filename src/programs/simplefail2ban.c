@@ -848,36 +848,44 @@ void * ban_thread_routine(void * args)
 
 }
 
-int main_cleanup(struct ban_targs_t ** targs, struct pthread_t ** tids)
+bool main_cleanup(struct ban_targs_t ** targs, pthread_t ** tids)
 {
 	int retval;
+	bool error = false;
 
-	if(targs != NULL && *targs != NULL)
+	if(targs != NULL && *targs != NULL && (*targs)[0].ipc_args != NULL)
 	{
 
 		switch (ipc_type)
 		{
 		case DISK:
+
+			io_uring_queue_exit(&((struct file_io_t *)(*targs)[0].ipc_args)->ring);
 			
-			if()
+			if(close(((struct file_io_t *)(*targs)[0].ipc_args)->logfile_fd) < 0)
 			{
-				retval = close(((struct file_io_t *)(*targs)[0].ipc_args)->logfile_fd);
+				perror("close");
+				error = true;
 			}
+
+			free((*targs)[0].ipc_args);
 
 			break;
 
 		case SHM:
 
-			if(targs != NULL && targs[0].ipc_args != NULL)
+			if((retval = shmrbuf_finalize((union shmrbuf_arg_t *)(*targs)[0].ipc_args, SHMRBUF_READER)) != IO_IPC_SUCCESS)
 			{
-				retval = shmrbuf_finalize((union shmrbuf_arg_t *)targs[0].ipc_args, SHMRBUF_READER);
-				free(targs[0].ipc_args);
+				fprintf(stderr, "shmrbuf_finalize failed with error code: %d\n", retval);
+				error = true;
 			}
+
+			free((*targs)[0].ipc_args);
 
 			break;
 		
 		default:
-			return IO_IPC_ARG_ERR;
+			break;
 		}
 
 		free(*targs);
@@ -887,12 +895,10 @@ int main_cleanup(struct ban_targs_t ** targs, struct pthread_t ** tids)
 
 	}
 
-	
-
-
 	if((retval = ebpf_cleanup(interface,true)) < 0)
 	{
 		fprintf(stderr,"ebpf cleanup failed : error code %d\n", retval);
+		error = true;
 	}
 
 	if(banned_list != NULL)
@@ -900,6 +906,7 @@ int main_cleanup(struct ban_targs_t ** targs, struct pthread_t ** tids)
 		if((retval = ip_llist_destroy(&banned_list)) != IP_LLIST_SUCCESS)
 		{
 			fprintf(stderr, "ip_llist_destroy failed with error code %d\n", retval);
+			error = true;
 		}
 	}
 	
@@ -908,6 +915,7 @@ int main_cleanup(struct ban_targs_t ** targs, struct pthread_t ** tids)
 		if((retval = ip_hashtable_destroy(&htable)) < 0)
 		{
 			fprintf(stderr, "ip_hashtable_destroy failed with error code %d\n", retval);
+			error = true;
 		}
 	}
 
@@ -916,8 +924,12 @@ int main_cleanup(struct ban_targs_t ** targs, struct pthread_t ** tids)
 		if((retval = hs_free_database(database)) != HS_SUCCESS)
 		{
 			fprintf(stderr, "hs_free_database failed with error code %d\n", retval);
+			error = true;
+
 		}
 	}	
+
+	return error;
 
 }
 
@@ -947,7 +959,7 @@ int main(int argc, char **argv)
 
 	if (retval == ARGP_ERR_UNKNOWN)
 	{
-		return retval;
+		exit(EXIT_FAILURE);
 	}
 		
 	if(thread_count > 1 && ipc_type == DISK)
@@ -992,13 +1004,14 @@ int main(int argc, char **argv)
     if(ebpf_setup(interface,false))
 	{
 		fprintf(stderr,"ebpf setup failed\n");
+		main_cleanup(&thread_args, &thread_ids);
 		exit(EXIT_FAILURE);
 	}
 
 	if((ipv4_ebpf_map = open_bpf_map(file_blacklist_ipv4)) == RETURN_FAIL || (ipv6_ebpf_map = open_bpf_map(file_blacklist_ipv6)) == RETURN_FAIL)
 	{
 		fprintf(stderr,"ERR: Failed to open bpf map  : %s\n",strerror(errno));
-		ebpf_cleanup(interface,true);
+		main_cleanup(&thread_args, &thread_ids);
 		exit(EXIT_FAILURE);
 	}
 
@@ -1006,29 +1019,21 @@ int main(int argc, char **argv)
 	   (thread_args = (struct ban_targs_t *) calloc(sizeof(struct ban_targs_t),thread_count)) == NULL)
 	{
 		perror("Calloc failed");
-		hs_free_database(database);
-		ebpf_cleanup(interface,true);
+		main_cleanup(&thread_args, &thread_ids);
 		exit(EXIT_FAILURE);
 	}
 
 	if((retval = ip_hashtable_init(&htable)) < 0)
 	{
 		fprintf(stderr,"ip_hashtable_init failed with error code %d\n", retval);
-		free(thread_ids);
-		free(thread_args);
-		hs_free_database(database);
-		ebpf_cleanup(interface,true);
+		main_cleanup(&thread_args, &thread_ids);
 		exit(EXIT_FAILURE);
 	}
 	
 	if((retval = ip_llist_init(&banned_list)) < 0)
 	{
 		fprintf(stderr,"ip_llist_init failed with error code %d\n", retval);
-		ip_hashtable_destroy(&htable);
-		free(thread_ids);
-		free(thread_args);
-		hs_free_database(database);
-		ebpf_cleanup(interface,true);
+		main_cleanup(&thread_args, &thread_ids);
 		exit(EXIT_FAILURE);
 	}
 
@@ -1044,14 +1049,11 @@ int main(int argc, char **argv)
 		else if((file_io_args->logfile_fd = open(logfile, O_RDONLY, 0644)) == -1)
 		{
 			perror("open failed");
-			free(file_io_args);
 		}
 
 		else if(io_uring_queue_init(2, &file_io_args->ring, 0) == -1)
 		{
 			perror("ic_uring_queue_init failed");
-			close(file_io_args->logfile_fd);
-			free(file_io_args);
 		}
 
 		else 
@@ -1060,12 +1062,7 @@ int main(int argc, char **argv)
 			break;
 		}
 
-		ip_hashtable_destroy(&htable);
-		ip_llist_destroy(&banned_list);
-		free(thread_ids);
-		free(thread_args);
-		hs_free_database(database);
-		ebpf_cleanup(interface,true);
+		main_cleanup(&thread_args, &thread_ids);
 		exit(EXIT_FAILURE);
 
 		break;
@@ -1075,12 +1072,7 @@ int main(int argc, char **argv)
 		if((rbuf_arg = (struct shmrbuf_reader_arg_t *)calloc(sizeof(struct shmrbuf_reader_arg_t),1)) == NULL)
 		{
 			perror("calloc failed");
-			ip_llist_destroy(&banned_list);
-			ip_hashtable_destroy(&htable);
-			free(thread_ids);
-			free(thread_args);
-			hs_free_database(database);
-			ebpf_cleanup(interface,true);
+			main_cleanup(&thread_args, &thread_ids);
 			exit(EXIT_FAILURE);
 		}
 
@@ -1095,13 +1087,7 @@ int main(int argc, char **argv)
 			else {
 				fprintf(stderr,"shm_rbuf_init failed : error code %d\n",retval);
 			}
-			ip_llist_destroy(&banned_list);
-			ip_hashtable_destroy(&htable);
-			free(rbuf_arg);
-			free(thread_ids);
-			free(thread_args);
-			hs_free_database(database);
-			ebpf_cleanup(interface,true);
+			main_cleanup(&thread_args, &thread_ids);
 			exit(EXIT_FAILURE);
 		}
 
@@ -1119,13 +1105,7 @@ int main(int argc, char **argv)
 	if(pthread_create(&thread_ids[0],NULL,unban_thread_routine,&unban_targs))
 	{
 		perror("pthread create failed for unban thread");
-		ipc_cleanup(thread_args, thread_count, ipc_type);
-		ip_hashtable_destroy(&htable);
-		ip_llist_destroy(&banned_list);
-		free(thread_args);
-		free(thread_ids);
-		hs_free_database(database);
-		ebpf_cleanup(interface, true);
+		main_cleanup(&thread_args, &thread_ids);
 		exit(EXIT_FAILURE);
 	} 
 	
@@ -1184,5 +1164,12 @@ int main(int argc, char **argv)
 	}
 
 	printf("Total messages received %ld : total clients banned %ld : total clients unbanned %ld\n",total_rcv_count,total_ban_count,unban_targs.unban_count);
+
+	if(main_cleanup(&thread_args, &thread_ids))
+	{
+		exit(EXIT_FAILURE);
+	}
+
+	exit(EXIT_SUCCESS);
 
 }	
