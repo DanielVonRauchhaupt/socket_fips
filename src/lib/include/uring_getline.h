@@ -5,8 +5,10 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <io_ipc.h>
 
-#define LOGBUF_SIZE 256 * 100
+#define BUFSIZE 1024
+#define MAX_LINE 65535
 
 struct file_io_t {
 	int logfile_fd;
@@ -17,8 +19,8 @@ struct file_io_t {
     struct io_uring_cqe * cqe;
     uint32_t offset1, offset2;
     uint32_t rsize1, rsize2;
-	char fbuf1[LOGBUF_SIZE];
-	char fbuf2[LOGBUF_SIZE];
+	char fbuf1[BUFSIZE];
+	char fbuf2[BUFSIZE];
 };
 
-char * uring_getline(struct file_io_t * fio_arg, uint32_t * lsize);
+int uring_getline(struct file_io_t * fio_arg, char ** lineptr);

@@ -93,17 +93,6 @@ struct unban_targs_t{
 	int retval;
 };
 
-
-struct file_io_t {
-	int logfile_fd;
-	off_t offset;
-    struct io_uring ring;
-    struct io_uring_sqe * sqe;
-    struct io_uring_cqe * cqe;
-	char fbuf1[100 * LOGBUF_SIZE];
-	char fbuf2[100 * LOGBUF_SIZE];
-};
-
 union ip_addr_t
 {
 	uint32_t ipv4;
@@ -573,18 +562,11 @@ void * ban_thread_routine(void * args)
 	hs_scratch_t * scratch = NULL; 
 	struct timespec tspec = {.tv_sec=0,.tv_nsec=targs->wakeup_interval};
 	uint8_t i, seg_index, steal_index, seg_count, steal_count, upper_seg;
-	size_t size = LOGBUF_SIZE - 1;
-	ssize_t retval;
 	char strerror_buf[64];
 	bool read;
-	int nr_cpus = libbpf_num_possible_cpus();
+	int64_t retval;
 
-	if((targs->logmsg_buf = calloc(sizeof(char),LOGBUF_SIZE)) == NULL)
-	{
-		error_msg("calloc failed : %s\n",strerror_r(errno, targs->strerror_buf, sizeof(targs->strerror_buf)));
-		targs->retval = EXIT_FAIL;
-        return &targs->retval;
-	}
+	int nr_cpus = libbpf_num_possible_cpus();
 
 	switch (ipc_type)
 	{
@@ -593,6 +575,13 @@ void * ban_thread_routine(void * args)
 		break;
 
 	case SHM:
+
+		if((targs->logmsg_buf = calloc(sizeof(char),LOGBUF_SIZE)) == NULL)
+		{
+			error_msg("calloc failed : %s\n",strerror_r(errno, targs->strerror_buf, sizeof(targs->strerror_buf)));
+			targs->retval = EXIT_FAIL;
+			return &targs->retval;
+		}
 
 		shm_arg = (struct shmrbuf_reader_arg_t *) targs->ipc_args;
 
@@ -613,8 +602,6 @@ void * ban_thread_routine(void * args)
 
 	default:
 		error_msg("invalid ipc type : %d\n",ipc_type);
-		free(targs->logmsg_buf);
-		targs->logmsg_buf = NULL;
 		targs->retval = EXIT_FAIL;
         return &targs->retval;
 	}
@@ -629,7 +616,7 @@ void * ban_thread_routine(void * args)
 		if (hs_alloc_scratch(database, &scratch) != HS_SUCCESS)
 		{
 			error_msg("hyperscan scratch space allocation failed\n");
-			free(targs->logmsg_buf);
+			if(ipc_type != DISK) {free(targs->logmsg_buf);}
 			targs->logmsg_buf = NULL;
 			targs->retval = EXIT_FAIL;
 			return &targs->retval;
@@ -645,7 +632,7 @@ void * ban_thread_routine(void * args)
 		{
 		case DISK:
 				
-			if((retval = getline(&targs->logmsg_buf, &size, (FILE *)targs->ipc_args)) > 0){
+			if((retval = uring_getline((struct file_io_t *)targs->ipc_args, &targs->logmsg_buf)) > 0){
 				read = true;
 				targs->logmsg_buf[retval-1] = '\0';
 			}
@@ -841,8 +828,8 @@ void * ban_thread_routine(void * args)
 
 	}
 
-	hs_free_scratch(scratch);
-	free(targs->logmsg_buf);
+	if(matching){hs_free_scratch(scratch);}
+	if(ipc_type != DISK) {free(targs->logmsg_buf);}
 	targs->logmsg_buf = NULL;
 	targs->retval = EXIT_SUCCESS;
 	return &targs->retval;

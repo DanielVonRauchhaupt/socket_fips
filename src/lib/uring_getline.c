@@ -1,8 +1,8 @@
 #include "include/uring_getline.h"
 
-static inline char * _rdline(u_int32_t * offset, uint32_t * rsize, char * buf, uint32_t * lsize)
+static inline int _rdline(u_int32_t * offset, uint32_t * rsize, char * buf, char ** lineptr)
 {
-    uint32_t start = *offset;
+    uint32_t lsize, start = *offset;
 
     while(*offset < *rsize)
     {
@@ -11,15 +11,16 @@ static inline char * _rdline(u_int32_t * offset, uint32_t * rsize, char * buf, u
 
     while(buf[start] == '\0' && start < *offset) {start++;}
 
-    *lsize = *offset - start;
+    *lineptr = &buf[start];
+    lsize = *offset - start;
 
     if(*offset == *rsize)
     {
         *offset = 0;
         *rsize = 0;
     }
-
-    return &buf[start];
+   
+    return lsize;
 }
 
 static inline void _rdstart(struct file_io_t * fio_arg, char * buf, uint32_t bufsize)
@@ -63,19 +64,19 @@ static inline bool _rdawait(struct file_io_t * fio_arg, char * buf, uint32_t buf
     return false;
 }
 
-char * uring_getline(struct file_io_t * fio_arg, uint32_t * lsize)
+int uring_getline(struct file_io_t * fio_arg, char ** lineptr)
 {
 
-    if(fio_arg == NULL)
+    if(fio_arg == NULL || lineptr == NULL)
     {
-        return NULL;
+        return IO_IPC_NULLPTR_ERR;
     }
 
     if(fio_arg->scnd_buf)
     {
         if(fio_arg->rsize2 > 0)
         {
-            return _rdline(&fio_arg->offset2, &fio_arg->rsize2, fio_arg->fbuf2, lsize);
+            return _rdline(&fio_arg->offset2, &fio_arg->rsize2, fio_arg->fbuf2, lineptr);
         }
 
         if(fio_arg->sqe != NULL)
@@ -96,27 +97,27 @@ char * uring_getline(struct file_io_t * fio_arg, uint32_t * lsize)
 
             if(fio_arg->rsize2 > 0)
             {
-                return _rdline(&fio_arg->offset2, &fio_arg->rsize2, fio_arg->fbuf2, lsize);
+                return _rdline(&fio_arg->offset2, &fio_arg->rsize2, fio_arg->fbuf2, lineptr);
             }
 
-            return NULL;
+            return 0;
 
         }
 
         if(fio_arg->rsize1 > 0)
         {
             fio_arg->scnd_buf = false;
-            return _rdline(&fio_arg->offset1, &fio_arg->rsize1, fio_arg->fbuf1, lsize);
+            return _rdline(&fio_arg->offset1, &fio_arg->rsize1, fio_arg->fbuf1, lineptr);
         }
 
-        return NULL;
+        return 0;
 
     }
     else 
     {
         if(fio_arg->rsize1 > 0)
         {
-            return _rdline(&fio_arg->offset1, &fio_arg->rsize1, fio_arg->fbuf1, lsize);
+            return _rdline(&fio_arg->offset1, &fio_arg->rsize1, fio_arg->fbuf1, lineptr);
         }
 
         if(fio_arg->sqe != NULL)
@@ -138,20 +139,20 @@ char * uring_getline(struct file_io_t * fio_arg, uint32_t * lsize)
 
             if(fio_arg->rsize1 > 0)
             {
-                return _rdline(&fio_arg->offset1, &fio_arg->rsize1, fio_arg->fbuf1, lsize);
+                return _rdline(&fio_arg->offset1, &fio_arg->rsize1, fio_arg->fbuf1, lineptr);
             }
 
-            return NULL;
+            return 0;
 
         }
 
         if(fio_arg->rsize2 > 0)
         {
             fio_arg->scnd_buf = true;
-            return _rdline(&fio_arg->offset2, &fio_arg->rsize2, fio_arg->fbuf2, lsize);
+            return _rdline(&fio_arg->offset2, &fio_arg->rsize2, fio_arg->fbuf2, lineptr);
         }
 
-        return NULL;
+        return 0;
     }
 
 }

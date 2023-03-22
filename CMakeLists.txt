@@ -75,6 +75,7 @@ target_include_directories(simplefail2ban
 
 target_link_libraries(simplefail2ban
     PUBLIC ebpf_blacklist
+    PUBLIC uring_getline
     PUBLIC ip_hashtable
     PUBLIC ip_llist
     PUBLIC ip_to_str
