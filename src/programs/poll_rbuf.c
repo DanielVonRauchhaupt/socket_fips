@@ -6,18 +6,34 @@
 #include <argp.h>
 #include <math.h>
 
-#define MIN(a,b)((a > b) ? b : a)
-#define MAX(a,b)((a > b) ? a : b)
-
+// config
 #define DEFAULT_KEY "udpsvr.log"
+#define DEFAULT_TIMEOUT 1
+
+// helpers
+#define MAX(a,b)((a > b) ? a : b)
+#define MIN(a,b)((a > b) ? b : a)
+
+// global variables
+static char * shm_key = DEFAULT_KEY;
+static bool header = false;
+static bool segments = false;
+static bool repeat = false;
+static struct timespec timeout = {.tv_nsec=0, .tv_sec=DEFAULT_TIMEOUT};
 
 const char *argp_program_version = "poll_rbuf 0.0";
+static char args_doc[] = "SHM_KEY";
 
-static char args_doc[] = "PATH";
+static const char argp_program_doc[] = 
+"poll_rbuf.\n"
+"\n"
+"Utility for viewing status information of a shmrbuf.h ringbuffer";
 
 static const struct argp_option options[] = {
-	{ "interval", 'i', "SECONDS", 0, "Specify interval between buffer state updates", 0},
-	{ "once", 'o', 0, 0, "Display current state of buffer and exit", 0},
+	{ "repeat", 'r', "TIMEOUT", OPTION_ARG_OPTIONAL, "Print repeatedly with timeout [HUNDREDTHS]", 0},
+	{ "info", 'i', NULL, 0, "Display full information", 0},
+	{ "header", 'h', NULL, 0, "Display header information", 0},
+	{ "segments", 's', NULL, 0, "Display segment information", 0},
     {0}
 };
 
@@ -27,52 +43,52 @@ static const struct argp argp = {
 	.options = options,
 	.parser = parse_arg,
 	.args_doc = args_doc,
-	.doc = "Documentation"
-};
-
-struct arguments
-{
-  char * path;
-  struct timespec to;
-  bool once;
-            
+	.doc = argp_program_doc
 };
 
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
-	struct arguments *arguments = state->input;
-	unsigned int milliseconds;
+	unsigned int hundredths;
 
 	switch (key) {
-	case 'i':
-		milliseconds = MIN(10000,MAX((int)(strtod(arg,NULL) * 1000),10));
-		arguments->to.tv_sec = (int)(milliseconds / 1000);
-		arguments->to.tv_nsec = milliseconds % 1000;
-		break;
-	case 'o':
-      arguments->once = true;
-	  break;
-	case ARGP_KEY_ARG:
-		if(state->arg_num == 0)
-		{
-			arguments->path = arg;
-		}
-		else 
-		{
-			argp_usage(state);
+		case 'r':
+			repeat = true;
+			hundredths = MIN(1000, MAX((int)(strtol(arg,NULL,10)), 1));
+			timeout.tv_sec = (int)(hundredths / 100);
+			timeout.tv_nsec = (hundredths % 100) * 10000000;
+			break;
+
+		case 's':
+			segments = true;
+			break;
+
+		case 'h':
+			header = true;
+			break;
+
+		case 'i':
+			header = true;
+			segments = true;
+			break;
+
+		case ARGP_KEY_ARG:
+
+			if(state->arg_num == 0)
+			{
+				shm_key = arg;
+			}
+			else 
+			{
+				argp_usage(state);
+				return ARGP_ERR_UNKNOWN;
+			}
+			break;
+
+		case ARGP_KEY_END:
+			break;
+
+		default:
 			return ARGP_ERR_UNKNOWN;
-		}
-		break;
-	case ARGP_KEY_END:
-		if(arguments->path ==  NULL)
-		{
-			arguments->path = DEFAULT_KEY;
-		}
-		break;
-	default:
-		break;
-		argp_usage(state);
-		return ARGP_ERR_UNKNOWN;
 	}
 
 	return 0;
@@ -100,9 +116,12 @@ void print_rbuf_overview(struct shmrbuf_reader_arg_t * rbuf_arg)
 		atomic_uint_fast32_t * reader;
 		uint64_t mdist = 0, dst;
 
-		printf("\n#######################################\n");
-		printf("Segment %d at %p\n\n", i, (void*)hdr->write_index);
-		printf("Writer at line %ld, address %p\n",*hdr->write_index, (char *)hdr->data + rbuf_arg->head->line_size * (*hdr->write_index));
+		if(segments)
+		{
+			printf("\n#######################################\n");
+			printf("Segment %d at %p\n\n", i, (void*)hdr->write_index);
+			printf("Writer at line %ld, address %p\n",*hdr->write_index, (char *)hdr->data + rbuf_arg->head->line_size * (*hdr->write_index));
+		}
 
 		for(int i = 0; i < rbuf_arg->head->reader_count; i++)
 		{
@@ -110,16 +129,19 @@ void print_rbuf_overview(struct shmrbuf_reader_arg_t * rbuf_arg)
 			dst = (*reader <= *hdr->write_index) ? (*hdr->write_index - *reader) : (rbuf_arg->head->lines - (*reader - *hdr->write_index));
 			mdist = (dst > mdist) ? dst : mdist;
 
-			printf("Reader %d at line %ld, address %p\n", i,  *reader, (char *)hdr->data + rbuf_arg->head->line_size * (*reader));
+			if(segments){printf("Reader %d at line %ld, address %p\n", i,  *reader, (char *)hdr->data + rbuf_arg->head->line_size * (*reader));}
 		}
 
 		total_free += rbuf_arg->head->lines - mdist - 1;
 		total_used += mdist + 1;
 
-		printf("Lines total: %u\n", rbuf_arg->head->lines);
-		printf("Lines used: %lu\n", mdist + 1);
-		printf("Lines free: %lu\n",rbuf_arg->head->lines - mdist - 1);
-		printf("Load percentage: %0.2f\n\n",((mdist + 1) /  (double) rbuf_arg->head->lines) * 100);
+		if(segments)
+		{
+			printf("Lines total: %u\n", rbuf_arg->head->lines);
+			printf("Lines used: %lu\n", mdist + 1);
+			printf("Lines free: %lu\n",rbuf_arg->head->lines - mdist - 1);
+			printf("Load percentage: %0.2f\n\n",((mdist + 1) /  (double) rbuf_arg->head->lines) * 100);
+		}
 
 	}
 
@@ -135,32 +157,34 @@ void print_rbuf_overview(struct shmrbuf_reader_arg_t * rbuf_arg)
 int main(int argc, char ** argv){
 
 	int retval;
-    struct arguments args = {.path=NULL,.to={.tv_sec=1,.tv_nsec=0},.once=false};
 	struct shmrbuf_reader_arg_t rbuf_arg = {.shm_key=DEFAULT_KEY, .no_reg=true};
 
-	if(argp_parse(&argp,argc,argv,0,NULL,&args)){
+	if(argp_parse(&argp,argc,argv,0,NULL,NULL))
+	{
 		exit(EXIT_FAILURE);
 	}
 
-	rbuf_arg.shm_key = args.path;
-
-	if((retval = shmrbuf_init((union shmrbuf_arg_t *)&rbuf_arg, SHMRBUF_READER))){
+	if((retval = shmrbuf_init((union shmrbuf_arg_t *)&rbuf_arg, SHMRBUF_READER)))
+	{
 		fprintf(stderr,"shm_rbuf_init failed with error code %d\n",retval);
 		exit(EXIT_FAILURE);
 	}
 
-	print_rbuf_info(&rbuf_arg);
+	if(header){print_rbuf_info(&rbuf_arg);}
 
-	if(args.once){
+	if(!repeat)
+	{
 
 		print_rbuf_overview(&rbuf_arg);
 
-	} else {
+	} 
+	else 
+	{
 
 		while (true)
 		{
 			print_rbuf_overview(&rbuf_arg);
-			nanosleep(&args.to,NULL);
+			nanosleep(&timeout,NULL);
 		}
 
 	}
