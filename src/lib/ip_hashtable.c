@@ -124,21 +124,36 @@ int ip_hashtable_init(struct ip_hashtable_t ** htable)
 int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
 {
 
+    /**
+     * Description : Inserts a ipv4 or ipv6 address into the hashtable. 
+     * If the address is already present, its counter is incremented instead. 
+     * 
+     * Parameters : 
+     *      struct ip_hashtable_t * htable : Hashtable to insert the address into
+     *      void * addr : Pointer to 4 byte uint for ipv4 or 16 byte uint for ipv6
+     *      int domain : AFINET for ipv4 or AFINET6 for ipv6
+     * 
+     * Returns : Number of times the address has been inserted into the hashtable or 
+     * negative value on error (see io_ipc.h for error codes)
+    */
+
     if(htable == NULL || addr == NULL)
     {
         return IP_HTABLE_NULLPTR_ERR;
     }
 
+    // Retreive container assigned by hashfunction
     int retval, index = (domain == AF_INET) ? HASH_IP4(addr) : HASH_IP6(addr);
     struct ip_hashbin_t * hbin = &htable->hbins[index];
     
-
+    // Claim lock of container
     if(pthread_mutex_lock(&hbin->lock))
     {
         pthread_mutex_unlock(&hbin->lock);
         return IP_HTABLE_MUTEX_ERR;
     }
 
+    // Initialize container if empty
     if(hbin->key == NULL)
     {
         if((retval = init_hbin(&hbin,addr,domain)))
@@ -154,6 +169,7 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
         return 1;
     }
 
+    // Check if container entry matches address
     switch (domain)
     {
     case AF_INET:
@@ -190,6 +206,7 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
         return IP_HTABLE_ARG_ERR;
     }
 
+    // Iterate through linked list of containers, until match or end of list
     struct ip_hashbin_t * it = hbin->next;
 
     while(it != NULL)

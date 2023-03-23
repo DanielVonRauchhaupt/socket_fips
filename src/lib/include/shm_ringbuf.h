@@ -26,6 +26,7 @@ struct shmrbuf_reader_arg_t {
     const char * shm_key;
     int shmid;
     uint8_t reader_index;
+    bool no_reg;
     struct shmrbuf_global_hdr_t * head;
     struct shmrbuf_seg_rhdr_t * segment_hdrs;
 };

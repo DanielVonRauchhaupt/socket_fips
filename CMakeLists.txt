@@ -43,6 +43,18 @@ target_link_libraries(simplelogstash
     PUBLIC uring
 )
 
+# Poll_rbuf utility
+add_executable(poll_rbuf ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/poll_rbuf.c)
+target_compile_options(poll_rbuf PRIVATE -Wall -Wextra -Wpedantic)
+
+target_include_directories(poll_rbuf
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+)
+
+target_link_libraries(poll_rbuf 
+    PUBLIC shm_ringbuf
+)
+
 # BPF Setup
 set(BPFOBJECT_BPFTOOL_EXE ${CMAKE_CURRENT_BINARY_DIR}/external/bpftool/bootstrap/bpftool)
 set(BPFOBJECT_VMLINUX_H ${CMAKE_CURRENT_SOURCE_DIR}/external/vmlinux/vmlinux.h)

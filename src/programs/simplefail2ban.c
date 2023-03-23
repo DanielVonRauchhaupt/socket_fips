@@ -35,7 +35,7 @@
 // Default configuration
 #define DEFAULT_BAN_TIME 60
 #define DEFAULT_BAN_THRESHOLD 1
-#define DEFAULT_THREAD_COUNT 4
+#define DEFAULT_THREAD_COUNT 4 // For multi-threading
 #define DEFAULT_IPC_TYPE DISK
 #define DEFAULT_IFACE "enp24s0f0np0"
 #define DEFAULT_LOG "udpsvr.log"
@@ -43,6 +43,7 @@
 #define IP4_REGEX "((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.){3}(25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)"
 #define IP6_REGEX "([a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4})|([a-f0-9:]{0,35}::[a-f0-9:]{0,35})"
 #define LOGBUF_SIZE 256
+#define NTHREADS 1
 
 // Hyperscan
 #define MATCH_REGEX_ID 0
@@ -52,8 +53,7 @@
 // Return values
 #define RETURN_FAIL (-1)
 #define RETURN_SUCC (0)
-#define NTHREADS 1
-#define WATCHER_COUNT 1
+
 
 // Helpers
 #define UNUSED(x)(void)(x)
@@ -74,6 +74,7 @@ static uint8_t thread_count = NTHREADS;
 static uint16_t bantime = DEFAULT_BAN_TIME;
 static uint16_t limit = DEFAULT_BAN_THRESHOLD;
 static bool matching = false;
+static bool wload_stealing = false;
 static char * shm_key = DEFAULT_LOG;
 static char * logfile = DEFAULT_LOG;
 static char * regex = DEFAULT_MATCH_REGEX;
@@ -81,6 +82,7 @@ static char * interface = DEFAULT_IFACE;
 static int ipv4_ebpf_map;
 static int ipv6_ebpf_map;
 
+// Timeout value for unbanning thread
 #define NANOSECONDS_PER_MILLISECOND 1000000
 #define TIMEOUT 500 * NANOSECONDS_PER_MILLISECOND
 
@@ -93,13 +95,14 @@ struct unban_targs_t{
 	int retval;
 };
 
+// Binary ip address representation
 union ip_addr_t
 {
 	uint32_t ipv4;
 	__uint128_t ipv6;
 };
 
-
+// Parameters for banning threads
 struct ban_targs_t {
 	void * ipc_args;
 	uint8_t thread_id;
@@ -116,7 +119,6 @@ struct ban_targs_t {
 
 
 // Argparse
-
 const char *argp_program_version = "simplefail2ban 0.0";
 static const char argp_program_doc[] =
 "simplefail2ban.\n"
@@ -133,6 +135,7 @@ static const struct argp_option opts[] = {
 	{ "limit", 'l', "N", 0, "Number of matches before a client is banned", 0},
 	{ "bantime", 'b', "N", 0, "Number of seconds a client should be banned", 0},
 	{ "match", 'm', "REGEX", OPTION_ARG_OPTIONAL, "Use regex matching on logstrings", 0},
+	{ "steal", 'w', NULL, 0, "Enable workload stealing for shared memory", 0},
 	{0},
 };
 
@@ -241,6 +244,11 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 	case 'm':
 
 			matching = true;
+			break;
+
+	case 'w':
+
+			wload_stealing = true;
 			break;
 
 	case ARGP_KEY_ARG:
@@ -358,6 +366,19 @@ int8_t block_signals(bool keep)
 
 void * unban_thread_routine(void * args)
 {
+	/**
+	*	Description: This this function represents the routine executed
+	*   by the unbanning thread. While the global parameter "server_running"
+	*   is true, it periodically wakes up and iterates through the banned_list,
+	*   to unban clients whos bantime has elapsed.
+	*   
+	*   Parameters:
+	*   	void * args : Pointer to struct unban_targs_t with thread parameters
+	*
+	*   Returns:
+	* 		void * : Pointer to int returncode of the function
+	**/
+
 
 	struct unban_targs_t * targs = (struct unban_targs_t *) args;
 	time_t ts;
@@ -366,27 +387,31 @@ void * unban_thread_routine(void * args)
 	struct ip_listnode_t *iterator, * prev;
 	int retval, nr_cpus = libbpf_num_possible_cpus();
 
+	// Blocks (blockable) signals except SIGINT and SIGTERM
 	if(block_signals(true))
 	{
         error_msg("Failed to block signals\n");
     }
 	
+	// Registers sig_handler to handle SIGINT and SIGTERM (-> server_running = false)
     if(signal(SIGINT,sig_handler) == SIG_ERR || signal(SIGTERM,sig_handler) == SIG_ERR)
 	{
         error_msg("Failed to set signal handler : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
     }
 
+	// Event loop
 	while (server_running)
 	{
-		time(&ts);
 
-		if(ts == -1)
+		// Gets current timestap for bantime evaluation
+		if((ts = time(NULL)) == -1)
 		{
 			error_msg("Failed to obtain timestamp : %s\n",strerror_r(errno,strerror_buf,sizeof(strerror_buf)));
 			targs->retval = EXIT_FAIL;
 			return &targs->retval;
 		}
 
+		// Aquires lock for head of the banned_list
 		if(pthread_mutex_lock(&banned_list->lock))
 		{
 			pthread_mutex_unlock(&banned_list->lock);
@@ -395,6 +420,7 @@ void * unban_thread_routine(void * args)
 			return &targs->retval;
 		}
 
+		// Find first entry in the banned_list whos bantime has elapsed.
 		iterator = banned_list->head;
 
 		if(iterator != NULL)
@@ -420,6 +446,7 @@ void * unban_thread_routine(void * args)
 
 				while(iterator != NULL)
 				{
+
 					if((ts - iterator->timestamp) > bantime)
 					{
 						prev->next = NULL;
@@ -431,6 +458,7 @@ void * unban_thread_routine(void * args)
 
 			}
 
+			// Unban all clients with an elapsed bantime
 			while(iterator != NULL)
 			{
 				switch (iterator->domain)
@@ -486,6 +514,7 @@ void * unban_thread_routine(void * args)
 			}
 		}
 
+		// Timeout after checking banned_list
 		nanosleep(&timeout,NULL);
 	}
 	
@@ -497,6 +526,20 @@ void * unban_thread_routine(void * args)
 int regex_match_handler(unsigned int id, unsigned long long from, unsigned long long to,
                   unsigned int flags, void *ctx)
 				  {
+
+	/**
+	 *  Description : Handler function that is called if hs_scan finds a match.
+	 *  
+	 *  Parameters : 
+	 * 		unsigned int id : ID of the matched regular expression (see hs_compile)
+	 * 		unsigned long long from : Start index of the match
+	 * 		unsigned long long to : End index of the match
+	 * 		unsigned int flags : Flags set for match
+	 *      void *ctx : Context pointer, expects pointer to struct ban_targs_t
+	 * 
+	 *  Returns : 
+	 * 		int : 0, if matching should continue, 1 else.  
+	*/
 
 	UNUSED(flags);
 
@@ -511,6 +554,8 @@ int regex_match_handler(unsigned int id, unsigned long long from, unsigned long 
 	case IP4_REGEX_ID:
 
 		from = to;
+
+		// Adjust to and from if not at the end of the address (assumes withespace around address)
 
 		while(to + 1 < LOGBUF_SIZE && context->logmsg_buf[to] != ' ') {to++;}
 
@@ -531,6 +576,8 @@ int regex_match_handler(unsigned int id, unsigned long long from, unsigned long 
 	case IP6_REGEX_ID:
 
 		from = to;
+
+		// Adjust to and from if not at the end of the address (assumes withespace around address)
 
 		while(to + 1 < LOGBUF_SIZE && context->logmsg_buf[to] != ' ') {to++;}
 
@@ -557,18 +604,33 @@ int regex_match_handler(unsigned int id, unsigned long long from, unsigned long 
 
 void * ban_thread_routine(void * args)
 {
+	/**
+	*	Description: This this function represents the routine executed
+	*   by the banning threads. While the global parameter "server_running"
+	*   is true, the choosen ipc api is queried for incoming messages. Messages
+	*   are then parsed, and identified clients are logged to htable. If the banning 
+	*   threshold has been exeeded, the clients ip is added to banned_list and the
+	*   corresponding ebpf map.
+	*   
+	*   Parameters:
+	*   	void * args : Pointer to struct ban_targs_t with thread parameters
+	*
+	*   Returns:
+	* 		void * : Pointer to int returncode of the function
+	**/
 
 	struct ban_targs_t * targs = (struct ban_targs_t *)args;
 	struct shmrbuf_reader_arg_t * shm_arg;
 	hs_scratch_t * scratch = NULL; 
 	struct timespec tspec = {.tv_sec=0,.tv_nsec=targs->wakeup_interval};
-	uint8_t i, seg_index, steal_index, seg_count, steal_count, upper_seg;
+	uint8_t i, seg_index, steal_index, seg_count, steal_count, upper_seg, lower_seg;
 	char strerror_buf[64];
 	bool read;
 	int64_t retval;
 
 	int nr_cpus = libbpf_num_possible_cpus();
 
+	// Communication setup dependant on ipc_type
 	switch (ipc_type)
 	{
 	case DISK:
@@ -592,12 +654,30 @@ void * ban_thread_routine(void * args)
 			return &targs->retval;
 		}
 
+		// Determine the ringbuffer segments for the thread, as well as the range for workload stealing.
 		seg_count = shm_arg->head->segment_count / thread_count;
-		steal_count = shm_arg->head->segment_count - seg_count;
-		seg_count = ((shm_arg->head->segment_count % thread_count) > targs->thread_id) ? seg_count + 1 : seg_count;
-		upper_seg = targs->thread_id + seg_count;
-		seg_index = targs->thread_id;
-		steal_index = 0;
+
+		if((retval = shm_arg->head->segment_count % thread_count) > 0)
+		{
+			if(retval > targs->thread_id)
+			{
+				seg_count = seg_count + 1;
+				lower_seg = targs->thread_id * seg_count;
+			}
+			else 
+			{
+				lower_seg = targs->thread_id * (seg_count + 1);
+			}
+		}
+		else 
+		{
+			lower_seg = targs->thread_id * seg_count;
+		}
+
+		steal_count = (wload_stealing) ? shm_arg->head->segment_count - seg_count : 0;
+		upper_seg = lower_seg + seg_count;
+		seg_index = lower_seg;
+		steal_index = (targs->thread_id) ? 0 : upper_seg;
 
 		break;
 
@@ -624,11 +704,12 @@ void * ban_thread_routine(void * args)
     	}	
 	}
     
-
+	// Event loop
 	while (server_running)
 	{
 		read = false;
 
+		// Message receiving dependent on ipc_type
 		switch (ipc_type)
 		{
 		case DISK:
@@ -656,7 +737,7 @@ void * ban_thread_routine(void * args)
 						return &targs->retval;
 					}
 
-					seg_index = (seg_index == upper_seg) ? targs->thread_id : seg_index;
+					seg_index = (seg_index == upper_seg) ? lower_seg : seg_index;
 
 					if(retval > 0)
 					{
@@ -680,9 +761,10 @@ void * ban_thread_routine(void * args)
 
 				if(read){break;}
 
+				// Steal workload from other threads of own segments are empty
 				for(i = 0; i < steal_count; i++)
 				{
-					if(steal_index >= targs->thread_id && steal_index < upper_seg)
+					if(steal_index >= lower_seg && steal_index < upper_seg)
 					{
 						steal_index = (upper_seg < shm_arg->head->segment_count) ? upper_seg : 0;
 					}
@@ -727,6 +809,7 @@ void * ban_thread_routine(void * args)
 
 			targs->rcv_count++;
 
+			// If matching enabled, matches log message against regex
 			if(matching)
 			{
 				targs->match = false;
@@ -742,6 +825,8 @@ void * ban_thread_routine(void * args)
 					continue;
 				}
 			}
+
+			// Try to convert log message to IP address
 			else 
 			{
 				if (inet_pton(AF_INET, targs->logmsg_buf, &targs->ip_addr.ipv4) == 1) 
@@ -758,6 +843,7 @@ void * ban_thread_routine(void * args)
 				}
 			}
 			
+			// Query htable for the number of times an ip address has been logged
 			switch (targs->domain)
 			{
 			case AF_INET:
@@ -766,62 +852,64 @@ void * ban_thread_routine(void * args)
 
 					break;
 
-				case AF_INET6:
+			case AF_INET6:
 
-					retval = ip_hashtable_insert(htable,&targs->ip_addr.ipv6,AF_INET6);
+				retval = ip_hashtable_insert(htable,&targs->ip_addr.ipv6,AF_INET6);
 
-					break;
+				break;
 			
+			default:
+				continue;
+			}
+
+			if(retval < 1)
+			{
+				error_msg("Error in htable query for logstring : %s : Error Code %d\n",targs->logmsg_buf,retval);
+				continue;
+			}
+
+			// Ban client if ban threshold has been reached
+			if(retval == limit)
+			{
+				time_t ts = time(NULL);
+
+				switch (targs->domain)
+				{
+				case AF_INET:
+					if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv4, &ts, AF_INET)) < 0)
+					{
+						error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
+							continue;
+					}
+					retval = blacklist_modify(ipv4_ebpf_map, &targs->ip_addr.ipv4, ACTION_ADD, AF_INET, nr_cpus, strerror_buf, sizeof(strerror_buf));
+					break;
+					
+				case AF_INET6:
+					if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv6, &ts, AF_INET6)) < 0)
+					{
+						error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
+							continue;
+					}
+					retval = blacklist_modify(ipv6_ebpf_map,&targs->ip_addr.ipv6,ACTION_ADD,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
+					break;
+
 				default:
 					continue;
 				}
 
-				if(retval < 1)
+				if(retval != EXIT_OK)
 				{
-					error_msg("Error in htable query for logstring : %s : Error Code %d\n",targs->logmsg_buf,retval);
+					error_msg("Error modifying blacklist : Error code %d\n",retval);
 					continue;
 				}
 
-				if(retval == limit)
-				{
-					time_t ts = time(NULL);
-
-					switch (targs->domain)
-					{
-					case AF_INET:
-						if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv6, &ts, AF_INET)) < 0)
-						{
-							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
-								continue;
-						}
-					    retval = blacklist_modify(ipv4_ebpf_map, &targs->ip_addr.ipv6, ACTION_ADD, AF_INET, nr_cpus, strerror_buf, sizeof(strerror_buf));
-						break;
-					
-					case AF_INET6:
-						if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv6, &ts, AF_INET6)) < 0)
-						{
-							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
-								continue;
-						}
-					    retval = blacklist_modify(ipv6_ebpf_map,&targs->ip_addr.ipv6,ACTION_ADD,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
-						break;
-
-					default:
-						continue;
-					}
-
-					if(retval != EXIT_OK)
-					{
-						error_msg("Error modifying blacklist : Error code %d\n",retval);
-						continue;
-					}
-
-					targs->ban_count++;
+				targs->ban_count++;
 				
-				} 
+			} 
 
 		}
 
+		// Timeout, if no messages were read
 		else 
 		{
 			nanosleep(&tspec,NULL);
@@ -839,6 +927,17 @@ void * ban_thread_routine(void * args)
 
 bool main_cleanup(struct ban_targs_t ** targs, pthread_t ** tids)
 {
+	/**
+	 * Description : Cleans up memory and io channels for the main function
+	 * 
+	 * Parameters : 
+	 * 		 struct ban_targs_t ** targs : Pointer to array of thread argument structs
+	 * 	     pthread_t ** tids : Pointer to arry of thread ids
+	 * 
+	 * Returns : 
+	 * 		bool : true, if an error occured, else false
+	*/
+
 	int retval;
 	bool error = false;
 
@@ -925,6 +1024,12 @@ bool main_cleanup(struct ban_targs_t ** targs, pthread_t ** tids)
 
 int main(int argc, char **argv)
 {
+	/**
+	 * Description : Main function of the program. Parses commandline arguments, sets up
+	 * the ipc api, loads the ebpf program, spawns unbanning and banning threads.
+	 * 
+	 * 
+	*/
 
 	// Avoid unused variable warning
 	UNUSED(file_port_blacklist);
@@ -944,6 +1049,8 @@ int main(int argc, char **argv)
 	pthread_t * thread_ids;
 	int retval;
 	uint8_t i;
+
+	// Parse commandline arguments
 	retval = argp_parse(&argp, argc, argv, 0, NULL, &args);
 
 	if (retval == ARGP_ERR_UNKNOWN)
@@ -957,6 +1064,7 @@ int main(int argc, char **argv)
 		thread_count = 1;
 	}
 
+	// Setup regex matching, compile chosen regex.
 	if (matching) 
 	{
 		const char * const regexes[] = {regex, IP4_REGEX, IP6_REGEX};
@@ -990,6 +1098,7 @@ int main(int argc, char **argv)
 		}
     } 
 
+	// Load ebpf program onto chosen interface and setup maps
     if(ebpf_setup(interface,false))
 	{
 		fprintf(stderr,"ebpf setup failed\n");
@@ -1004,6 +1113,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	// Init memory for thread arguments
 	if((thread_ids = (pthread_t *) calloc(sizeof(pthread_t),thread_count)) == NULL ||
 	   (thread_args = (struct ban_targs_t *) calloc(sizeof(struct ban_targs_t),thread_count)) == NULL)
 	{
@@ -1012,6 +1122,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	// Init hashtable for tracking of logged ip addresses
 	if((retval = ip_hashtable_init(&htable)) < 0)
 	{
 		fprintf(stderr,"ip_hashtable_init failed with error code %d\n", retval);
@@ -1019,6 +1130,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 	
+	// Init linked list for tracking of banned ip addresses
 	if((retval = ip_llist_init(&banned_list)) < 0)
 	{
 		fprintf(stderr,"ip_llist_init failed with error code %d\n", retval);
@@ -1026,6 +1138,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	// Init ipc communication dependent on chosen ipc_type
 	switch (ipc_type)
 	{
 	case DISK:
@@ -1091,6 +1204,7 @@ int main(int argc, char **argv)
 		break;
 	}
 
+	// Create unbanning thread
 	if(pthread_create(&thread_ids[0],NULL,unban_thread_routine,&unban_targs))
 	{
 		perror("pthread create failed for unban thread");
@@ -1100,7 +1214,7 @@ int main(int argc, char **argv)
 	
 	else 
 	{
-
+		// Create banning threads
 		for(i = 0; i < thread_count; i++)
 		{
 			thread_args[i].ban_count = 0;
@@ -1118,6 +1232,7 @@ int main(int argc, char **argv)
 
 		}
 
+		// Start main event loop
 		ban_thread_routine(&thread_args[0]);
 
 		for(i = 0; i < thread_count; i++)
@@ -1134,6 +1249,7 @@ int main(int argc, char **argv)
 
 	printf("\n");
 
+	// Aggregate and print receive and ban / unban counters.
 	for(i = 0; i < thread_count; i++)
 	{
 		if(thread_args[i].retval != RETURN_SUCC)

@@ -129,9 +129,13 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
         args->rargs.head = global_hdr;
         args->rargs.shmid = shmid;
 
-        if((args->rargs.reader_index = atomic_fetch_add(&global_hdr->reader_index,1)) >= global_hdr->reader_count){
-            shm_cleanup(args, role);
-            return IO_IPC_ARG_ERR;
+        if(!args->rargs.no_reg)
+        {
+            if((args->rargs.reader_index = atomic_fetch_add(&global_hdr->reader_index,1)) >= global_hdr->reader_count)
+            {
+                shm_cleanup(args, role);
+                return IO_IPC_ARG_ERR;
+            }
         }
 
         if((args->rargs.segment_hdrs = (struct shmrbuf_seg_rhdr_t *) calloc(sizeof(struct shmrbuf_seg_rhdr_t),global_hdr->segment_count)) == NULL){
