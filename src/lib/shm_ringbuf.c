@@ -87,7 +87,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
         return errno;
     }
 
-    if(size <= PAGESIZE || (shmid = shmget(key,size, shm_flag | SHM_HUGETLB)) == -1)
+    if(size <= PAGESIZE || (shmid = shmget(key, size, shm_flag | SHM_HUGETLB)) == -1)
     {
         if((shmid = shmget(key,size,shm_flag)) == -1)
         {
@@ -155,6 +155,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
 
         if(role == SHMRBUF_WRITER){
 
+            // Fixme: memset zero on indices
             struct shmrbuf_seg_whdr_t * seg_whdr = &args->wargs.segment_hdrs[i];
 
             seg_whdr->write_index = seg_head;
@@ -223,6 +224,7 @@ int shmrbuf_write(struct shmrbuf_writer_arg_t * args, void * src, uint16_t wsize
 
     }
 
+    // Fixme: Guarantee nullbyte at end of line
     if(memcpy((char *)segment->data + write_index*args->line_size,src,wsize) == NULL){
         return IO_IPC_MEM_ERR;
     }

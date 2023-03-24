@@ -32,6 +32,7 @@ struct shmrbuf_reader_arg_t {
 };
 
 
+// Todo: dynamic adding and removing of readers
 struct shmrbuf_global_hdr_t {
     uint8_t segment_count;
     bool overwrite;
@@ -71,6 +72,7 @@ union shmrbuf_arg_t {
 
 };
 
+// Todo: initialization by reader or writer (partial initialization)
 int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role);
 
 int shmrbuf_finalize(union shmrbuf_arg_t *, enum shmrbuf_role_t role);

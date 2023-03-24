@@ -403,6 +403,7 @@ time_t update_datetime(char * datebuf)
     localtime_r(&t, &tm);
     if(pthread_rwlock_wrlock(&datebuf_lock))
     {
+        // Fixme: not unlocking after error (see manpage) check other writelocks
         pthread_rwlock_unlock(&datebuf_lock);
         return RETURN_FAIL;
     }
@@ -872,6 +873,7 @@ void * run_socket(void *args)
     switch (targs->domain)
     {
     case AF_INET:
+        
         if(inet_pton(AF_INET, ip4_addr, (void *)&((struct sockaddr_in *)&server_addr)->sin_addr)!=1)
         {
             error_msg("Could not set %s as address, default to INADDR_ANY\n",ip4_addr);

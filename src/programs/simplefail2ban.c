@@ -522,7 +522,7 @@ void * unban_thread_routine(void * args)
 	return &targs->retval;
 
 }
-
+// Todo: Unittest for regex match
 int regex_match_handler(unsigned int id, unsigned long long from, unsigned long long to,
                   unsigned int flags, void *ctx)
 				  {
@@ -725,7 +725,7 @@ void * ban_thread_routine(void * args)
 
 				for(i = 0; i < seg_count; i++)
 				{
-					
+					// Todo: include workload stealing into shmrbuf api
 					if((retval = shmrbuf_read(shm_arg, targs->logmsg_buf, LOGBUF_SIZE, seg_index++)) < 0)
 					{
 						error_msg("Thread %d : error in shmrbuf_read : segment %d : error code %d\n", targs->thread_id, seg_index - 1, retval);
@@ -761,7 +761,8 @@ void * ban_thread_routine(void * args)
 
 				if(read){break;}
 
-				// Steal workload from other threads of own segments are empty
+				// Steal workload from other threads of own segments are empty 
+				// Todo: implement stealing counter
 				for(i = 0; i < steal_count; i++)
 				{
 					if(steal_index >= lower_seg && steal_index < upper_seg)
