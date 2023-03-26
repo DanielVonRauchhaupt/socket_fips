@@ -64,7 +64,7 @@ static inline bool _rdawait(struct file_io_t * fio_arg, char * buf, uint32_t buf
     return false;
 }
 
-int uring_getline(struct file_io_t * fio_arg, char ** lineptr)
+int inline uring_getline(struct file_io_t * fio_arg, char ** lineptr)
 {
 
     if(fio_arg == NULL || lineptr == NULL)
@@ -155,4 +155,34 @@ int uring_getline(struct file_io_t * fio_arg, char ** lineptr)
         return 0;
     }
 
+}
+
+int uring_getlines(struct file_io_t * fio_arg, struct iovec * iovecs, uint16_t vsize)
+{
+
+    if(iovecs == NULL){return IO_IPC_ARG_ERR;}
+
+    int retval;
+    uint16_t read = 0;
+
+    for(uint16_t i = 0; i < vsize; i++)
+    {
+        if((retval = uring_getline(fio_arg,(char **) &iovecs[i].iov_base)) < 0)
+        {
+            return retval;
+        }
+
+        if(retval > 0)
+        {
+            iovecs[i].iov_len = retval;
+            read++;
+            continue;
+        }
+
+        if(retval == 0)
+        {
+            return read;
+        }
+
+    }
 }

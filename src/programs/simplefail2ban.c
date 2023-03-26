@@ -44,6 +44,7 @@
 #define IP6_REGEX "([a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4})|([a-f0-9:]{0,35}::[a-f0-9:]{0,35})"
 #define LOGBUF_SIZE 256
 #define NTHREADS 1
+#define QUEUE_SIZE 100
 
 // Hyperscan
 #define MATCH_REGEX_ID 0
@@ -53,10 +54,6 @@
 // Return values
 #define RETURN_FAIL (-1)
 #define RETURN_SUCC (0)
-
-
-// Helpers
-#define UNUSED(x)(void)(x)
 
 // Open options
 #define OPEN_MODE O_RDONLY
@@ -86,6 +83,9 @@ static int ipv6_ebpf_map;
 #define NANOSECONDS_PER_MILLISECOND 1000000
 #define TIMEOUT 500 * NANOSECONDS_PER_MILLISECOND
 
+// Helpers
+#define UNUSED(x)((void)x)
+
 // Structs
 
 // Parameters for unbanning thread
@@ -109,6 +109,7 @@ struct ban_targs_t {
 	uint32_t wakeup_interval;
 	uint64_t rcv_count;
 	uint64_t ban_count;
+	uint64_t steal_count;
 	char * logmsg_buf;
 	char strerror_buf[64];
 	union ip_addr_t ip_addr;
@@ -498,7 +499,7 @@ void * unban_thread_routine(void * args)
 					
 				if((retval = ip_llist_remove(&prev, NULL)) < 0)
 				{
-					error_msg("Error removing ´ node from banned list : error code %d\n",retval);
+					error_msg("Error removing node from banned list : error code %d\n",retval);
 				}	
 
 			}
@@ -621,25 +622,27 @@ void * ban_thread_routine(void * args)
 
 	struct ban_targs_t * targs = (struct ban_targs_t *)args;
 	struct shmrbuf_reader_arg_t * shm_arg;
+	struct file_io_t * file_arg;
 	hs_scratch_t * scratch = NULL; 
 	struct timespec tspec = {.tv_sec=0,.tv_nsec=targs->wakeup_interval};
-	uint8_t i, seg_index, steal_index, seg_count, steal_count, upper_seg, lower_seg;
+	struct iovec iovecs[QUEUE_SIZE];
 	char strerror_buf[64];
-	bool read;
-	int64_t retval;
+	int64_t retval, i;
+	uint8_t seg_count, upper_seg, lower_seg;
+	uint64_t * nsteal_ptr = (wload_stealing) ? &targs->steal_count: NULL;
 
 	int nr_cpus = libbpf_num_possible_cpus();
 
 	// Communication setup dependant on ipc_type
-	switch (ipc_type)
+	if(ipc_type == DISK)
 	{
-	case DISK:
-	
-		break;
+		file_arg = (struct file_io_t *) targs->ipc_args;
+	}
 
-	case SHM:
+	else if(ipc_type == SHM)
+	{
 
-		if((targs->logmsg_buf = calloc(sizeof(char),LOGBUF_SIZE)) == NULL)
+		if((targs->logmsg_buf = (char*) calloc(QUEUE_SIZE,LOGBUF_SIZE)) == NULL)
 		{
 			error_msg("calloc failed : %s\n",strerror_r(errno, targs->strerror_buf, sizeof(targs->strerror_buf)));
 			targs->retval = EXIT_FAIL;
@@ -648,16 +651,22 @@ void * ban_thread_routine(void * args)
 
 		shm_arg = (struct shmrbuf_reader_arg_t *) targs->ipc_args;
 
-		if(targs->thread_id > shm_arg->head->segment_count - 1)
+		if(targs->thread_id >= shm_arg->global_hdr->segment_count)
 		{
 			targs->retval = RETURN_SUCC;
 			return &targs->retval;
 		}
 
-		// Determine the ringbuffer segments for the thread, as well as the range for workload stealing.
-		seg_count = shm_arg->head->segment_count / thread_count;
+		for(i = 0; i < QUEUE_SIZE; i++)
+		{
+			iovecs[i].iov_base = &targs->logmsg_buf[LOGBUF_SIZE * i];
+			iovecs[i].iov_len = LOGBUF_SIZE;
+		}
 
-		if((retval = shm_arg->head->segment_count % thread_count) > 0)
+		// Determine the ringbuffer segments for the thread, as well as the range for workload stealing.
+		seg_count = shm_arg->global_hdr->segment_count / thread_count;
+
+		if((retval = shm_arg->global_hdr->segment_count % thread_count) > 0)
 		{
 			if(retval > targs->thread_id)
 			{
@@ -674,17 +683,7 @@ void * ban_thread_routine(void * args)
 			lower_seg = targs->thread_id * seg_count;
 		}
 
-		steal_count = (wload_stealing) ? shm_arg->head->segment_count - seg_count : 0;
 		upper_seg = lower_seg + seg_count;
-		seg_index = lower_seg;
-		steal_index = (targs->thread_id) ? 0 : upper_seg;
-
-		break;
-
-	default:
-		error_msg("invalid ipc type : %d\n",ipc_type);
-		targs->retval = EXIT_FAIL;
-        return &targs->retval;
 	}
 
 	if(block_signals(false))
@@ -707,207 +706,174 @@ void * ban_thread_routine(void * args)
 	// Event loop
 	while (server_running)
 	{
-		read = false;
 
 		// Message receiving dependent on ipc_type
 		switch (ipc_type)
 		{
 		case DISK:
 				
-			if((retval = uring_getline((struct file_io_t *)targs->ipc_args, &targs->logmsg_buf)) > 0){
-				read = true;
-				targs->logmsg_buf[retval-1] = '\0';
+			if((retval = uring_getlines(file_arg, iovecs, QUEUE_SIZE)) > 0)
+			{
+				
+				for(i = 0; i < retval; i++)
+				{
+					((char *)iovecs[i].iov_base)[iovecs[i].iov_len -1] = '\0';
+				}
+			}
+			else if(retval < 0)
+			{
+				error_msg("uring_getlines failed with error code %d\n", retval);
+				targs->retval = EXIT_FAIL;
+				return &targs->retval;	
+
 			}
 
 			break;
 
 		case SHM:
 
-				for(i = 0; i < seg_count; i++)
+			if((retval = shmrbuf_readv_rng(shm_arg, iovecs, QUEUE_SIZE, lower_seg, upper_seg, nsteal_ptr)) > 0)
+			{
+				
+				for(i = 0; i < QUEUE_SIZE; i++)
 				{
-					// Todo: include workload stealing into shmrbuf api
-					if((retval = shmrbuf_read(shm_arg, targs->logmsg_buf, LOGBUF_SIZE, seg_index++)) < 0)
+					uint16_t len = iovecs[i].iov_len - 1;
+					char * str = (char*) iovecs[i].iov_base;
+					while(len-- > 0)
 					{
-						error_msg("Thread %d : error in shmrbuf_read : segment %d : error code %d\n", targs->thread_id, seg_index - 1, retval);
-						if(matching)
-							{ hs_free_scratch(scratch); }
-						free(targs->logmsg_buf);
-						targs->logmsg_buf = NULL;
-						targs->retval = EXIT_FAIL;
-						return &targs->retval;
-					}
-
-					seg_index = (seg_index == upper_seg) ? lower_seg : seg_index;
-
-					if(retval > 0)
-					{
-						read = true;
-
-						// Remove newline char
-						while(--retval > 0)
+						if(str[len] == '\n') 
 						{
-							if(targs->logmsg_buf[retval] == '\n')
-							{
-								targs->logmsg_buf[retval] = '\0';
-								break;
-							}
+							str[len] = '\0';
+							break;
 						}
-
-
-						break;
-					}
-
-				}
-
-				if(read){break;}
-
-				// Steal workload from other threads of own segments are empty 
-				// Todo: implement stealing counter
-				for(i = 0; i < steal_count; i++)
-				{
-					if(steal_index >= lower_seg && steal_index < upper_seg)
-					{
-						steal_index = (upper_seg < shm_arg->head->segment_count) ? upper_seg : 0;
-					}
-
-					if((retval = shmrbuf_read(shm_arg, targs->logmsg_buf, sizeof(targs->logmsg_buf), steal_index++)) < 0)
-					{
-						error_msg("Thread %d : error in shmrbuf_read : segment %d : error code %d\n", targs->thread_id, steal_index - 1, retval);
-						if(matching)
-							{ hs_free_scratch(scratch); }
-						free(targs->logmsg_buf);
-						targs->logmsg_buf = NULL;
-						targs->retval = EXIT_FAIL;
-						return &targs->retval;
-					}
-
-					steal_index = (steal_index == shm_arg->head->segment_count) ? 0 : steal_index;
-
-					if(retval > 0)
-					{
-						read = true;
-
-						// Remove newline char
-						while(--retval > 0)
-						{
-							if(targs->logmsg_buf[retval] == '\n')
-							{
-								targs->logmsg_buf[retval] = '\0';
-								break;
-							}
-						}
-
-						break;
 					}
 					
 				}
+
+			}
+
+			else if (retval < 0)
+			{
+				error_msg("shmrbuf_readv_rng failed with error code %d\n", retval);
+				free(targs->logmsg_buf);
+				targs->logmsg_buf = NULL;
+				targs->retval = EXIT_FAIL;
+				return &targs->retval;
+			}
+
+			break;
 
 		default:
 			break;
 		}
 
-		if(read){
+		if(retval){
 
-			targs->rcv_count++;
+			targs->rcv_count += retval;
 
-			// If matching enabled, matches log message against regex
-			if(matching)
+			for(i = 0; i < retval; i++)
 			{
-				targs->match = false;
-				targs->domain = -1;
 
-				if((retval = hs_scan(database, targs->logmsg_buf, LOGBUF_SIZE, 0, scratch, regex_match_handler, targs)) != HS_SUCCESS && retval != HS_SCAN_TERMINATED)
-				{
-					error_msg("Hyperscan error for logstring %s : error code %d\n",targs->logmsg_buf,retval);
-					continue;
-				}
-				else if(!targs->match || targs->domain == -1)
-				{
-					continue;
-				}
-			}
+				char * logstr = (char *) iovecs[i].iov_base;
 
-			// Try to convert log message to IP address
-			else 
-			{
-				if (inet_pton(AF_INET, targs->logmsg_buf, &targs->ip_addr.ipv4) == 1) 
+				// If matching enabled, matches log message against regex
+				if(matching)
 				{
-					targs->domain = AF_INET;
-				} 
-				else if (inet_pton(AF_INET6, targs->logmsg_buf, &targs->ip_addr.ipv6) == 1) 
-				{
-					targs->domain = AF_INET6;
-				} 
+					targs->match = false;
+					targs->domain = -1;
+
+					if((retval = hs_scan(database, logstr, LOGBUF_SIZE, 0, scratch, regex_match_handler, targs)) != HS_SUCCESS && retval != HS_SCAN_TERMINATED)
+					{
+						error_msg("Hyperscan error for logstring %s : error code %d\n",logstr,retval);
+						continue;
+					}
+					else if(!targs->match || targs->domain == -1)
+					{
+						continue;
+					}
+				}
+
+				// Try to convert log message to IP address
 				else 
 				{
-					continue;
+					if (inet_pton(AF_INET, logstr, &targs->ip_addr.ipv4) == 1) 
+					{
+						targs->domain = AF_INET;
+					} 
+					else if (inet_pton(AF_INET6, logstr, &targs->ip_addr.ipv6) == 1) 
+					{
+						targs->domain = AF_INET6;
+					} 
+					else 
+					{
+						continue;
+					}
 				}
-			}
-			
-			// Query htable for the number of times an ip address has been logged
-			switch (targs->domain)
-			{
-			case AF_INET:
-					
-					retval = ip_hashtable_insert(htable,&targs->ip_addr.ipv4,AF_INET);
-
-					break;
-
-			case AF_INET6:
-
-				retval = ip_hashtable_insert(htable,&targs->ip_addr.ipv6,AF_INET6);
-
-				break;
-			
-			default:
-				continue;
-			}
-
-			if(retval < 1)
-			{
-				error_msg("Error in htable query for logstring : %s : Error Code %d\n",targs->logmsg_buf,retval);
-				continue;
-			}
-
-			// Ban client if ban threshold has been reached
-			if(retval == limit)
-			{
-				time_t ts = time(NULL);
-
+				
+				// Query htable for the number of times an ip address has been logged
 				switch (targs->domain)
 				{
 				case AF_INET:
-					if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv4, &ts, AF_INET)) < 0)
-					{
-						error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
-							continue;
-					}
-					retval = blacklist_modify(ipv4_ebpf_map, &targs->ip_addr.ipv4, ACTION_ADD, AF_INET, nr_cpus, strerror_buf, sizeof(strerror_buf));
-					break;
-					
-				case AF_INET6:
-					if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv6, &ts, AF_INET6)) < 0)
-					{
-						error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",&targs->logmsg_buf,retval);
-							continue;
-					}
-					retval = blacklist_modify(ipv6_ebpf_map,&targs->ip_addr.ipv6,ACTION_ADD,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
-					break;
+						
+						retval = ip_hashtable_insert(htable,&targs->ip_addr.ipv4,AF_INET);
 
+						break;
+
+				case AF_INET6:
+
+					retval = ip_hashtable_insert(htable,&targs->ip_addr.ipv6,AF_INET6);
+
+					break;
+				
 				default:
 					continue;
 				}
 
-				if(retval != EXIT_OK)
+				if(retval < 1)
 				{
-					error_msg("Error modifying blacklist : Error code %d\n",retval);
+					error_msg("Error in htable query for logstring : %s : Error Code %d\n",logstr,retval);
 					continue;
 				}
 
-				targs->ban_count++;
-				
-			} 
+				// Ban client if ban threshold has been reached
+				if(retval == limit)
+				{
+					time_t ts = time(NULL);
 
+					switch (targs->domain)
+					{
+					case AF_INET:
+						if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv4, &ts, AF_INET)) < 0)
+						{
+							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",logstr,retval);
+								continue;
+						}
+						retval = blacklist_modify(ipv4_ebpf_map, &targs->ip_addr.ipv4, ACTION_ADD, AF_INET, nr_cpus, strerror_buf, sizeof(strerror_buf));
+						break;
+						
+					case AF_INET6:
+						if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv6, &ts, AF_INET6)) < 0)
+						{
+							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",logstr,retval);
+								continue;
+						}
+						retval = blacklist_modify(ipv6_ebpf_map,&targs->ip_addr.ipv6,ACTION_ADD,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
+						break;
+
+					default:
+						continue;
+					}
+
+					if(retval != EXIT_OK)
+					{
+						error_msg("Error modifying blacklist : Error code %d\n",retval);
+						continue;
+					}
+
+					targs->ban_count++;
+					
+				} 
+			}
 		}
 
 		// Timeout, if no messages were read

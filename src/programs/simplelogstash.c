@@ -119,30 +119,30 @@ static inline void read_from_rbuf(struct shmrbuf_reader_arg_t * rbuf_arg, struct
     int i, retval;
 
     while(read)
+    {
+        read = false;
+
+        for(i = 0; i < rbuf_arg->global_hdr->segment_count; i++)
         {
-            read = false;
-
-            for(i = 0; i < rbuf_arg->head->segment_count; i++)
+            if((retval = shmrbuf_read(rbuf_arg, io_buf->logmsgbuf[*read_index], LINEBUF_SIZE, i)) < 0)
             {
-                if((retval = shmrbuf_read(rbuf_arg, io_buf->logmsgbuf[*read_index], LINEBUF_SIZE, i)) < 0)
-                {
-                    fprintf(stderr, "shmrbuf_read failed with error code %d\n", retval);
-                }
-
-                else if (retval > 0)
-                {
-                    read = true;
-                    io_buf->iovs[*read_index].iov_len = retval;
-                    (*read_index)++;
-                }
-                
-                if((*read_index + 1) == QUEUE_SIZE){break;}
-                
+                fprintf(stderr, "shmrbuf_read failed with error code %d\n", retval);
             }
 
+            else if (retval > 0)
+            {
+                read = true;
+                io_buf->iovs[*read_index].iov_len = retval;
+                (*read_index)++;
+            }
+                
             if((*read_index + 1) == QUEUE_SIZE){break;}
-
+                
         }
+
+        if((*read_index + 1) == QUEUE_SIZE){break;}
+
+    }
 
 }
 

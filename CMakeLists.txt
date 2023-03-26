@@ -53,6 +53,7 @@ target_include_directories(poll_rbuf
 
 target_link_libraries(poll_rbuf 
     PUBLIC shm_ringbuf
+    PUBLIC Threads::Threads
 )
 
 # BPF Setup
