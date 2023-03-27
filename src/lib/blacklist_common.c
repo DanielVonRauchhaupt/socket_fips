@@ -407,7 +407,7 @@ int ebpf_setup(const char * device, bool verbose){
 	int err = ip_blacklist_bpf__load(skel);
 	if (err) {
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
-		
+		return EXIT_FAILURE;
 	}
 	/* Attach xdp */
 	int xdp_flags = 0;

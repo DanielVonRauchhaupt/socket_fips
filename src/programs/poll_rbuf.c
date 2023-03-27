@@ -139,21 +139,18 @@ void print_rbuf_info(struct shmrbuf_reader_arg_t * rbuf_arg)
 
 	printf("\n#######################################\n");
 	printf("Ringbuffer at %p\n\n",(void *)global_hdr);
-	printf("Identifier : %d\n", global_hdr->identifier);
-	printf("Number of segments : %d\n",global_hdr->segment_count);
-	printf("Number of lines per segment : %u\n",global_hdr->line_count);
-	printf("Line size : %u Bytes\n",global_hdr->line_size);
-	printf("Total buffer size : %u Bytes\n",global_hdr->line_count * global_hdr->line_size * global_hdr->segment_count);
-	printf("Overwrite : %s\n",(global_hdr->overwrite) ? "true" : "false");
-	printf("Number of readers : %d\n",global_hdr->reader_count);
+	printf("Checksum : %d\n", global_hdr->checksum);
+	printf("Number of segments: %d\n",global_hdr->segment_count);
+	printf("Number of lines per segment: %u\n",global_hdr->line_count);
+	printf("Line size: %u Bytes\n",global_hdr->line_size);
+	printf("Total buffer size: %u Bytes\n",global_hdr->line_count * global_hdr->line_size * global_hdr->segment_count);
+	printf("Overwrite: %s\n",(global_hdr->overwrite) ? "true" : "false");
+	printf("Number of readers: %d\n",global_hdr->reader_count);
 	printf("Writer attached: %s\n", (global_hdr->writer_att) ? "true" : "false");
 
 	for(int i = 0; i < global_hdr->reader_count; i++)
 	{
-		if(i == 0)
-		{
-			printf("Reader %d attached: %s\n", i, (*(&global_hdr->first_reader_att + i)) ? "true" : "false");
-		}
+		printf("Reader %d attached: %s\n", i, (*(&global_hdr->first_reader_att + i)) ? "true" : "false");
 	}
 	
 }

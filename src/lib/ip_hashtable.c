@@ -40,7 +40,6 @@ static int init_hbin(struct ip_hashbin_t ** hbin, void * addr, int domain)
         }
         if(pthread_mutex_init(&(*hbin)->lock,NULL))
         {
-            pthread_mutex_destroy(&(*hbin)->lock);
             free(*hbin);
             return IP_HTABLE_MUTEX_ERR;
         }
@@ -107,15 +106,6 @@ int ip_hashtable_init(struct ip_hashtable_t ** htable)
     {
         return IP_HTABLE_MEM_ERR;
     }
-    
-    for(int i = 0; i < NBINS; i++)
-    {
-        if(pthread_mutex_init(&(*htable)->hbins[i].lock,NULL))
-        {
-            ip_hashtable_destroy(htable);
-            return IP_HTABLE_MUTEX_ERR;
-        }
-    }
 
     return IP_HTABLE_SUCCESS;
 
@@ -149,7 +139,6 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
     // Claim lock of container
     if(pthread_mutex_lock(&hbin->lock))
     {
-        pthread_mutex_unlock(&hbin->lock);
         return IP_HTABLE_MUTEX_ERR;
     }
 
@@ -221,7 +210,6 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
 
         if(pthread_mutex_lock(&hbin->lock))
         {
-            pthread_mutex_unlock(&hbin->lock);
             return IP_HTABLE_MUTEX_ERR;
         }
         if(domain == AF_INET && hbin->domain == AF_INET)
@@ -274,7 +262,6 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
 
     if(pthread_mutex_lock(&hbin->lock))
     {
-        pthread_mutex_unlock(&hbin->lock);
         return IP_HTABLE_MUTEX_ERR;
     }
 
@@ -330,7 +317,6 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
 
             if(pthread_mutex_lock(&temp->lock))
             {
-                pthread_mutex_unlock(&temp->lock);
                 pthread_mutex_unlock(&hbin->lock);
                 return IP_HTABLE_MUTEX_ERR;
             }
@@ -362,7 +348,6 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
 
         if(pthread_mutex_lock(&it->lock))
         {
-            pthread_mutex_unlock(&it->lock);
             pthread_mutex_unlock(&hbin->lock);
             return IP_HTABLE_MUTEX_ERR;
         }
@@ -451,8 +436,6 @@ int ip_hashtable_destroy(struct ip_hashtable_t ** htable)
             }
             addr_count++;
         }
-
-
 
     }
 

@@ -744,7 +744,7 @@ void * ban_thread_routine(void * args)
 
 				for(i = 0; i < QUEUE_SIZE; i++)
 				{
-					uint16_t len = iovecs[i].iov_len - 1;
+					uint16_t len = iovecs[i].iov_len;
 					char * str = (char*) iovecs[i].iov_base;
 					while(len-- > 0)
 					{

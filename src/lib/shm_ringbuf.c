@@ -56,6 +56,11 @@ static inline int shm_cleanup(union shmrbuf_arg_t * args, enum shmrbuf_role_t ro
 
 }
 
+static inline uint32_t get_hdr_checksum(struct shmrbuf_global_hdr_t * global_hdr, key_t key)
+{
+    return (key + global_hdr->line_count + global_hdr->line_size + global_hdr->overwrite + global_hdr->reader_count + global_hdr->segment_count) % UINT32_MAX;
+}
+
 int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
 {
 
@@ -64,7 +69,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
         return IO_IPC_NULLPTR_ERR;
     }
 
-    bool reattach = false, overwrite = false, exists = (role == SHMRBUF_READER) ? true : false, force = false;
+    bool reattach = false, overwrite = false, exists = false, force = false, reset = false;
     int shm_id, shm_flags = 0, retval, i;
     key_t key = -1;
     off_t size = 0;
@@ -106,6 +111,8 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
             return IO_IPC_ARG_ERR;
         }
 
+        reset = args->rargs.flags & SHMRBUF_RESET;
+
         key = ftok(args->rargs.shm_key,0);
 
         break;
@@ -119,27 +126,30 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
         return errno;
     }
 
-    // If the required size is larger than one page, try to allocate huge pages
-    if(size <= PAGESIZE || (shm_id = shmget(key, size, shm_flags | SHM_HUGETLB)) == -1)
+    // Try to attach to existing segment
+    if(role == SHMRBUF_READER || reattach)
     {
-        if(errno == EEXIST)
+        if((shm_id = shmget(key, 0, 0)) == -1)
         {
-            exists = true;
-
-            if(reattach)
-            {
-                if((shm_id = shmget(key, 0, 0)) == -1)
-                {
-                    return errno;
-                }
-            }
-            else 
-            {
-                return errno;
-            }
+            if(role == SHMRBUF_READER) {return errno;}
+            exists = false;
         }
+        else {  exists = true; }
+       
+    }
 
-        else 
+    // Create new segment (writer only)
+    if(!exists && role == SHMRBUF_WRITER) // role check is redundant but doppelt hält besser 
+    {
+
+        if(size > PAGESIZE)
+        {
+            // If the required size is larger than one page, try to allocate huge pages
+            shm_id = shmget(key, size, shm_flags | SHM_HUGETLB);
+        } 
+
+        // Try again if allocation with SHM_HUGETLB failed
+        if(size <= PAGESIZE || shm_id == -1)
         {
             if((shm_id = shmget(key, size, shm_flags)) == -1)
             {
@@ -161,7 +171,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
 
         if(exists)
         {
-            if(global_hdr->identifier != key ||  (global_hdr->writer_att == true && !force))
+            if(global_hdr->checksum != get_hdr_checksum(global_hdr, key) ||  (global_hdr->writer_att == true && !force))
             {
                 shm_cleanup(args, role, true, false);   
                 return IO_IPC_ARG_ERR;
@@ -171,12 +181,12 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
         }
         else 
         {
-            global_hdr->identifier = key;
             global_hdr->line_count = args->wargs.line_count;
             global_hdr->line_size = args->wargs.line_size;
             global_hdr->segment_count = args->wargs.segment_count;
             global_hdr->reader_count = args->wargs.reader_count;
             global_hdr->overwrite = overwrite;
+            global_hdr->checksum = get_hdr_checksum(global_hdr, key);
             global_hdr->writer_att = true;
 
             memset(&global_hdr->first_reader_att, 0, sizeof(atomic_bool) * global_hdr->reader_count);
@@ -197,7 +207,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
     else 
     {
 
-        if(global_hdr->identifier != key || 
+        if(global_hdr->checksum != get_hdr_checksum(global_hdr, key) || 
            global_hdr->segment_count == 0 ||
            global_hdr->line_count == 0 ||
            global_hdr->line_size == 0 )
@@ -220,14 +230,16 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
                     registered = true;
                     break;
                 }
-
-                if(!registered)
-                {
-                    shm_cleanup(args, role, true, false);
-                    return IO_IPC_SIZE_ERR;
-                }
-
+                registered = false;
             }
+
+            if(!registered)
+            {
+                shm_cleanup(args, role, true, false);
+                return IO_IPC_SIZE_ERR;
+            }
+
+            
 
         }
 
@@ -272,6 +284,12 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
             seg_rhdr->write_index = seg_head;
             seg_rhdr->read_index = seg_head + (args->rargs.reader_id + 1);
             seg_rhdr->data = (void *)(seg_head + global_hdr->reader_count + 1);
+
+            if(reset)
+            {
+                uint32_t write_index = atomic_load(seg_rhdr->write_index);
+                if(write_index != *seg_rhdr->read_index) {atomic_store(seg_rhdr->read_index, write_index);}
+            }
 
         }
 

@@ -71,8 +71,9 @@
 
 // Sizes
 #define NANOSECONDS_PER_MILLISECOND 1000000
+#define MICROSECONDS_PER_MILISECOND 1000
 #define UTIL_TIMEOUT 500 * NANOSECONDS_PER_MILLISECOND // Timeout for background thread
-#define RECV_TIMEOUT 1000 // Timeout for receiving sockets
+#define RECV_TIMEOUT MICROSECONDS_PER_MILISECOND * 500 // Timeout for receiving sockets
 #define MAX_MSG __IOV_MAX // Size of receive and send queue for sockets
 
 // Helpers
@@ -805,7 +806,7 @@ void * run_socket(void *args)
 
     opt = 1;
 
-    if(setsockopt(sockfd,SOL_SOCKET,SO_REUSEPORT,(void*)&opt,sizeof(opt)) == -1)
+    if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, (void*)&opt, sizeof(opt)) == -1)
     {
         error_msg("Cant set socket option SO_REUSEPORT : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
         close(sockfd);
@@ -813,7 +814,7 @@ void * run_socket(void *args)
         return &targs->return_code;
     }
 
-    if(setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,(void*)&timeout,sizeof(timeout)) == -1)
+    if(setsockopt(sockfd,SOL_SOCKET, SO_RCVTIMEO, (void*)&timeout, sizeof(timeout)) == -1)
     {
         error_msg("Cant set socket option SO_RCVTIMEO : %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
         close(sockfd);
@@ -1078,7 +1079,7 @@ int main(int argc, char ** argv) {
             fprintf(stderr,"Thread %d returned with an error : error code %d\n", i, sock_targs[i].return_code);
         }
 
-        printf("Thread %d : packets received  : %lu, packets sent  : %lu, messages logged : %lu, messages dropped : %lu\n", i, sock_targs[i].pkt_in,sock_targs[i].pkt_out, sock_targs[i].log_count, sock_targs[i].log_drop);
+        printf("Thread %d : packets received: %lu, packets sent: %lu, messages logged: %lu, messages dropped: %lu\n", i, sock_targs[i].pkt_in,sock_targs[i].pkt_out, sock_targs[i].log_count, sock_targs[i].log_drop);
 
         total_in_count += sock_targs[i].pkt_in;
         total_out_count += sock_targs[i].pkt_out;
@@ -1086,7 +1087,7 @@ int main(int argc, char ** argv) {
         total_drop_count += sock_targs[i].log_drop;
    }
 
-   printf("Total packets received : %llu, total packets sent : %llu, total messages logged : %llu, total messages dropped : %llu\n",total_in_count, total_out_count, total_log_count, total_drop_count);
+   printf("Total packets received: %llu, total packets sent: %llu, total messages logged: %llu, total messages dropped: %llu\n",total_in_count, total_out_count, total_log_count, total_drop_count);
 
    if(util_targ.return_code == RETURN_FAIL)
    {

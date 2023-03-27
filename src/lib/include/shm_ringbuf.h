@@ -18,8 +18,9 @@
 // Flags
 #define SHMRBUF_REATT 0x01
 #define SHMRBUF_FRCAT 0x02
-#define SHMRBUF_OVWR 0x03
-#define SHMRBUF_NOREG 0x04
+#define SHMRBUF_OVWR 0x04
+#define SHMRBUF_NOREG 0x08
+#define SHMRBUF_RESET 0x016
 
 struct shmrbuf_writer_arg_t 
 {
@@ -45,7 +46,7 @@ struct shmrbuf_reader_arg_t
 // Todo: dynamic adding and removing of readers
 struct shmrbuf_global_hdr_t 
 {
-    key_t identifier;
+    uint32_t checksum;
     uint8_t segment_count, reader_count;
     uint16_t line_size;
     uint32_t line_count;
