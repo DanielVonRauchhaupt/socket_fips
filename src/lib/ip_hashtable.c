@@ -336,7 +336,16 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
             return retval;
 
         }
+
+        retval = hbin->count;
+        hbin->count = 0;
+
+        if(pthread_mutex_unlock(&hbin->lock))
+        {
+            return IP_HTABLE_MUTEX_ERR;
+        }
     
+        return retval; 
     }
 
     struct ip_hashbin_t * it = hbin;

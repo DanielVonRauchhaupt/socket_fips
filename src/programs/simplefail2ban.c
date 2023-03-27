@@ -113,7 +113,7 @@ struct ban_targs_t {
 	char * logmsg_buf;
 	char strerror_buf[64];
 	union ip_addr_t ip_addr;
-	int8_t domain;
+	int domain;
 	bool match;
 	int retval;
 };
@@ -627,10 +627,14 @@ void * ban_thread_routine(void * args)
 	struct timespec tspec = {.tv_sec=0,.tv_nsec=targs->wakeup_interval};
 	struct iovec iovecs[QUEUE_SIZE];
 	char strerror_buf[64];
-	int64_t retval, i;
+	uint64_t rcv_count = 0, ban_count = 0, steal_count = 0;
+	int retval, recv_retval, i;
+	int * domain = &targs->domain;
+	bool * match = &targs->match;
+	union ip_addr_t * ip_addr = &targs->ip_addr;
 	uint8_t seg_count, upper_seg, lower_seg;
-	uint16_t nsteal_counter = 0;
-	uint16_t * nsteal_ptr = (wload_stealing) ? &nsteal_counter: NULL;
+	uint16_t nsteal = 0;
+	uint16_t * nsteal_buf = (wload_stealing) ? &nsteal : NULL;
 
 	int nr_cpus = libbpf_num_possible_cpus();
 
@@ -713,17 +717,20 @@ void * ban_thread_routine(void * args)
 		{
 		case DISK:
 				
-			if((retval = uring_getlines(file_arg, iovecs, QUEUE_SIZE)) > 0)
+			if((recv_retval = uring_getlines(file_arg, iovecs, QUEUE_SIZE)) > 0)
 			{
 				
-				for(i = 0; i < retval; i++)
+				for(i = 0; i < recv_retval; i++)
 				{
 					((char *)iovecs[i].iov_base)[iovecs[i].iov_len -1] = '\0';
 				}
 			}
-			else if(retval < 0)
+			else if(recv_retval < 0)
 			{
-				error_msg("uring_getlines failed with error code %d\n", retval);
+				error_msg("uring_getlines failed with error code %d\n", recv_retval);
+				targs->rcv_count = rcv_count;
+				targs->ban_count = ban_count;
+				targs->steal_count = steal_count;
 				targs->retval = EXIT_FAIL;
 				return &targs->retval;	
 
@@ -733,13 +740,13 @@ void * ban_thread_routine(void * args)
 
 		case SHM:
 
-			if((retval = shmrbuf_readv_rng(shm_arg, iovecs, QUEUE_SIZE, lower_seg, upper_seg, nsteal_ptr)) > 0)
+			if((recv_retval = shmrbuf_readv_rng(shm_arg, iovecs, QUEUE_SIZE, lower_seg, upper_seg, nsteal_buf)) > 0)
 			{
 				
-				if(wload_stealing && nsteal_counter > 0)
+				if(wload_stealing && nsteal > 0)
 				{
-					targs->steal_count += nsteal_counter;
-					nsteal_counter = 0;
+					steal_count += nsteal;
+					nsteal = 0;
 				}
 
 				for(i = 0; i < QUEUE_SIZE; i++)
@@ -759,9 +766,12 @@ void * ban_thread_routine(void * args)
 
 			}
 
-			else if (retval < 0)
+			else if (recv_retval < 0)
 			{
-				error_msg("shmrbuf_readv_rng failed with error code %d\n", retval);
+				error_msg("shmrbuf_readv_rng failed with error code %d\n", recv_retval);
+				targs->rcv_count = rcv_count;
+				targs->ban_count = ban_count;
+				targs->steal_count = steal_count;
 				free(targs->logmsg_buf);
 				targs->logmsg_buf = NULL;
 				targs->retval = EXIT_FAIL;
@@ -774,11 +784,11 @@ void * ban_thread_routine(void * args)
 			break;
 		}
 
-		if(retval){
+		if(recv_retval){
 
-			targs->rcv_count += retval;
+			rcv_count += recv_retval;
 
-			for(i = 0; i < retval; i++)
+			for(i = 0; i < recv_retval; i++)
 			{
 
 				char * logstr = (char *) iovecs[i].iov_base;
@@ -786,15 +796,15 @@ void * ban_thread_routine(void * args)
 				// If matching enabled, matches log message against regex
 				if(matching)
 				{
-					targs->match = false;
-					targs->domain = -1;
+					*match = false;
+					*domain = -1;
 
 					if((retval = hs_scan(database, logstr, LOGBUF_SIZE, 0, scratch, regex_match_handler, targs)) != HS_SUCCESS && retval != HS_SCAN_TERMINATED)
 					{
-						error_msg("Hyperscan error for logstring %s : error code %d\n",logstr,retval);
+						error_msg("Hyperscan error for logstring %s : error code %d\n", logstr, retval);
 						continue;
 					}
-					else if(!targs->match || targs->domain == -1)
+					else if(!*match || *domain == -1)
 					{
 						continue;
 					}
@@ -803,13 +813,13 @@ void * ban_thread_routine(void * args)
 				// Try to convert log message to IP address
 				else 
 				{
-					if (inet_pton(AF_INET, logstr, &targs->ip_addr.ipv4) == 1) 
+					if (inet_pton(AF_INET, logstr, &ip_addr->ipv4) == 1) 
 					{
-						targs->domain = AF_INET;
+						*domain = AF_INET;
 					} 
-					else if (inet_pton(AF_INET6, logstr, &targs->ip_addr.ipv6) == 1) 
+					else if (inet_pton(AF_INET6, logstr, &ip_addr->ipv6) == 1) 
 					{
-						targs->domain = AF_INET6;
+						*domain = AF_INET6;
 					} 
 					else 
 					{
@@ -817,18 +827,19 @@ void * ban_thread_routine(void * args)
 					}
 				}
 				
+				
 				// Query htable for the number of times an ip address has been logged
-				switch (targs->domain)
+				switch (*domain)
 				{
 				case AF_INET:
 						
-						retval = ip_hashtable_insert(htable,&targs->ip_addr.ipv4,AF_INET);
+						retval = ip_hashtable_insert(htable, &ip_addr->ipv4,AF_INET);
 
 						break;
 
 				case AF_INET6:
 
-					retval = ip_hashtable_insert(htable,&targs->ip_addr.ipv6,AF_INET6);
+					retval = ip_hashtable_insert(htable, &ip_addr->ipv6,AF_INET6);
 
 					break;
 				
@@ -838,7 +849,7 @@ void * ban_thread_routine(void * args)
 
 				if(retval < 1)
 				{
-					error_msg("Error in htable query for logstring : %s : Error Code %d\n",logstr,retval);
+					error_msg("Error in htable query for logstring : %s : Error Code %d\n", logstr, retval);
 					continue;
 				}
 
@@ -847,24 +858,24 @@ void * ban_thread_routine(void * args)
 				{
 					time_t ts = time(NULL);
 
-					switch (targs->domain)
+					switch (*domain)
 					{
 					case AF_INET:
-						if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv4, &ts, AF_INET)) < 0)
+						if((retval = ip_llist_push(banned_list, &ip_addr->ipv4, &ts, AF_INET)) < 0)
 						{
 							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",logstr,retval);
 								continue;
 						}
-						retval = blacklist_modify(ipv4_ebpf_map, &targs->ip_addr.ipv4, ACTION_ADD, AF_INET, nr_cpus, strerror_buf, sizeof(strerror_buf));
+						retval = blacklist_modify(ipv4_ebpf_map, &ip_addr->ipv4, ACTION_ADD, AF_INET, nr_cpus, strerror_buf, sizeof(strerror_buf));
 						break;
 						
 					case AF_INET6:
-						if((retval = ip_llist_push(banned_list, &targs->ip_addr.ipv6, &ts, AF_INET6)) < 0)
+						if((retval = ip_llist_push(banned_list, &ip_addr->ipv6, &ts, AF_INET6)) < 0)
 						{
 							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",logstr,retval);
 								continue;
 						}
-						retval = blacklist_modify(ipv6_ebpf_map,&targs->ip_addr.ipv6,ACTION_ADD,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
+						retval = blacklist_modify(ipv6_ebpf_map, &ip_addr->ipv6, ACTION_ADD, AF_INET6, nr_cpus, strerror_buf, sizeof(strerror_buf));
 						break;
 
 					default:
@@ -877,7 +888,7 @@ void * ban_thread_routine(void * args)
 						continue;
 					}
 
-					targs->ban_count++;
+					ban_count++;
 					
 				} 
 			}
@@ -893,6 +904,9 @@ void * ban_thread_routine(void * args)
 
 	if(matching){hs_free_scratch(scratch);}
 	if(ipc_type != DISK) {free(targs->logmsg_buf);}
+	targs->rcv_count = rcv_count;
+	targs->ban_count = ban_count;
+	targs->steal_count = steal_count;
 	targs->logmsg_buf = NULL;
 	targs->retval = EXIT_SUCCESS;
 	return &targs->retval;
@@ -1219,7 +1233,7 @@ int main(int argc, char **argv)
 
 	}
 
-	uint64_t total_rcv_count = 0, total_ban_count = 0;
+	uint64_t total_rcv_count = 0, total_ban_count = 0, total_steal_count = 0;
 
 	printf("\n");
 
@@ -1228,12 +1242,13 @@ int main(int argc, char **argv)
 	{
 		if(thread_args[i].retval != RETURN_SUCC)
 		{
-			fprintf(stderr,"Watcher thread %d returned with error code %d\n",i,thread_args[i].retval);
+			fprintf(stderr,"Banning thread %d returned with error code %d\n",i,thread_args[i].retval);
 		}
-		printf("Thread %d : messages received %ld : clients banned %ld\n",i,thread_args[i].rcv_count,thread_args[i].ban_count);
+		printf("Thread %d : messages received: %ld, messages stolen: %ld, clients banned: %ld\n",i,thread_args[i].rcv_count, thread_args[i].steal_count,thread_args[i].ban_count);
 	
 		total_rcv_count += thread_args[i].rcv_count;
 		total_ban_count += thread_args[i].ban_count;
+		total_steal_count += thread_args[i].steal_count;
 
 	}
 
@@ -1242,7 +1257,7 @@ int main(int argc, char **argv)
 		fprintf(stderr,"Unban thread returned with error code %d\n",thread_args[i].retval);
 	}
 
-	printf("Total messages received %ld : total clients banned %ld : total clients unbanned %ld\n",total_rcv_count,total_ban_count,unban_targs.unban_count);
+	printf("Total messages received: %ld, total messages stolen: %ld, total clients banned: %ld, total clients unbanned: %ld\n",total_rcv_count, total_steal_count, total_ban_count, unban_targs.unban_count);
 
 	if(main_cleanup(&thread_args, &thread_ids))
 	{

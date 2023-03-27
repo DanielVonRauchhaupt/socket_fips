@@ -3,12 +3,13 @@
 #define MIN(a,b)((a > b) ? b : a)
 #define MAX(a,b)((a > b) ? a : b)
 
-static inline int shm_cleanup(union shmrbuf_arg_t * args, enum shmrbuf_role_t role, bool detach, bool destroy)
+static inline int shm_cleanup(union shmrbuf_arg_t * args, enum shmrbuf_role_t role, bool detach)
 {
 
     int retval = IO_IPC_SUCCESS, shm_id;
     uint32_t size;
     void * global_hdr, * segment_hdrs;
+    struct shmid_ds shmid_ds;
 
     switch (role)
     {
@@ -34,25 +35,32 @@ static inline int shm_cleanup(union shmrbuf_arg_t * args, enum shmrbuf_role_t ro
         return IO_IPC_ARG_ERR;
     }
 
-    if(destroy)
-    {
-        if(shmctl(shm_id, IPC_RMID, NULL) == -1)
-        {   
-        retval = errno;
-        }
-    }
-    else if(detach)
+    if(detach)
     {
         if(shmdt(global_hdr) == -1)
         {
             retval = errno;
         }  
+
+        else if (shmctl(shm_id, IPC_STAT, &shmid_ds) == -1)
+        {
+            retval = errno;
+        }
+
+        else if (shmid_ds.shm_nattch == 0) 
+        {
+            if(shmctl(shm_id, IPC_RMID, NULL) == -1)
+            {   
+                retval = errno;
+            }
+        }
+
     }
 
     free(segment_hdrs);
     memset(args, 0, size);
 
-    return IO_IPC_SUCCESS;
+    return retval;
 
 }
 
@@ -134,7 +142,11 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
             if(role == SHMRBUF_READER) {return errno;}
             exists = false;
         }
-        else {  exists = true; }
+        else 
+        {  
+            exists = true;
+            
+        }
        
     }
 
@@ -159,10 +171,10 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
 
     }
 
-    if((global_hdr = (struct shmrbuf_global_hdr_t *) shmat(shm_id,NULL,0)) == (void *) -1)
+    if((global_hdr = (struct shmrbuf_global_hdr_t *) shmat(shm_id, NULL, 0)) == (void *) -1)
     {
         retval = errno;
-        shm_cleanup(args, role, false, !exists);
+        shm_cleanup(args, role, false);
         return errno;
     }
 
@@ -173,7 +185,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
         {
             if(global_hdr->checksum != get_hdr_checksum(global_hdr, key) ||  (global_hdr->writer_att == true && !force))
             {
-                shm_cleanup(args, role, true, false);   
+                shm_cleanup(args, role, true);   
                 return IO_IPC_ARG_ERR;
             }     
 
@@ -198,7 +210,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
 
         if((args->wargs.segment_hdrs = (struct shmrbuf_seg_whdr_t *) calloc(sizeof(struct shmrbuf_seg_whdr_t),global_hdr->segment_count)) == NULL)
         {
-            shm_cleanup(args, role, exists, !exists);
+            shm_cleanup(args, role, exists);
             return IO_IPC_MEM_ERR;
         }
 
@@ -212,7 +224,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
            global_hdr->line_count == 0 ||
            global_hdr->line_size == 0 )
         {  
-            shm_cleanup(args, role, true, false);
+            shm_cleanup(args, role, true);
             return IO_IPC_ARG_ERR;
         }   
 
@@ -235,7 +247,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
 
             if(!registered)
             {
-                shm_cleanup(args, role, true, false);
+                shm_cleanup(args, role, true);
                 return IO_IPC_SIZE_ERR;
             }
 
@@ -244,7 +256,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
         }
 
         if((args->rargs.segment_hdrs = (struct shmrbuf_seg_rhdr_t *) calloc(sizeof(struct shmrbuf_seg_rhdr_t),global_hdr->segment_count)) == NULL){
-            shm_cleanup(args, role, true, false);
+            shm_cleanup(args, role, true);
             return IO_IPC_MEM_ERR;
         }
 
@@ -309,7 +321,7 @@ int shmrbuf_finalize(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
         return IO_IPC_NULLPTR_ERR;
     }
 
-    bool destroy = true;
+    bool destroy = false;
 
     switch (role)
     {
@@ -317,37 +329,21 @@ int shmrbuf_finalize(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
         
         args->wargs.global_hdr->writer_att = false;
 
-        for(int i = 0; i < args->wargs.global_hdr->reader_count; i++)
-        {
-            if(*(&args->wargs.global_hdr->first_reader_att + i) == true)
-            {
-                destroy = false;
-            }
-        }
-
         break;
 
     case SHMRBUF_READER:
 
-        if(args->rargs.flags & SHMRBUF_NOREG) {destroy = false;}
-        else
+        if(!(args->rargs.flags & SHMRBUF_NOREG))
         {
             *(&args->rargs.global_hdr->first_reader_att + args->rargs.reader_id) = false;
 
-            for(int i = 0; i < args->wargs.global_hdr->reader_count + 1; i++)
-            {
-                if(*(&args->wargs.global_hdr->writer_att + i) == true)
-                {
-                    destroy = false;
-                }
-            }
         }
         
     default:
         break;
     }
 
-    return shm_cleanup(args, role, true, destroy);
+    return shm_cleanup(args, role, true);
 
 }
 
