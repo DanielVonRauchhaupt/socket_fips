@@ -647,8 +647,8 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
                     continue;
                 }
 
-                log_iovs->iov_base = logstr;
-                log_iovs->iov_len = logstr_len;
+                log_iovs[invalid_count].iov_base = logstr;
+                log_iovs[invalid_count].iov_len = logstr_len;
                 invalid_count++;
 
             }
@@ -1000,7 +1000,7 @@ int main(int argc, char ** argv) {
         shmrbuf_arg->shm_key = args.shm_key;
         shmrbuf_arg->segment_count = thread_count;
         shmrbuf_arg->reader_count = (args.shm_reader_count) ? args.shm_reader_count : NREADERS;
-        shmrbuf_arg->flags = (args.overwrite) ? SHMRBUF_OVWR | SHMRBUF_REATT : SHMRBUF_REATT;
+        shmrbuf_arg->flags = (args.overwrite) ? SHMRBUF_OVWR | SHMRBUF_REATT | SHMRBUF_FRCAT : SHMRBUF_REATT | SHMRBUF_FRCAT;
 
         if((retval = shmrbuf_init((union shmrbuf_arg_t *)shmrbuf_arg, SHMRBUF_WRITER)) != IO_IPC_SUCCESS)
         {

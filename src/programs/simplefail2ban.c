@@ -629,7 +629,8 @@ void * ban_thread_routine(void * args)
 	char strerror_buf[64];
 	int64_t retval, i;
 	uint8_t seg_count, upper_seg, lower_seg;
-	uint64_t * nsteal_ptr = (wload_stealing) ? &targs->steal_count: NULL;
+	uint16_t nsteal_counter = 0;
+	uint16_t * nsteal_ptr = (wload_stealing) ? &nsteal_counter: NULL;
 
 	int nr_cpus = libbpf_num_possible_cpus();
 
@@ -735,6 +736,12 @@ void * ban_thread_routine(void * args)
 			if((retval = shmrbuf_readv_rng(shm_arg, iovecs, QUEUE_SIZE, lower_seg, upper_seg, nsteal_ptr)) > 0)
 			{
 				
+				if(wload_stealing && nsteal_counter > 0)
+				{
+					targs->steal_count += nsteal_counter;
+					nsteal_counter = 0;
+				}
+
 				for(i = 0; i < QUEUE_SIZE; i++)
 				{
 					uint16_t len = iovecs[i].iov_len - 1;

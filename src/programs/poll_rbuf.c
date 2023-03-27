@@ -226,7 +226,9 @@ int main(int argc, char ** argv){
 
 	if((retval = shmrbuf_init((union shmrbuf_arg_t *)&rbuf_arg, SHMRBUF_READER)))
 	{
-		fprintf(stderr,"shm_rbuf_init failed with error code %d\n",retval);
+		if(retval > 0) {fprintf(stderr,"shm_rbuf_init failed : %s\n", strerror(retval));}
+		else {fprintf(stderr,"shm_rbuf_init failed with error code %d\n",retval);}
+
 		exit(EXIT_FAILURE);
 	}
 

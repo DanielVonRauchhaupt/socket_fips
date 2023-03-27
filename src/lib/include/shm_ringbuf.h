@@ -17,8 +17,9 @@
 
 // Flags
 #define SHMRBUF_REATT 0x01
-#define SHMRBUF_OVWR 0x02
-#define SHMRBUF_NOREG 0x03
+#define SHMRBUF_FRCAT 0x02
+#define SHMRBUF_OVWR 0x03
+#define SHMRBUF_NOREG 0x04
 
 struct shmrbuf_writer_arg_t 
 {
@@ -100,6 +101,6 @@ int shmrbuf_readv(struct shmrbuf_reader_arg_t * args, struct iovec * iovecs, uin
 int shmrbuf_read_rng(struct shmrbuf_reader_arg_t * args, void * rbuf, uint16_t bufsize, uint8_t lower, uint8_t upper, bool * wsteal);
 
 // Reads multiple lines from a range of segments
-int shmrbuf_readv_rng(struct shmrbuf_reader_arg_t * args, struct iovec * iovecs, uint16_t vsize, uint8_t lower, uint8_t upper, uint64_t * wsteal);
+int shmrbuf_readv_rng(struct shmrbuf_reader_arg_t * args, struct iovec * iovecs, uint16_t vsize, uint8_t lower, uint8_t upper, uint16_t * wsteal);
 
 #endif
