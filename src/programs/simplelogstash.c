@@ -21,7 +21,7 @@
 #define OPEN_PERM 0644
 
 #define QUEUE_SIZE 100
-#define LINEBUF_SIZE 256
+#define LINEBUF_SIZE 128
 
 // Helpers
 #define UNUSED(x)(void)(x)
@@ -113,47 +113,14 @@ int8_t block_signals(void)
     return 0;
 }
 
-static inline void read_from_rbuf(struct shmrbuf_reader_arg_t * rbuf_arg, struct io_buf_t * io_buf, uint32_t * read_index)
-{
-    bool read = true;
-    int i, retval;
-
-    while(read)
-        {
-            read = false;
-
-            for(i = 0; i < rbuf_arg->head->segment_count; i++)
-            {
-                if((retval = shmrbuf_read(rbuf_arg, io_buf->logmsgbuf[*read_index], LINEBUF_SIZE, i)) < 0)
-                {
-                    fprintf(stderr, "shmrbuf_read failed with error code %d\n", retval);
-                }
-
-                else if (retval > 0)
-                {
-                    read = true;
-                    io_buf->iovs[*read_index].iov_len = retval;
-                    (*read_index)++;
-                }
-                
-                if((*read_index + 1) == QUEUE_SIZE){break;}
-                
-            }
-
-            if((*read_index + 1) == QUEUE_SIZE){break;}
-
-        }
-
-}
-
 int write_routine(void){
 
     int logfile_fd, retval, i;
     bool second_buf = false, error = false;
-    uint32_t read_index;
+    int read_index;
     struct io_uring ring;
-    struct io_uring_sqe * sqe;
-    struct io_uring_cqe * cqe;
+    struct io_uring_sqe * sqe = NULL;
+    struct io_uring_cqe * cqe = NULL;
     struct io_buf_t * io_buf1;
     struct io_buf_t * io_buf2;
     struct shmrbuf_reader_arg_t rbuf_arg = {.shm_key = shmkey};
@@ -167,7 +134,9 @@ int write_routine(void){
     for(i = 0; i < QUEUE_SIZE; i++)
     {
         io_buf1->iovs[i].iov_base = io_buf1->logmsgbuf[i];
+        io_buf1->iovs[i].iov_len = LINEBUF_SIZE;
         io_buf2->iovs[i].iov_base = io_buf2->logmsgbuf[i];
+        io_buf2->iovs[i].iov_len = LINEBUF_SIZE;
     }
 
     if((logfile_fd = open(logfile, OPEN_FLAGS, OPEN_PERM)) == -1)
@@ -198,6 +167,8 @@ int write_routine(void){
         return -1;
     }
 
+    uint8_t segment_count = rbuf_arg.global_hdr->segment_count;
+
     while (running)
     {
         
@@ -205,13 +176,23 @@ int write_routine(void){
 
        if(second_buf)
        {
-            read_from_rbuf(&rbuf_arg, io_buf2, &read_index);
+            if((read_index = shmrbuf_readv_rng(&rbuf_arg, io_buf2->iovs, QUEUE_SIZE, 0, segment_count, NULL)) < 0)
+            {
+                fprintf(stderr, "Error in shmrbuf_readv_rng : error code %d\n", read_index);
+                error = true;
+                break;
+            }
        }
 
        else 
 
        {
-            read_from_rbuf(&rbuf_arg, io_buf1, &read_index);
+            if((read_index = shmrbuf_readv_rng(&rbuf_arg, io_buf1->iovs, QUEUE_SIZE, 0, segment_count, NULL)) < 0)
+            {
+                fprintf(stderr, "Error in shmrbuf_readv_rng : error code %d\n", read_index);
+                error = true;
+                break;
+            }
        }
 
         if(sqe != NULL)
@@ -219,7 +200,9 @@ int write_routine(void){
             if(io_uring_wait_cqe(&ring, &cqe) == -1 || cqe->res < 0)
             {
                 perror("io_uring_wait_cqe failed");
+                io_uring_queue_exit(&ring);
                 error = true;
+                break;
             }
 
             io_uring_cqe_seen(&ring, cqe);   
@@ -234,6 +217,7 @@ int write_routine(void){
             if((sqe = io_uring_get_sqe(&ring)) == NULL){
                 perror("io_uring_get_sqe failed");
                 error = true;
+                break;
             }
 
             else 
@@ -251,6 +235,7 @@ int write_routine(void){
                 {
                     perror("io_uring_submit failed");
                     error = true;
+                    break;
                 }
                 else 
                 {
@@ -266,7 +251,6 @@ int write_routine(void){
         {
             nanosleep(&timeout, NULL);
         }
-
 
     }
 

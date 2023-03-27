@@ -16,8 +16,6 @@
 
 // Local includes
 #include "shm_ringbuf.h"
-#include "msgq.h"
-#include "sock.h"
 
 // Error types
 #define IO_IPC_SUCCESS (0)
@@ -33,9 +31,6 @@
 enum ipc_type_t 
 {
     SHM,
-    SHM_S,
-    SOCKET,
-    QUEUE,
     DISK,
 };
 

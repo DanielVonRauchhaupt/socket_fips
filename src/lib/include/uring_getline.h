@@ -26,4 +26,6 @@ struct file_io_t {
 
 int uring_getline(struct file_io_t * fio_arg, char ** lineptr);
 
+int uring_getlines(struct file_io_t * fio_arg, struct iovec * ivoecs, uint16_t vsize);
+
 #endif
