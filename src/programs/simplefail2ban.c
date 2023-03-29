@@ -470,12 +470,12 @@ void * unban_thread_routine(void * args)
 				{
 				case AF_INET:
 						
-					retval = bpf_map_delete_elem(ipv4_ebpf_map, (uint32_t *)iterator->key);
+					retval = bpf_map_delete_elem(ipv4_ebpf_map, iterator->key);
 					break;
 					
 				case AF_INET6:
 
-					retval = bpf_map_delete_elem(ipv6_ebpf_map, (__uint128_t *)iterator->key);
+					retval = bpf_map_delete_elem(ipv6_ebpf_map, iterator->key);
 					break; 
 
 				default:
@@ -841,13 +841,13 @@ void * ban_thread_routine(void * args)
 				{
 				case AF_INET:
 						
-						retval = ip_hashtable_insert(htable, &context.ip_addr.ipv4,AF_INET);
+						retval = ip_hashtable_insert(htable, &context.ip_addr.ipv4, AF_INET);
 
 						break;
 
 				case AF_INET6:
 
-					retval = ip_hashtable_insert(htable, &context.ip_addr.ipv6,AF_INET6);
+					retval = ip_hashtable_insert(htable, &context.ip_addr.ipv6, AF_INET6);
 
 					break;
 				
@@ -893,6 +893,11 @@ void * ban_thread_routine(void * args)
 					if(retval != EXIT_OK)
 					{
 						error_msg("Error adding entry to ebpf map : Error code %d : logstring : %s\n", retval, logstr);
+						
+						if((retval = ip_hashtable_remove(htable, &context.ip_addr, context.domain)) < 0)
+						{
+							error_msg("ip_hashtable_remove failed : Error code %d\n", retval);
+						}
 						continue;
 					}
 
