@@ -16,9 +16,10 @@ find_library(uring NAMES liburing PATHS /usr/lib/x86_64-linux-gnu)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
+add_compile_options(-Wall -Wextra -pedantic -O2)
+
 # UDP Server Programm
 add_executable(udp_server ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/udp_server.c)
-target_compile_options(udp_server PUBLIC -Wall -Wextra -Wpedantic)
 target_include_directories(udp_server
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
 )
@@ -31,7 +32,6 @@ target_link_libraries(udp_server
 
 # SimpleLogstash Programm
 add_executable(simplelogstash ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplelogstash.c)
-target_compile_options(simplelogstash PRIVATE -Wall -Wextra -Wpedantic)
 
 target_include_directories(simplelogstash
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
@@ -45,8 +45,6 @@ target_link_libraries(simplelogstash
 
 # Poll_rbuf utility
 add_executable(poll_rbuf ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/poll_rbuf.c)
-target_compile_options(poll_rbuf PRIVATE -Wall -Wextra -Wpedantic)
-
 target_include_directories(poll_rbuf
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
 )
@@ -76,7 +74,6 @@ target_link_libraries(ebpf_blacklist ip_blacklist_skel)
 
 # SimpleFail2ban Programm
 add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)                                                         
-target_compile_options(simplefail2ban PRIVATE -Wall -Wextra -Wpedantic)
 
 target_include_directories(simplefail2ban
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src            

@@ -157,25 +157,30 @@ int inline uring_getline(struct file_io_t * fio_arg, char ** lineptr)
 
 }
 
-int uring_getlines(struct file_io_t * fio_arg, struct iovec * iovecs, uint16_t vsize)
+int uring_getlines(struct file_io_t * fio_arg, struct iovec * iovecs, uint16_t vsize, uint16_t bufsize)
 {
 
     if(iovecs == NULL){return IO_IPC_ARG_ERR;}
 
     int retval;
     uint16_t read = 0;
+    char * line;
 
     for(uint16_t i = 0; i < vsize; i++)
     {
-        if((retval = uring_getline(fio_arg,(char **) &iovecs[i].iov_base)) < 0)
+        if((retval = uring_getline(fio_arg, &line)) < 0)
         {
             return retval;
         }
 
         if(retval > 0)
         {
-            iovecs[i].iov_len = retval;
-            read++;
+            if(retval <= bufsize && memcpy(iovecs[i].iov_base, line, retval) != NULL)
+            {
+                iovecs[i].iov_len = retval;
+                read++;
+            }
+                     
             continue;
         }
 

@@ -244,26 +244,32 @@ int blacklist_modify(int fd, void * ip_addr, unsigned int action, unsigned int d
 	}
 
 	if (res != 0) { 
-		if (domain == AF_INET){
-			inet_ntop(AF_INET,ip_addr,ip_str_buf,INET6_ADDRSTRLEN);
-			if(verbose){fprintf(stderr,
-			"%s() line %d IP:%s key:0x%X errno(%d/%s)",
-			__func__,__LINE__, ip_str_buf, (__u32)*((__u32 *)ip_addr), errno, strerror_r(errno,strerror_buf,strerror_size));}
+
+		if(verbose)
+		{
+
+			if (domain == AF_INET){
+				inet_ntop(AF_INET,ip_addr,ip_str_buf,INET6_ADDRSTRLEN);
+				fprintf(stderr,
+				"%s() line %d IP:%s key:0x%X errno(%d/%s)",
+				__func__,__LINE__, ip_str_buf, (__u32)*((__u32 *)ip_addr), errno, strerror_r(errno,strerror_buf,strerror_size));
+						}
+			else{
+				inet_ntop(AF_INET6,ip_addr,ip_str_buf,INET6_ADDRSTRLEN);
+				fprintf(stderr,
+				"%s() line %d IP:%s key:0x%llX%llX errno(%d/%s)",
+				__func__,__LINE__, ip_str_buf, (__u64)*((__uint128_t *)ip_addr),(__u64)(*((__uint128_t *)ip_addr)>>64), errno,strerror_r(errno,strerror_buf,strerror_size));	
 					}
-		else{
-			inet_ntop(AF_INET6,ip_addr,ip_str_buf,INET6_ADDRSTRLEN);
-			if(verbose){fprintf(stderr,
-			"%s() line %d IP:%s key:0x%llX%llX errno(%d/%s)",
-			__func__,__LINE__, ip_str_buf, (__u64)*((__uint128_t *)ip_addr),(__u64)(*((__uint128_t *)ip_addr)>>64), errno,strerror_r(errno,strerror_buf,strerror_size));} 	
-				}
 		
+		}
 
 		if (errno == 17) {
 			if(verbose){fprintf(stderr,"address already in blacklist\n");}
 			return EXIT_OK;
 		}
+
 		fprintf(stderr,"\n");
-		return EXIT_FAIL_MAP_KEY;
+		return errno;
 	}
 	if (verbose){
 		if (domain == AF_INET){

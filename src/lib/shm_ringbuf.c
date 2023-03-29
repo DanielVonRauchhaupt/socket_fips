@@ -470,7 +470,7 @@ int shmrbuf_writev(struct shmrbuf_writer_arg_t * args, struct iovec * iovecs, ui
         return IO_IPC_NULLPTR_ERR;
     }
 
-    else if(segment_id >= args->segment_count || vsize > args->line_count)
+    else if(segment_id >= args->segment_count)
     {
         return IO_IPC_ARG_ERR;
     }
@@ -485,6 +485,8 @@ int shmrbuf_writev(struct shmrbuf_writer_arg_t * args, struct iovec * iovecs, ui
     bool overwrite = global_hdr->overwrite;
     uint32_t write_index = *segment->write_index, line_count = global_hdr->line_count;
     char * write_dest = ((char *)segment->data + write_index*line_size);
+
+    vsize = (vsize > line_count) ? line_count : vsize;
 
     if(!overwrite)
     {
@@ -502,33 +504,89 @@ int shmrbuf_writev(struct shmrbuf_writer_arg_t * args, struct iovec * iovecs, ui
     }
 
     uint32_t new_write_index = (write_index + vsize) % line_count;
-    
-    for(uint16_t i = 0; i < vsize; i++)
+
+    if(new_write_index > write_index)
     {
-        uint16_t wsize = iovecs[i].iov_len;
 
-        if(wsize > line_size) {return IO_IPC_SIZE_ERR;}
-
-        if(memcpy(write_dest, iovecs[i].iov_base, wsize) == NULL)
+        for(uint16_t i = 0; i < vsize; i++)
         {
-            return IO_IPC_MEM_ERR;
+            uint16_t wsize = iovecs[i].iov_len;
+
+            if(wsize > line_size) {return IO_IPC_SIZE_ERR;}
+
+            if(memcpy(write_dest, iovecs[i].iov_base, wsize) == NULL)
+            {
+                return IO_IPC_MEM_ERR;
+            }
+
+            while(wsize < line_size)
+            {
+                *(write_dest + wsize) = '\0';
+                wsize++;
+            }
+
+            write_dest += line_size;
         }
 
-        while(wsize < line_size)
-        {
-            *(write_dest + wsize) = '\0';
-            wsize++;
-        }
 
-        write_dest += line_size;
     }
 
+    else 
+    {
+        uint16_t dst = line_count - write_index , i;
+
+        for(i = 0; i < dst; i++)
+        {
+            uint16_t wsize = iovecs[i].iov_len;
+
+            if(wsize > line_size) {return IO_IPC_SIZE_ERR;}
+
+            if(memcpy(write_dest, iovecs[i].iov_base, wsize) == NULL)
+            {
+                return IO_IPC_MEM_ERR;
+            }
+
+            while(wsize < line_size)
+            {
+                *(write_dest + wsize) = '\0';
+                wsize++;
+            }
+
+            write_dest += line_size;
+        }
+
+        dst = vsize - dst;
+        write_dest = (char *)segment->data;
+
+        for(i = 0; i < dst; i++)
+        {
+            uint16_t wsize = iovecs[i].iov_len;
+
+            if(wsize > line_size) {return IO_IPC_SIZE_ERR;}
+
+            if(memcpy(write_dest, iovecs[i].iov_base, wsize) == NULL)
+            {
+                return IO_IPC_MEM_ERR;
+            }
+
+            while(wsize < line_size)
+            {
+                *(write_dest + wsize) = '\0';
+                wsize++;
+            }
+
+            write_dest += line_size;
+        }
+
+    }
+    
+    
     atomic_store(segment->write_index,new_write_index);
 
     return vsize;
 }
 
-int shmrbuf_readv(struct shmrbuf_reader_arg_t * args, struct iovec * iovecs, uint16_t vsize, uint8_t segment_id)
+int shmrbuf_readv(struct shmrbuf_reader_arg_t * args, struct iovec * iovecs, uint16_t vsize, uint16_t bufsize, uint8_t segment_id)
 {
     if(args == NULL ||
        iovecs == NULL ||
@@ -578,14 +636,19 @@ int shmrbuf_readv(struct shmrbuf_reader_arg_t * args, struct iovec * iovecs, uin
     char * src = (char*)segment->data + read_index * line_size;
     struct iovec * iov;
 
+    if(bufsize < line_size) 
+    {
+        pthread_mutex_unlock(&segment->segment_lock);
+        return IO_IPC_SIZE_ERR;
+    }
+
     for(uint16_t i = 0; i < vsize; i++)
     {
         iov = &iovecs[i];
 
-        if(iov->iov_len < line_size) {return IO_IPC_SIZE_ERR;}
-
         if(memcpy(iov->iov_base, src, line_size) == NULL)
         {
+            pthread_mutex_unlock(&segment->segment_lock);
             return IO_IPC_MEM_ERR;
         }
         iov->iov_len = line_size;
@@ -651,7 +714,7 @@ int shmrbuf_read_rng(struct shmrbuf_reader_arg_t * args, void * rbuf, uint16_t b
 
 }
 
-int shmrbuf_readv_rng(struct shmrbuf_reader_arg_t * args, struct iovec * iovecs, uint16_t vsize, uint8_t lower, uint8_t upper, uint16_t * wsteal)
+int shmrbuf_readv_rng(struct shmrbuf_reader_arg_t * args, struct iovec * iovecs, uint16_t vsize, uint16_t bufsize, uint8_t lower, uint8_t upper, uint16_t * wsteal)
 {
     static thread_local uint8_t segment_index = 0;
     static thread_local uint8_t steal_index = 0;
@@ -666,7 +729,7 @@ int shmrbuf_readv_rng(struct shmrbuf_reader_arg_t * args, struct iovec * iovecs,
         if(segment_index == upper) {segment_index = lower;}
         else if (segment_index < lower) {segment_index = lower;}
 
-        if((retval = shmrbuf_readv(args, &iovecs[read], vsize, segment_index++)) < 0)
+        if((retval = shmrbuf_readv(args, &iovecs[read], vsize, bufsize, segment_index++)) < 0)
         {
             return retval;
         }
@@ -689,7 +752,7 @@ int shmrbuf_readv_rng(struct shmrbuf_reader_arg_t * args, struct iovec * iovecs,
             if(steal_index == lower) {steal_index = (upper == segment_count) ? 0 : upper;}
             else if(steal_index == segment_count){steal_index = (lower == 0) ? upper : 0;}
 
-            if((retval = shmrbuf_readv(args, &iovecs[read], vsize, steal_index++)) < 0)
+            if((retval = shmrbuf_readv(args, &iovecs[read], vsize, bufsize, steal_index++)) < 0)
             {
                 return retval;
             }

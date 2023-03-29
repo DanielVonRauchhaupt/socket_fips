@@ -176,7 +176,7 @@ int write_routine(void){
 
        if(second_buf)
        {
-            if((read_index = shmrbuf_readv_rng(&rbuf_arg, io_buf2->iovs, QUEUE_SIZE, 0, segment_count, NULL)) < 0)
+            if((read_index = shmrbuf_readv_rng(&rbuf_arg, io_buf2->iovs, QUEUE_SIZE, LINEBUF_SIZE, 0, segment_count, NULL)) < 0)
             {
                 fprintf(stderr, "Error in shmrbuf_readv_rng : error code %d\n", read_index);
                 error = true;
@@ -187,7 +187,7 @@ int write_routine(void){
        else 
 
        {
-            if((read_index = shmrbuf_readv_rng(&rbuf_arg, io_buf1->iovs, QUEUE_SIZE, 0, segment_count, NULL)) < 0)
+            if((read_index = shmrbuf_readv_rng(&rbuf_arg, io_buf1->iovs, QUEUE_SIZE, LINEBUF_SIZE, 0, segment_count, NULL)) < 0)
             {
                 fprintf(stderr, "Error in shmrbuf_readv_rng : error code %d\n", read_index);
                 error = true;
