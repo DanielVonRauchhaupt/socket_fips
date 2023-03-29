@@ -13,7 +13,6 @@
 #include <bpf/libbpf.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <errno.h>
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <sys/ipc.h>
@@ -402,7 +401,7 @@ void * unban_thread_routine(void * args)
 	struct timespec timeout = {.tv_sec=0,.tv_nsec=targs->wakeup_interval};
 	char strerror_buf[64];
 	struct ip_listnode_t *iterator, * prev;
-	int retval, nr_cpus = libbpf_num_possible_cpus();
+	int retval;
 	bool idle;
 
 	// Blocks (blockable) signals except SIGINT and SIGTERM
@@ -487,12 +486,12 @@ void * unban_thread_routine(void * args)
 				{
 				case AF_INET:
 						
-					retval = blacklist_modify(ipv4_ebpf_map,iterator->key,ACTION_DEL,AF_INET,nr_cpus,strerror_buf,sizeof(strerror_buf));
+					retval = bpf_map_delete_elem(ipv4_ebpf_map, (uint32_t *)iterator->key);
 					break;
 					
 				case AF_INET6:
 
-					retval = blacklist_modify(ipv6_ebpf_map,iterator->key,ACTION_DEL,AF_INET6,nr_cpus,strerror_buf,sizeof(strerror_buf));
+					retval = bpf_map_delete_elem(ipv6_ebpf_map, (__uint128_t *)iterator->key);
 					break; 
 
 				default:
@@ -500,9 +499,9 @@ void * unban_thread_routine(void * args)
 					error_msg("Invalid domain in banned list %d\n",iterator->domain);
 				}
 
-				if(retval < 0)
+				if(retval != 0)
 				{
-					error_msg("Error modifying ebf map : error code %d\n",retval);
+					error_msg("Error deleting entry from ebpf map : error code %d\n", retval);
 				} 
 
 				else 
@@ -642,20 +641,26 @@ void * ban_thread_routine(void * args)
 	**/
 
 	struct ban_targs_t * targs = (struct ban_targs_t *)args;
-	struct shmrbuf_reader_arg_t * shm_arg;
-	struct file_io_t * file_arg;
+	struct shmrbuf_reader_arg_t * shm_arg = NULL;
+	struct file_io_t * file_arg = NULL;
 	hs_scratch_t * scratch = NULL; 
 	struct hs_context_t context;
 	struct timespec tspec = {.tv_sec=0,.tv_nsec=targs->wakeup_interval};
 	struct iovec iovecs[QUEUE_SIZE];
 	char * logstr_buf;
 	uint64_t rcv_count = 0, ban_count = 0, steal_count = 0;
-	int retval, recv_retval, i;
-	uint8_t seg_count, upper_seg, lower_seg;
+	int retval, recv_retval = 0, i;
+	uint8_t seg_count, upper_seg = 0, lower_seg = 0;
 	uint16_t nsteal = 0;
 	uint16_t * nsteal_buf = (wload_stealing) ? &nsteal : NULL;
 
 	int nr_cpus = libbpf_num_possible_cpus();
+	__u64 values[nr_cpus];
+
+	if(memset(&values, 0, sizeof(values)) == NULL)
+	{
+		error_msg("Memset error \n");
+	}
 
 	if((logstr_buf = (char*) calloc(QUEUE_SIZE, LINEBUF_SIZE)) == NULL)
 	{
@@ -885,7 +890,7 @@ void * ban_thread_routine(void * args)
 							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n", logstr, retval);
 								continue;
 						}
-						retval = blacklist_modify(ipv4_ebpf_map, &context.ip_addr.ipv4, ACTION_ADD, AF_INET, nr_cpus, targs->strerror_buf, sizeof(targs->strerror_buf));
+						retval = bpf_map_update_elem(ipv4_ebpf_map, &context.ip_addr.ipv4, &values, BPF_NOEXIST);
 						break;
 						
 					case AF_INET6:
@@ -894,7 +899,7 @@ void * ban_thread_routine(void * args)
 							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",logstr,retval);
 								continue;
 						}
-						retval = blacklist_modify(ipv6_ebpf_map, &context.ip_addr.ipv6, ACTION_ADD, AF_INET6, nr_cpus, targs->strerror_buf, sizeof(targs->strerror_buf));
+						retval = bpf_map_update_elem(ipv6_ebpf_map, &context.ip_addr.ipv6, &values, BPF_NOEXIST);
 						break;
 
 					default:
@@ -903,7 +908,7 @@ void * ban_thread_routine(void * args)
 
 					if(retval != EXIT_OK)
 					{
-						error_msg("Error modifying blacklist : Error code %d : logstring : %s\n", retval, logstr);
+						error_msg("Error adding entry to ebpf map : Error code %d : logstring : %s\n", retval, logstr);
 						continue;
 					}
 
@@ -1036,13 +1041,6 @@ int main(int argc, char **argv)
 	 * 
 	 * 
 	*/
-
-	// Avoid unused variable warning
-	UNUSED(file_port_blacklist);
-	UNUSED(file_port_blacklist_count);
-	UNUSED(file_blacklist_ipv6_subnet);
-	UNUSED(file_blacklist_ipv6_subnetcache);
-	UNUSED(file_verdict);
 	
 	// Variables
     struct arguments args = {.ipc_set=false};
@@ -1106,7 +1104,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	if((ipv4_ebpf_map = open_bpf_map(file_blacklist_ipv4)) == RETURN_FAIL || (ipv6_ebpf_map = open_bpf_map(file_blacklist_ipv6)) == RETURN_FAIL)
+	if((ipv4_ebpf_map = open_bpf_map(FILE_BLACKLIST_IPV4)) == RETURN_FAIL || (ipv6_ebpf_map = open_bpf_map(FILE_BLACKLIST_IPV6)) == RETURN_FAIL)
 	{
 		fprintf(stderr,"ERR: Failed to open bpf map  : %s\n",strerror(errno));
 		main_cleanup(&thread_args, &thread_ids);

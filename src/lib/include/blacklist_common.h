@@ -36,17 +36,17 @@
  * Gotcha need to mount:
  *   mount -t bpf bpf /sys/fs/bpf/
  */
-static const char *file_blacklist_ipv4 = "/sys/fs/bpf/blacklistv4";
-static const char *file_blacklist_ipv6 = "/sys/fs/bpf/blacklistv6";
-static const char *file_verdict   = "/sys/fs/bpf/verdict_cnt";
-static const char *file_blacklist_ipv6_subnet   = "/sys/fs/bpf/blacklistv6subnet";
-static const char *file_blacklist_ipv6_subnetcache = "/sys/fs/bpf/blacklistv6subnetcache";
 
-static const char *file_port_blacklist = "/sys/fs/bpf/port_blacklist";
-static const char *file_port_blacklist_count[] = {
-	"/sys/fs/bpf/port_blacklist_drop_count_tcp",
-	"/sys/fs/bpf/port_blacklist_drop_count_udp"
-};
+#define FILE_BLACKLIST_IPV4 "/sys/fs/bpf/blacklistv4"
+#define FILE_BLACKLIST_IPV6 "/sys/fs/bpf/blacklistv6"
+#define FILE_VERDICT "/sys/fs/bpf/verdict_cnt"
+#define FILE_BLACKLIST_IPV6_SUBNET "/sys/fs/bpf/blacklistv6subnet"
+#define FILE_BLACKLIST_IPV6_SUBNETCACHE "/sys/fs/bpf/blacklistv6subnetcache"
+
+#define FILE_PORT_BLACKLIST "/sys/fs/bpf/port_blacklist";
+#define FILE_PORT_BLACKLIST_COUNT_TCP "/sys/fs/bpf/port_blacklist_drop_count_tcp"
+#define FILE_PORT_BLACKLIST_COUNT_UDP "/sys/fs/bpf/port_blacklist_drop_count_udp"
+
 #ifdef DEBUG
 static const char *file_reasons   = "/sys/fs/bpf/verdict_reasons";
 #endif
