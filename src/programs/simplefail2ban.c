@@ -27,7 +27,7 @@
 #include <ip_hashtable.h>
 #include <ip_llist.h>
 #include <io_ipc.h>
-#include <blacklist_common.h>
+#include <ebpf_utils.h>
 #include <uring_getline.h>
 #include "ip_blacklist.skel.h"
 
@@ -69,7 +69,7 @@ static enum ipc_type_t ipc_type = DEFAULT_IPC_TYPE;
 static uint8_t thread_count = NTHREADS;
 static uint16_t bantime = DEFAULT_BAN_TIME;
 static uint16_t limit = DEFAULT_BAN_THRESHOLD;
-static bool matching = false;
+static bool matching = false, verbose = false;
 static bool wload_stealing = false;
 static char * shm_key = DEFAULT_LOG;
 static char * logfile = DEFAULT_LOG;
@@ -123,9 +123,9 @@ struct ban_targs_t {
 
 
 // Argparse
-const char *argp_program_version = "simplefail2ban 0.0";
+const char *argp_program_version = "Simplefail2ban 1.0";
 static const char argp_program_doc[] =
-"simplefail2ban.\n"
+"Simplefail2ban.\n"
 "\n"
 "A minimal eBPF based IPS for testing purposes";
 
@@ -133,21 +133,24 @@ static char args_doc[] = "INTERFACE";
 
 static const struct argp_option opts[] = {
 
-	{ "file", 'f', "FILE", OPTION_ARG_OPTIONAL, "Specifies disk as the chosen ipc type", 0},
-	{"shm", 's', "KEY", OPTION_ARG_OPTIONAL, "Specifies shared memory as the ipc type", 0},
-	{"threads", 't', "N", OPTION_ARG_OPTIONAL, "Specify the number of banning threads to use",0},
-	{ "limit", 'l', "N", 0, "Number of matches before a client is banned", 0},
-	{ "bantime", 'b', "N", 0, "Number of seconds a client should be banned", 0},
-	{ "match", 'm', "REGEX", OPTION_ARG_OPTIONAL, "Use regex matching on logstrings", 0},
+	{ "file", 'f', "FILE", OPTION_ARG_OPTIONAL, "Set logifle as the chosen ipc type (optional: specify path to logfile)", 0},
+	{"shm", 's', "KEY", OPTION_ARG_OPTIONAL, "Set shared memory as the ipc type (optional: specify file for shared memory key)", 0},
+	{"threads", 't', "N", OPTION_ARG_OPTIONAL, "Enable multi-threading (optional: set number of banning threads to use)",0},
+	{ "limit", 'l', "N", 0, "Set number of matches before a client is banned", 0},
+	{ "bantime", 'b', "N", 0, "Set number of seconds a client should be banned", 0},
+	{ "match", 'm', "REGEX", OPTION_ARG_OPTIONAL, "Use regex matching on logstrings (optional: specify match regex to use)", 0},
 	{ "steal", 'w', NULL, 0, "Enable workload stealing for shared memory", 0},
+	{ "verbose", 'v', NULL, 0, "Enable debug output", 0},
 	{0},
 };
 
+// Struct passed to arg_parse
 struct arguments
 {
   bool ipc_set;
 };
 
+// Arguments parser for argparse
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
 	struct arguments *arguments = state->input;
@@ -255,6 +258,11 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 			wload_stealing = true;
 			break;
 
+	case 'v':
+
+			verbose = true;
+			break;
+
 	case ARGP_KEY_ARG:
       	if (state->arg_num >=2 )
 		{
@@ -325,34 +333,10 @@ void error_msg(const char * fmt,...)
     va_end(targs);
 }
 
-uint64_t gettime(void)
-{
-	struct timespec t;
-	int res;
-
-	res = clock_gettime(CLOCK_MONOTONIC, &t);
-	if (res < 0) {
-		fprintf(stderr, "Error with gettimeofday! (%i)\n", res);
-		exit(EXIT_FAIL);
-	}
-	return (uint64_t) t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
-}
-
-
 void sig_handler(int signal)
 {
     UNUSED(signal);
     server_running = false;
-}
-
-
-int open_bpf_map(const char *file)
-{
-	int fd;
-
-	fd = bpf_obj_get(file);
-	
-	return fd;
 }
 
 int8_t block_signals(bool keep)
@@ -994,7 +978,7 @@ bool main_cleanup(struct ban_targs_t ** targs, pthread_t ** tids)
 
 	}
 
-	if((retval = ebpf_cleanup(interface,true)) < 0)
+	if((retval = ebpf_cleanup(interface, true, verbose)) < 0)
 	{
 		fprintf(stderr,"ebpf cleanup failed : error code %d\n", retval);
 		error = true;
@@ -1044,13 +1028,13 @@ int main(int argc, char **argv)
 	
 	// Variables
     struct arguments args = {.ipc_set=false};
-	struct ban_targs_t * thread_args;
+	struct ban_targs_t * thread_args = NULL;
 	struct unban_targs_t unban_targs = {.unban_count = 0,.wakeup_interval=TIMEOUT};
-	struct file_io_t * file_io_args;
-	struct shmrbuf_reader_arg_t * rbuf_arg;
+	struct file_io_t * file_io_args = NULL;
+	struct shmrbuf_reader_arg_t * rbuf_arg = NULL;
 	hs_platform_info_t * platform_info;
 	hs_compile_error_t * compile_error;
-	pthread_t * thread_ids;
+	pthread_t * thread_ids = NULL;
 	int retval;
 	uint8_t i;
 
@@ -1084,7 +1068,7 @@ int main(int argc, char **argv)
 
 		if(hs_compile_multi(regexes, flags, ids, 3, HS_MODE_BLOCK, platform_info, &database, &compile_error) != HS_SUCCESS)
 		{
-			fprintf(stderr,"Hyperscan compilation failed with error code %d, %s\n", compile_error->expression, compile_error->message);
+			fprintf(stderr,"hyperscan compilation failed with error code %d, %s\n", compile_error->expression, compile_error->message);
 			hs_free_compile_error(compile_error);
 			exit(EXIT_FAILURE);
 		}
@@ -1097,7 +1081,7 @@ int main(int argc, char **argv)
     } 
 
 	// Load ebpf program onto chosen interface and setup maps
-    if(ebpf_setup(interface,false))
+    if(ebpf_setup(interface, verbose))
 	{
 		fprintf(stderr,"ebpf setup failed\n");
 		main_cleanup(&thread_args, &thread_ids);
@@ -1106,7 +1090,7 @@ int main(int argc, char **argv)
 
 	if((ipv4_ebpf_map = open_bpf_map(FILE_BLACKLIST_IPV4)) == RETURN_FAIL || (ipv6_ebpf_map = open_bpf_map(FILE_BLACKLIST_IPV6)) == RETURN_FAIL)
 	{
-		fprintf(stderr,"ERR: Failed to open bpf map  : %s\n",strerror(errno));
+		fprintf(stderr,"failed to open bpf map  : %s\n",strerror(errno));
 		main_cleanup(&thread_args, &thread_ids);
 		exit(EXIT_FAILURE);
 	}
@@ -1115,7 +1099,7 @@ int main(int argc, char **argv)
 	if((thread_ids = (pthread_t *) calloc(sizeof(pthread_t),thread_count)) == NULL ||
 	   (thread_args = (struct ban_targs_t *) calloc(sizeof(struct ban_targs_t),thread_count)) == NULL)
 	{
-		perror("Calloc failed");
+		perror("calloc failed");
 		main_cleanup(&thread_args, &thread_ids);
 		exit(EXIT_FAILURE);
 	}

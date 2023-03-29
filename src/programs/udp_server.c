@@ -499,19 +499,19 @@ void cleanup_listen_and_reply(struct mmsghdr ** msg_hdrs,
 int listen_and_reply(int sockfd, struct sock_targ_t * targs)
 {
 
-    struct mmsghdr * msg_hdrs;
-    struct iovec * snd_rcv_iovs, * log_iovs;
-    unsigned char * payload_buf;
-    struct sockaddr_in6 * ip_buf;
-    char * logstr_buf;
+    struct mmsghdr * msg_hdrs = NULL;
+    struct iovec * snd_rcv_iovs, * log_iovs = NULL;
+    unsigned char * payload_buf = NULL;
+    struct sockaddr_in6 * ip_buf = NULL;
+    char * logstr_buf = NULL;
     int logfile_fd, retval_rcv, retval_snd, retval_ipc, i, logbuf_size, invalid_count = 0;
     uint64_t pkt_in = 0, pkt_out = 0, msg_out = 0, msg_drop = 0;
     uint16_t logstr_len;
     uint8_t segment_id = targs->thread_id;
-    struct io_uring * ring;
+    struct io_uring * ring = NULL;
     struct io_uring_sqe * sqe = NULL;
     struct io_uring_cqe * cqe = NULL;
-    struct shmrbuf_writer_arg_t * rbuf_arg;
+    struct shmrbuf_writer_arg_t * rbuf_arg = NULL;
 
     switch (ipc_type)
     {
