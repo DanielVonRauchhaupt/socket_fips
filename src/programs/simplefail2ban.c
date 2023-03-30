@@ -496,7 +496,7 @@ void * unban_thread_routine(void * args)
 				prev = iterator;
 				iterator = iterator->next;
 
-				if((retval = ip_hashtable_remove(htable, prev->key, prev->domain)) < 0)
+				if((retval = ip_hashtable_remove(htable, prev->key, prev->domain)) < 1)
 				{
 					error_msg("Error removing key from hashtable : error code %d\n",retval);
 				}
@@ -757,7 +757,7 @@ void * ban_thread_routine(void * args)
 					nsteal = 0;
 				}
 
-				for(i = 0; i < QUEUE_SIZE; i++)
+				for(i = 0; i < recv_retval; i++)
 				{
 					uint16_t len = iovecs[i].iov_len;
 					char * str = (char*) iovecs[i].iov_base;
@@ -880,7 +880,7 @@ void * ban_thread_routine(void * args)
 					case AF_INET6:
 						if((retval = ip_llist_push(banned_list, &context.ip_addr.ipv6, &ts, AF_INET6)) < 0)
 						{
-							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",logstr,retval);
+							error_msg("Error pushing to banned list for logstring : %s : Error Code %d\n",logstr, retval);
 								continue;
 						}
 						retval = bpf_map_update_elem(ipv6_ebpf_map, &context.ip_addr.ipv6, &values, BPF_NOEXIST);

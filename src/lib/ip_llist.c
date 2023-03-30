@@ -31,7 +31,7 @@ static int create_lnode(struct ip_listnode_t ** lnode,void * key, time_t * ts, i
     
     case AF_INET6:
 
-        if(((*lnode)->key = calloc(sizeof(__uint128_t),1)) == NULL)
+        if(((*lnode)->key = calloc(sizeof(__uint128_t), 1)) == NULL)
         {
             free(lnode);
             return IP_LLIST_MEM_ERR;
@@ -89,7 +89,7 @@ int ip_llist_push(struct ip_llist_t * llist, void * key, time_t * ts, int domain
     int retval;    
     struct ip_listnode_t * new;
 
-    if((retval = create_lnode(&new,key,ts,domain)))
+    if((retval = create_lnode(&new, key, ts, domain)))
     {
         return retval;
     }

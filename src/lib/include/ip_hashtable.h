@@ -57,6 +57,11 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * key, int domain);
 int ip_hashtable_remove(struct ip_hashtable_t * htable, void * key, int domain);
 
 /*
+    Set the value for entry addr. Returns the count on success or zero if the address is not present
+*/
+int ip_hashtable_set(struct ip_hashtable_t * htable, void * key, int domain, uint32_t value);
+
+/*
     Frees memory for the ip_hasttable_t struct (Should be called after exiting the multi threaded context)
 */
 int ip_hashtable_destroy(struct ip_hashtable_t ** htable); 

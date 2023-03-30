@@ -42,7 +42,7 @@
 #define NREADERS 1
 
 // Open options for logfile
-#define OPEN_MODE O_WRONLY | O_CREAT | O_APPEND | O_TRUNC
+#define OPEN_MODE O_WRONLY | O_CREAT | O_TRUNC
 #define OPEN_PERM 0644
 
 // Return codes
@@ -601,7 +601,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
 
         pkt_in += retval_rcv;
 
-        // If ipc_type is DIKS, check if previos io_uring submission was successful
+        // If ipc_type is DISK, check if previous io_uring submission was successful
         if(ipc_type == DISK && sqe!= NULL)
         {
             sqe = NULL;
@@ -639,7 +639,8 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
                 if(logshort)
                 {
                     logstr_len = logstr_short(logstr, &((struct sockaddr_in6 *)msg_hdrs[i].msg_hdr.msg_name)->sin6_addr);
-                } else 
+                } 
+                else 
                 {
                     logstr_len = logstr_long(logstr, &((struct sockaddr_in6 *)msg_hdrs[i].msg_hdr.msg_name)->sin6_addr);
                 }
