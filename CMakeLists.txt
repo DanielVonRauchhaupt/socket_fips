@@ -77,7 +77,6 @@ add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefai
 
 target_include_directories(simplefail2ban
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src            
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/list/src  
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs
     PUBLIC /usr/include/hs
@@ -93,3 +92,20 @@ target_link_libraries(simplefail2ban
     PUBLIC hs
     PUBLIC uring
     PUBLIC Threads::Threads) 
+
+# ebpf blacklist cmd 
+
+#add_executable(ebpf_blacklist_cmd ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/ebpf_blacklist_cmd.c)
+
+#add_dependencies(ebpf_blacklist_cmd libbpf-build bpftool)
+
+#target_include_directories(ebpf_blacklist_cmd
+#    PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/external/libbpf/bpf 
+#    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src           
+#    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+#    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs
+#) 
+
+#target_link_libraries(ebpf_blacklist_cmd
+#    PUBLIC ebpf_utils
+#    ) 

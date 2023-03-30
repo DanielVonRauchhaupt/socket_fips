@@ -500,7 +500,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
 {
 
     struct mmsghdr * msg_hdrs = NULL;
-    struct iovec * snd_rcv_iovs, * log_iovs = NULL;
+    struct iovec * snd_rcv_iovs = NULL, * log_iovs = NULL;
     unsigned char * payload_buf = NULL;
     struct sockaddr_in6 * ip_buf = NULL;
     char * logstr_buf = NULL;
@@ -555,6 +555,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
         return RETURN_FAIL;
     }
 
+    // redundant due to calloc
     if(memset(msg_hdrs, 0, sizeof(struct mmsghdr) * MAX_MSG) == NULL)
     {
         error_msg("Memset error\n");
@@ -625,33 +626,36 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
             io_uring_cqe_seen(ring, cqe);
             
         }
+
+        uint32_t logstr_index = 0;
  
         for(i = 0; i < retval_rcv; i++)
         {
 
-            uint32_t logstr_index = i*logbuf_size;
-
             if(payload_buf[i] == INVALID_PAYLOAD)
             {
-                void * logstr = &logstr_buf[logstr_index];
+                char * logstr = &logstr_buf[logstr_index];
 
                 if(logshort)
                 {
                     logstr_len = logstr_short(logstr, &((struct sockaddr_in6 *)msg_hdrs[i].msg_hdr.msg_name)->sin6_addr);
-                } else {
+                } else 
+                {
                     logstr_len = logstr_long(logstr, &((struct sockaddr_in6 *)msg_hdrs[i].msg_hdr.msg_name)->sin6_addr);
                 }
 
-                if(logstr_len == 0)
+                if(logstr_len > 0)
                 {
-                    error_msg("Error writing logstring\n");
-                    continue;
+                    log_iovs[invalid_count].iov_base = (void *) logstr;
+                    log_iovs[invalid_count].iov_len = logstr_len;
+                    logstr_index += logbuf_size;
+                    invalid_count++;
                 }
 
-                log_iovs[invalid_count].iov_base = logstr;
-                log_iovs[invalid_count].iov_len = logstr_len;
-                invalid_count++;
-
+                else 
+                {
+                    error_msg("Error writing logstring\n");
+                }
             }
 
             payload_buf[i] = payload_buf[i] + 1;
@@ -729,7 +733,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
         if(retval_snd == -1)
         {
             if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-                error_msg("Error in sendmmsg : sendcount %d, %s\n",strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
+                error_msg("Error in sendmmsg : %s\n", strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                 cleanup_listen_and_reply(&msg_hdrs,
                                  &snd_rcv_iovs,
                                  &log_iovs,
@@ -922,7 +926,8 @@ int main(int argc, char ** argv) {
     struct shmrbuf_writer_arg_t * shmrbuf_arg;
     struct util_targ_t util_targ = {.interval=(size_t)UTIL_TIMEOUT};
 
-    struct arguments args = {
+    struct arguments args = 
+    {
         .ipc_set = false,
         .logfile = DEFAULT_LOG,
     };
@@ -1041,7 +1046,7 @@ int main(int argc, char ** argv) {
     }
 
     
-    if(pthread_create(&threads[0],NULL,util_thread_routine,(void*)&util_targ))
+    if(pthread_create(&threads[0], NULL, util_thread_routine, (void*)&util_targ))
     {
         perror("Creating util thread failed");
         ipc_cleanup(sock_targs, thread_count, ipc_type);
@@ -1052,7 +1057,7 @@ int main(int argc, char ** argv) {
     for(i = 1; i < thread_count; i++)
     {
 
-        if(pthread_create(&threads[i],NULL,run_socket,(void*)&sock_targs[i]))
+        if(pthread_create(&threads[i], NULL, run_socket, (void*)&sock_targs[i]))
         {
             perror("Could not create listener thread");
         }
@@ -1076,7 +1081,7 @@ int main(int argc, char ** argv) {
    {
         if(sock_targs[i].return_code != RETURN_SUC)
         {
-            fprintf(stderr,"Thread %d returned with an error : error code %d\n", i, sock_targs[i].return_code);
+            fprintf(stderr,"Thread %d terminated with an error : error code %d\n", i, sock_targs[i].return_code);
         }
 
         printf("Thread %d : packets received: %lu, packets sent: %lu, messages logged: %lu, messages dropped: %lu\n", i, sock_targs[i].pkt_in,sock_targs[i].pkt_out, sock_targs[i].log_count, sock_targs[i].log_drop);
