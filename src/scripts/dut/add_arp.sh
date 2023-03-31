@@ -25,20 +25,20 @@ IP6_INVALID_START=257
 IP6_INVALID_END=65278
 
 # Valid ipv4
-for ((i=IP_START;i<=IP_END;i++))
-do
-   ip neigh add "$IP_PREFIX_VAL.$i" lladdr $ETHER_ADDR dev $INTERFACE
-done 
+#for ((i=IP_VALID_START;i<=IP_VALID_END;i++))
+#do
+#   ip neigh add "$IP_PREFIX_VAL.$i" lladdr $ETHER_ADDR dev $INTERFACE
+#done 
 
 # Invalid ipv4
 
-for((i=IP_START;i<=IP_END;i++))
-do
-   for ((j=IP_START;j<=IP_END;j++))
-   do
-      ip neigh add "$IP_PREFIX_INVAL.$j.$i" lladdr $ETHER_ADDR dev $INTERFACE
-   done 
-done
+#for((i=IP_INVALID_START;i<=IP_INVALID_END;i++))
+#do
+#   for ((j=IP_START;j<=IP_INVALID_END;j++))
+#   do
+#      ip neigh add "$IP_PREFIX_INVAL.$j.$i" lladdr $ETHER_ADDR dev $INTERFACE
+#   done 
+#done
 
 # Valid ipv6
 for ((i=IP6_VALID_START;i<=IP6_VALID_END;i++))
@@ -46,7 +46,7 @@ do
    ip neigh add "2001:db8:db8:0:a03:$(printf '%x\n' $i):0:2" lladdr $ETHER_ADDRV6 dev $INTERFACEV6
 done
 
-# Invalid ipv6
+## Invalid ipv6
 for ((i=IP6_INVALID_START;i<=IP6_INVALID_END;i++))
 do
    ip -6 neigh add "2001:db8:c0a8:$(printf '%x\n' $i)::2" lladdr $ETHER_ADDRV6 dev $INTERFACEV6

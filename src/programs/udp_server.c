@@ -729,11 +729,9 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
 
         }
 
-        retval_snd = sendmmsg(sockfd, msg_hdrs, retval_rcv, 0);
-
-        if(retval_snd == -1)
+        if((retval_snd = sendmmsg(sockfd, msg_hdrs, retval_rcv, 0)) == -1)
         {
-            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR && errno != ECONNREFUSED) {
                 error_msg("Error in sendmmsg : %s\n", strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                 cleanup_listen_and_reply(&msg_hdrs,
                                  &snd_rcv_iovs,
