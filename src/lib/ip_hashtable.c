@@ -229,18 +229,22 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
 
     while(it != NULL)
     {
+
+        if(pthread_mutex_lock(&it->lock))
+        {
+            pthread_mutex_unlock(&hbin->lock);
+            return IP_HTABLE_MUTEX_ERR;
+        }
+
         if(pthread_mutex_unlock(&hbin->lock))
         {
+            pthread_mutex_lock(&it->lock);
             return IP_HTABLE_MUTEX_ERR;
         }
 
         hbin = it;
         it = it->next;
 
-        if(pthread_mutex_lock(&hbin->lock))
-        {
-            return IP_HTABLE_MUTEX_ERR;
-        }
         if(domain == AF_INET && hbin->domain == AF_INET)
         {
             if(*((uint16_t *)hbin->key) == GET_KEY_IP4(addr))
@@ -352,7 +356,7 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
             hbin->count = temp->count;
             hbin->next = temp->next;
 
-            if(hbin->next->domain == AF_INET)
+            if(temp->domain == AF_INET)
             {
                 *((uint16_t *)hbin->key) = *((uint16_t *) temp->key);
             }
