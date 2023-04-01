@@ -90,7 +90,7 @@ static int init_hbin(struct ip_hashbin_t ** hbin, void * addr, int domain)
             }
             (*hbin)->domain = AF_INET;
             *((uint16_t *)(*hbin)->key) = GET_KEY_IP4(addr);
-            (*hbin)->count++;
+            (*hbin)->count = 1;
             break;
 
         case AF_INET6:
@@ -102,10 +102,11 @@ static int init_hbin(struct ip_hashbin_t ** hbin, void * addr, int domain)
                 }
                 return IP_HTABLE_MEM_ERR;
             }
+
             (*hbin)->domain = AF_INET6;
             if(memcpy((*hbin)->key, addr, sizeof(__uint128_t)) != NULL)
             {
-                (*hbin)->count++;
+                (*hbin)->count = 1;
                 break;
             }
             
@@ -164,7 +165,7 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
     int retval;
     uint16_t index = (domain == AF_INET) ? HASH_IP4(addr) : jenkins_hash_ipv6((__uint128_t *)addr);
     struct ip_hashbin_t * hbin = &htable->hbins[index];
-    
+   
     // Claim lock of container
     if(pthread_mutex_lock(&hbin->lock))
     {
@@ -174,7 +175,8 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
     // Initialize container if empty
     if(hbin->key == NULL)
     {
-        if((retval = init_hbin(&hbin,addr,domain)))
+
+        if((retval = init_hbin(&hbin , addr, domain)))
         {
             pthread_mutex_unlock(&hbin->lock);
             return retval;
@@ -183,7 +185,6 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
         {
             return IP_HTABLE_MUTEX_ERR;
         }
-        
         return 1;
     }
 
@@ -217,8 +218,9 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
                 }
                 return retval;
             }
-            break;
         }
+        break;
+        
     default:
         pthread_mutex_unlock(&hbin->lock);
         return IP_HTABLE_ARG_ERR;
@@ -257,14 +259,20 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
                 return retval;
             }
         } 
-        else if(memcmp(hbin->key, addr, 16) == 0) {
-            retval = ++(hbin->count);
-            if(pthread_mutex_unlock(&hbin->lock))
+
+        else if(domain == AF_INET6 && hbin->domain == AF_INET6)
+        {
+            if(memcmp(hbin->key, addr, 16) == 0) 
             {
-                return IP_HTABLE_MUTEX_ERR;
+                retval = ++(hbin->count);
+                if(pthread_mutex_unlock(&hbin->lock))
+                {
+                    return IP_HTABLE_MUTEX_ERR;
+                }
+                return retval;
             }
-            return retval;
         }
+        
             
     }
 
@@ -355,6 +363,7 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
 
             hbin->count = temp->count;
             hbin->next = temp->next;
+            hbin->domain = temp->domain;
 
             if(temp->domain == AF_INET)
             {
@@ -419,7 +428,7 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
         else if(it->domain == AF_INET6 && domain == AF_INET6)
         {
 
-            if(memcmp(it->key,addr,16) == 0)
+            if(memcmp(it->key, addr, 16) == 0)
             {
                 retval = it->count;
                 match = true;
