@@ -316,7 +316,7 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
             return IP_HTABLE_MUTEX_ERR;
         }
 
-        return 0;
+        return IP_HTABLE_NOEXIST;
     }
 
     switch (domain)
@@ -468,7 +468,145 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
         return IP_HTABLE_MUTEX_ERR;
     }
 
-    return 0;    
+    return IP_HTABLE_NOEXIST;    
+
+}
+
+int ip_hashtable_set(struct ip_hashtable_t * htable, void * addr, int domain, uint32_t value)
+{
+
+    if(htable == NULL || addr == NULL)
+    {
+        return IP_HTABLE_NULLPTR_ERR;
+    }
+
+    int retval;
+    uint16_t index = (domain == AF_INET) ? HASH_IP4(addr) : jenkins_hash_ipv6((__uint128_t *) addr);
+    struct ip_hashbin_t * hbin = &htable->hbins[index];
+    bool match;
+
+    if(pthread_mutex_lock(&hbin->lock))
+    {
+        return IP_HTABLE_MUTEX_ERR;
+    }
+
+    if(hbin->key == NULL)
+    {
+        if(pthread_mutex_unlock(&hbin->lock))
+        {
+            
+            return IP_HTABLE_MUTEX_ERR;
+        }
+
+        return IP_HTABLE_NOEXIST;
+    }
+
+    switch (domain)
+    {
+        case AF_INET:
+            if(hbin->domain == AF_INET)
+            {
+                if(*((uint16_t *)hbin->key) == GET_KEY_IP4(addr))
+                {
+                    retval = hbin->count;
+                    hbin->count = value;
+
+                    if(pthread_mutex_unlock(&hbin->lock))
+                    {
+                        return IP_HTABLE_MUTEX_ERR;
+                    }
+
+                    return retval;
+                }
+            }
+            break;
+
+        case AF_INET6:
+            if(hbin->domain == AF_INET6)
+            {
+                if(memcmp(hbin->key,addr,16) == 0)
+                {
+                    retval = hbin->count;
+                    hbin->count = value;
+
+                    if(pthread_mutex_unlock(&hbin->lock))
+                    {
+                        return IP_HTABLE_MUTEX_ERR;
+                    }
+
+                    return retval;
+                }
+            }
+            break;
+    
+    default:
+        pthread_mutex_unlock(&hbin->lock);
+        return IP_HTABLE_ARG_ERR;
+    }
+
+    struct ip_hashbin_t * it = hbin;
+
+    while(it->next != NULL)
+    {
+
+        it = it->next;
+
+        if(pthread_mutex_lock(&it->lock))
+        {
+            pthread_mutex_unlock(&hbin->lock);
+            return IP_HTABLE_MUTEX_ERR;
+        }
+
+        if(pthread_mutex_unlock(&hbin->lock))
+        {
+            pthread_mutex_unlock(&it->lock);
+            return IP_HTABLE_MUTEX_ERR;
+        }
+
+        if(domain == AF_INET && it->domain == AF_INET)
+        {
+            if(*((uint16_t *)it->key) == GET_KEY_IP4(addr))
+            {
+                retval = it->count;
+                it->count = value;
+
+                if(pthread_mutex_unlock(&it->lock))
+                {
+                    return IP_HTABLE_MUTEX_ERR;
+                }
+
+                return retval;    
+            }
+        }
+
+        else if(it->domain == AF_INET6 && domain == AF_INET6)
+        {
+
+            if(memcmp(it->key, addr, 16) == 0)
+            {
+                retval = it->count;
+                it->count = value;
+
+                if(pthread_mutex_unlock(&it->lock))
+                {
+                    return IP_HTABLE_MUTEX_ERR;
+                }
+
+                return retval;
+            }
+
+        }
+
+        hbin = it;
+
+    }
+
+    if(pthread_mutex_unlock(&hbin->lock))
+    {
+        return IP_HTABLE_MUTEX_ERR;
+    }
+
+    return IP_HTABLE_NOEXIST;    
 
 }
 

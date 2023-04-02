@@ -73,7 +73,7 @@
 #define NANOSECONDS_PER_MILLISECOND 1000000
 #define MICROSECONDS_PER_MILISECOND 1000
 #define UTIL_TIMEOUT 500 * NANOSECONDS_PER_MILLISECOND // Timeout for background thread
-#define RECV_TIMEOUT MICROSECONDS_PER_MILISECOND * 500 // Timeout for receiving sockets
+#define RECV_TIMEOUT MICROSECONDS_PER_MILISECOND * 10 // Timeout for receiving sockets
 #define MAX_MSG __IOV_MAX // Size of receive and send queue for sockets
 
 // Helpers
@@ -414,11 +414,11 @@ uint16_t logstr_short(char * logstr_buf, struct in6_addr* addr)
     
     if(IN6_IS_ADDR_V4MAPPED(addr))
     {
-        addrlen = (uint16_t) ipv4_to_str((void *)((char *)addr + 12),(void *)(logstr_buf));
+        addrlen = ipv4_to_str((uint32_t *)((char *)addr + 12), logstr_buf);
     }
     else 
     {
-        addrlen = (uint16_t) ipv6_to_str((void *)addr,(void *)(logstr_buf));
+        addrlen = ipv6_to_str((__uint128_t *)addr, logstr_buf);
     }
 
     logstr_buf[addrlen] = NEWLINE_CHAR;
@@ -446,11 +446,11 @@ uint16_t logstr_long(char * logstr_buf, struct in6_addr * addr)
 
     if(IN6_IS_ADDR_V4MAPPED(addr))
     {
-        offset += (uint16_t) ipv4_to_str((void *)((char *)addr + 12),(void *)(logstr_buf + offset));
+        offset += ipv4_to_str((uint32_t *)((char *)addr + 12),(logstr_buf + offset));
     }
     else 
     {
-        offset += (uint16_t) ipv6_to_str((void *)addr,(void *)(logstr_buf + offset));
+        offset += ipv6_to_str((__uint128_t *)addr,(logstr_buf + offset));
     }
 
     if(memcpy(logstr_buf+offset, MSG_STR, MSG_STR_SIZE) == NULL)

@@ -43,7 +43,7 @@
 #define IP6_REGEX "([a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4})|([a-f0-9:]{0,35}::[a-f0-9:]{0,35})"
 #define LINEBUF_SIZE 128
 #define NTHREADS 1
-#define QUEUE_SIZE 100
+#define QUEUE_SIZE 100 // Number of entries read at once
 
 // Hyperscan
 #define MATCH_REGEX_ID 0
@@ -228,6 +228,12 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 	case 'l':
             
             limit = (uint16_t) strtol(arg,NULL,10);
+
+			if(limit == 0)
+			{
+				fprintf(stderr,"Ban limit has to be at least 1\n");
+				limit = 1;
+			}			
 
             break;
 
@@ -496,7 +502,7 @@ void * unban_thread_routine(void * args)
 				prev = iterator;
 				iterator = iterator->next;
 
-				if((retval = ip_hashtable_remove(htable, prev->key, prev->domain)) < 1)
+				if((retval = ip_hashtable_remove(htable, prev->key, prev->domain)) < 0)
 				{
 					error_msg("Error removing key from hashtable : error code %d\n",retval);
 				}
@@ -893,11 +899,13 @@ void * ban_thread_routine(void * args)
 					if(retval != EXIT_OK)
 					{
 						error_msg("Error adding entry to ebpf map : Error code %d : logstring : %s\n", retval, logstr);
-						
-						if((retval = ip_hashtable_remove(htable, &context.ip_addr, context.domain)) < 0)
+
+						// set the hashtable counter to limit -1, so client can be banned again 
+						if((retval = ip_hashtable_set(htable, &context.ip_addr, context.domain, limit-1)) < 0)
 						{
-							error_msg("ip_hashtable_remove failed : Error code %d\n", retval);
+							error_msg("ip_hashtable set failed, Error code: %d, logstring: %s\n", retval);
 						}
+
 						continue;
 					}
 
@@ -1190,7 +1198,7 @@ int main(int argc, char **argv)
 	default:
 		break;
 	}
-
+	
 	// Create unbanning thread
 	if(pthread_create(&thread_ids[0],NULL,unban_thread_routine,&unban_targs))
 	{

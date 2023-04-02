@@ -21,24 +21,24 @@ IP_INVALID_START=1
 IP_INVALID_END=254
 IP6_VALID_START=2817
 IP6_VALID_END=3070
-IP6_INVALID_START=257
-IP6_INVALID_END=65278
+IP6_INVALID_START=1
+IP6_INVALID_END=65535
 
 # Valid ipv4
-#for ((i=IP_VALID_START;i<=IP_VALID_END;i++))
-#do
-#   ip neigh add "$IP_PREFIX_VAL.$i" lladdr $ETHER_ADDR dev $INTERFACE
-#done 
+for ((i=IP_VALID_START;i<=IP_VALID_END;i++))
+do
+   ip neigh add "$IP_PREFIX_VAL.$i" lladdr $ETHER_ADDR dev $INTERFACE
+done 
 
 # Invalid ipv4
 
-#for((i=IP_INVALID_START;i<=IP_INVALID_END;i++))
-#do
-#   for ((j=IP_START;j<=IP_INVALID_END;j++))
-#   do
-#      ip neigh add "$IP_PREFIX_INVAL.$j.$i" lladdr $ETHER_ADDR dev $INTERFACE
-#   done 
-#done
+for((i=IP_INVALID_START-1;i<=IP_INVALID_END+1;i++))
+do
+   for ((j=IP_INVALID_START;j<=IP_INVALID_END;j++))
+   do
+      ip neigh add "$IP_PREFIX_INVAL.$j.$i" lladdr $ETHER_ADDR dev $INTERFACE
+   done 
+done
 
 # Valid ipv6
 for ((i=IP6_VALID_START;i<=IP6_VALID_END;i++))

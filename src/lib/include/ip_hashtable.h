@@ -23,6 +23,7 @@
 #define IP_HTABLE_NULLPTR_ERR (-2) // Error type for nullpointer error
 #define IP_HTABLE_MEM_ERR (-3) // Error type for memory allocation failures 
 #define IP_HTABLE_MUTEX_ERR (-4) // Error type for mutex failures
+#define IP_HTABLE_NOEXIST (-5)
 
 // Struct to store a single hashtable entry
 struct ip_hashbin_t
