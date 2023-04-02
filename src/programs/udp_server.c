@@ -42,7 +42,7 @@
 #define NREADERS 1
 
 // Open options for logfile
-#define OPEN_MODE O_WRONLY | O_CREAT | O_TRUNC
+#define OPEN_MODE O_WRONLY | O_CREAT | O_TRUNC | O_APPEND
 #define OPEN_PERM 0644
 
 // Return codes

@@ -17,7 +17,7 @@
 #include <io_ipc.h>
 
 #define DEFAULT_LOG "simplelogstash.log"
-#define OPEN_FLAGS O_WRONLY | O_CREAT | O_TRUNC
+#define OPEN_FLAGS O_WRONLY | O_CREAT | O_TRUNC | O_APPEND
 #define OPEN_PERM 0644
 
 #define QUEUE_SIZE 100
