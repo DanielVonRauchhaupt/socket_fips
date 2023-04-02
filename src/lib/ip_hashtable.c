@@ -4,7 +4,7 @@
 #define HASH_IP4(key)((uint16_t)(*((uint32_t *)key) >> 16))
 #define HASH_IP6(key)((uint16_t)(*((__uint128_t *)key) >> 112))
 
-static inline uint16_t jenkins_hash_ipv6(__uint128_t * key) 
+static inline uint32_t jenkins_hash_ipv6(__uint128_t * key) 
 {
     uint8_t *key_bytes = (uint8_t *)key;
     uint64_t hash_value = 0;
@@ -17,10 +17,10 @@ static inline uint16_t jenkins_hash_ipv6(__uint128_t * key)
     hash_value += (hash_value << 3);
     hash_value ^= (hash_value >> 11);
     hash_value += (hash_value << 15);
-    return (uint16_t) hash_value % NBINS;
+    return (uint32_t) hash_value % NBINS;
 }
 
-static inline uint16_t jenkins_hash_ipv4(uint32_t * key) 
+static inline uint32_t jenkins_hash_ipv4(uint32_t * key) 
 {
     uint8_t *key_bytes = (uint8_t *)&key;
     uint32_t hash_value = 0;
@@ -33,7 +33,7 @@ static inline uint16_t jenkins_hash_ipv4(uint32_t * key)
     hash_value += (hash_value << 3);
     hash_value ^= (hash_value >> 11);
     hash_value += (hash_value << 15);
-    return (uint16_t) hash_value % NBINS;
+    return (uint32_t) hash_value % NBINS;
 }
 
 
@@ -163,7 +163,7 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
 
     // Retreive container assigned by hashfunction
     int retval;
-    uint16_t index = (domain == AF_INET) ? HASH_IP4(addr) : jenkins_hash_ipv6((__uint128_t *)addr);
+    uint32_t index = (domain == AF_INET) ? HASH_IP4(addr) : jenkins_hash_ipv6((__uint128_t *)addr);
     struct ip_hashbin_t * hbin = &htable->hbins[index];
    
     // Claim lock of container
@@ -299,7 +299,7 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
     }
 
     int retval;
-    uint16_t index = (domain == AF_INET) ? HASH_IP4(addr) : jenkins_hash_ipv6((__uint128_t *) addr);
+    uint32_t index = (domain == AF_INET) ? HASH_IP4(addr) : jenkins_hash_ipv6((__uint128_t *) addr);
     struct ip_hashbin_t * hbin = &htable->hbins[index];
     bool match;
 
@@ -481,7 +481,7 @@ int ip_hashtable_set(struct ip_hashtable_t * htable, void * addr, int domain, ui
     }
 
     int retval;
-    uint16_t index = (domain == AF_INET) ? HASH_IP4(addr) : jenkins_hash_ipv6((__uint128_t *) addr);
+    uint32_t index = (domain == AF_INET) ? HASH_IP4(addr) : jenkins_hash_ipv6((__uint128_t *) addr);
     struct ip_hashbin_t * hbin = &htable->hbins[index];
     bool match;
 
