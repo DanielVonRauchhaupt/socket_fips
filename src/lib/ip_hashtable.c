@@ -1,41 +1,13 @@
 #include "include/ip_hashtable.h"
+#include <stdio.h>
 
-#define GET_KEY_IP4(key)(*((uint16_t *)key))
-#define HASH_IP4(key)((uint16_t)(*((uint32_t *)key) >> 16))
-#define HASH_IP6(key)((uint16_t)(*((__uint128_t *)key) >> 112))
+#define GET_KEY_IP4(key)(*((uint32_t *)key))
+#define GET_KEY_IP6(key)(*((__uint128_t *)key))
 
-static inline uint32_t jenkins_hash_ipv6(__uint128_t * key) 
+static inline uint32_t spooky_hash(void * src, uint8_t len)
 {
-    uint8_t *key_bytes = (uint8_t *)key;
-    uint64_t hash_value = 0;
-    for (int i = 0; i < 16; i++) 
-    {
-        hash_value += key_bytes[i];
-        hash_value += (hash_value << 10);
-        hash_value ^= (hash_value >> 6);
-    }
-    hash_value += (hash_value << 3);
-    hash_value ^= (hash_value >> 11);
-    hash_value += (hash_value << 15);
-    return (uint32_t) hash_value % NBINS;
+   return  spooky_hash32(src, len, 0) % NBINS;
 }
-
-static inline uint32_t jenkins_hash_ipv4(uint32_t * key) 
-{
-    uint8_t *key_bytes = (uint8_t *)&key;
-    uint32_t hash_value = 0;
-    for (int i = 0; i < 16; i++) 
-    {
-        hash_value += key_bytes[i];
-        hash_value += (hash_value << 10);
-        hash_value ^= (hash_value >> 6);
-    }
-    hash_value += (hash_value << 3);
-    hash_value ^= (hash_value >> 11);
-    hash_value += (hash_value << 15);
-    return (uint32_t) hash_value % NBINS;
-}
-
 
 static int destroy_hbin(struct ip_hashbin_t ** hbin)
 {
@@ -80,7 +52,7 @@ static int init_hbin(struct ip_hashbin_t ** hbin, void * addr, int domain)
         switch (domain)
         {
         case AF_INET:
-            if(((*hbin)->key = calloc(sizeof(uint16_t), 1)) == NULL)
+            if(((*hbin)->key = calloc(sizeof(uint32_t), 1)) == NULL)
             {
                 if(init)
                 {
@@ -89,7 +61,7 @@ static int init_hbin(struct ip_hashbin_t ** hbin, void * addr, int domain)
                 return IP_HTABLE_MEM_ERR;
             }
             (*hbin)->domain = AF_INET;
-            *((uint16_t *)(*hbin)->key) = GET_KEY_IP4(addr);
+            GET_KEY_IP4((*hbin)->key) = GET_KEY_IP4(addr);
             (*hbin)->count = 1;
             break;
 
@@ -104,11 +76,9 @@ static int init_hbin(struct ip_hashbin_t ** hbin, void * addr, int domain)
             }
 
             (*hbin)->domain = AF_INET6;
-            if(memcpy((*hbin)->key, addr, sizeof(__uint128_t)) != NULL)
-            {
-                (*hbin)->count = 1;
-                break;
-            }
+            GET_KEY_IP6((*hbin)->key) = GET_KEY_IP6(addr);
+            (*hbin)->count = 1;
+            break;
             
         
         default:
@@ -163,9 +133,9 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
 
     // Retreive container assigned by hashfunction
     int retval;
-    uint32_t index = (domain == AF_INET) ? HASH_IP4(addr) : jenkins_hash_ipv6((__uint128_t *)addr);
+    uint32_t index = (domain == AF_INET) ? spooky_hash(addr, 4) : spooky_hash(addr, 16);
     struct ip_hashbin_t * hbin = &htable->hbins[index];
-   
+
     // Claim lock of container
     if(pthread_mutex_lock(&hbin->lock))
     {
@@ -194,7 +164,7 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
     case AF_INET:
         if(hbin->domain == domain)
         {
-            if(*((uint16_t * )hbin->key) == GET_KEY_IP4(addr))
+            if(GET_KEY_IP4(hbin->key) == GET_KEY_IP4(addr))
             {
                 retval = ++(hbin->count);
                 if(pthread_mutex_unlock(&hbin->lock))
@@ -209,7 +179,7 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
     case AF_INET6:
         if(hbin->domain == domain)
         {
-            if(memcmp(hbin->key,addr,16) == 0)
+            if(GET_KEY_IP6(hbin->key) == GET_KEY_IP6(addr))
             {
                 retval = ++hbin->count;
                 if(pthread_mutex_unlock(&hbin->lock))
@@ -249,7 +219,7 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
 
         if(domain == AF_INET && hbin->domain == AF_INET)
         {
-            if(*((uint16_t *)hbin->key) == GET_KEY_IP4(addr))
+            if(GET_KEY_IP4(hbin->key) == GET_KEY_IP4(addr))
             {
                 retval = ++(hbin->count);
                 if(pthread_mutex_unlock(&hbin->lock))
@@ -262,7 +232,7 @@ int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
 
         else if(domain == AF_INET6 && hbin->domain == AF_INET6)
         {
-            if(memcmp(hbin->key, addr, 16) == 0) 
+            if(GET_KEY_IP6(hbin->key) == GET_KEY_IP6(addr)) 
             {
                 retval = ++(hbin->count);
                 if(pthread_mutex_unlock(&hbin->lock))
@@ -299,7 +269,7 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
     }
 
     int retval;
-    uint32_t index = (domain == AF_INET) ? HASH_IP4(addr) : jenkins_hash_ipv6((__uint128_t *) addr);
+    uint32_t index = (domain == AF_INET) ? spooky_hash(addr, 4) : spooky_hash(addr, 16);;
     struct ip_hashbin_t * hbin = &htable->hbins[index];
     bool match;
 
@@ -324,7 +294,7 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
         case AF_INET:
             if(hbin->domain == AF_INET)
             {
-                if(*((uint16_t *)hbin->key) == GET_KEY_IP4(addr))
+                if(GET_KEY_IP4(hbin->key) == GET_KEY_IP4(addr))
                 {
                     retval = hbin->count;
                     match = true;
@@ -335,7 +305,7 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
         case AF_INET6:
             if(hbin->domain == AF_INET6)
             {
-                if(memcmp(hbin->key,addr,16) == 0)
+                if(GET_KEY_IP6(hbin->key) == GET_KEY_IP6(addr))
                 {
                     retval = hbin->count;
                     match = true;
@@ -367,11 +337,11 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
 
             if(temp->domain == AF_INET)
             {
-                *((uint16_t *)hbin->key) = *((uint16_t *) temp->key);
+                GET_KEY_IP4(hbin->key) = GET_KEY_IP4(temp->key);
             }
             else
             {
-                *((__uint128_t *)hbin->key) = *((__uint128_t *) temp->key);
+                GET_KEY_IP6(hbin->key) = GET_KEY_IP6(temp->key);
             }
 
             if(pthread_mutex_unlock(&hbin->lock))
@@ -418,7 +388,7 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
 
         if(domain == AF_INET && it->domain == AF_INET)
         {
-            if(*((uint16_t *)it->key) == GET_KEY_IP4(addr))
+            if(GET_KEY_IP4(it->key) == GET_KEY_IP4(addr))
             {
                 retval = it->count;
                 match = true;
@@ -428,7 +398,7 @@ int ip_hashtable_remove(struct ip_hashtable_t * htable, void * addr, int domain)
         else if(it->domain == AF_INET6 && domain == AF_INET6)
         {
 
-            if(memcmp(it->key, addr, 16) == 0)
+            if(GET_KEY_IP6(it->key) == GET_KEY_IP6(addr))
             {
                 retval = it->count;
                 match = true;
@@ -481,7 +451,7 @@ int ip_hashtable_set(struct ip_hashtable_t * htable, void * addr, int domain, ui
     }
 
     int retval;
-    uint32_t index = (domain == AF_INET) ? HASH_IP4(addr) : jenkins_hash_ipv6((__uint128_t *) addr);
+    uint32_t index = (domain == AF_INET) ? spooky_hash(addr, 4) : spooky_hash(addr, 16);
     struct ip_hashbin_t * hbin = &htable->hbins[index];
     bool match;
 
@@ -506,7 +476,7 @@ int ip_hashtable_set(struct ip_hashtable_t * htable, void * addr, int domain, ui
         case AF_INET:
             if(hbin->domain == AF_INET)
             {
-                if(*((uint16_t *)hbin->key) == GET_KEY_IP4(addr))
+                if(GET_KEY_IP4(hbin->key) == GET_KEY_IP4(addr))
                 {
                     retval = hbin->count;
                     hbin->count = value;
@@ -524,7 +494,7 @@ int ip_hashtable_set(struct ip_hashtable_t * htable, void * addr, int domain, ui
         case AF_INET6:
             if(hbin->domain == AF_INET6)
             {
-                if(memcmp(hbin->key,addr,16) == 0)
+                if(GET_KEY_IP6(hbin->key) == GET_KEY_IP6(addr))
                 {
                     retval = hbin->count;
                     hbin->count = value;
@@ -565,7 +535,7 @@ int ip_hashtable_set(struct ip_hashtable_t * htable, void * addr, int domain, ui
 
         if(domain == AF_INET && it->domain == AF_INET)
         {
-            if(*((uint16_t *)it->key) == GET_KEY_IP4(addr))
+            if(GET_KEY_IP4(it->key) == GET_KEY_IP4(addr))
             {
                 retval = it->count;
                 it->count = value;
@@ -582,7 +552,7 @@ int ip_hashtable_set(struct ip_hashtable_t * htable, void * addr, int domain, ui
         else if(it->domain == AF_INET6 && domain == AF_INET6)
         {
 
-            if(memcmp(it->key, addr, 16) == 0)
+            if(GET_KEY_IP6(it->key) == GET_KEY_IP6(addr))
             {
                 retval = it->count;
                 it->count = value;

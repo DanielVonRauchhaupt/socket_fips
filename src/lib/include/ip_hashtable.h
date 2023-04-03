@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <spooky-c.h>
 /**
  *  Small and simple hashtable to store IPv4 and IPv6 Addresses
  * 
@@ -16,7 +17,7 @@
 */
 
 // Number of binds used by the hashtable
-#define NBINS 256 * 256
+#define NBINS 600011
 
 #define IP_HTABLE_SUCCESS (0) // Success return code
 #define IP_HTABLE_ARG_ERR (-1) // Error type for invalid argument errors

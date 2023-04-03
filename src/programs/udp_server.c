@@ -73,7 +73,7 @@
 #define NANOSECONDS_PER_MILLISECOND 1000000
 #define MICROSECONDS_PER_MILISECOND 1000
 #define UTIL_TIMEOUT 500 * NANOSECONDS_PER_MILLISECOND // Timeout for background thread
-#define RECV_TIMEOUT MICROSECONDS_PER_MILISECOND * 10 // Timeout for receiving sockets
+#define RECV_TIMEOUT MICROSECONDS_PER_MILISECOND * 100 // Timeout for receiving sockets
 #define MAX_MSG __IOV_MAX // Size of receive and send queue for sockets
 
 // Helpers

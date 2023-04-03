@@ -486,7 +486,7 @@ void * unban_thread_routine(void * args)
 
 				default:
 					retval = -1;
-					error_msg("Invalid domain in banned list %d\n",iterator->domain);
+					error_msg("Invalid domain in banned list %d\n", iterator->domain);
 				}
 
 				if(retval != 0)
@@ -922,7 +922,6 @@ void * ban_thread_routine(void * args)
 		}
 
 	}
-
 	if(matching){hs_free_scratch(scratch);}
 	free(logstr_buf);
 	targs->rcv_count = rcv_count;
