@@ -1,18 +1,6 @@
 [submodule "external/bpftool"]
 	path = external/bpftool
 	url = https://github.com/libbpf/bpftool.git
-[submodule "external/hyperscan"]
-	path = external/hyperscan
-	url = https://github.com/intel/hyperscan.git
-[submodule "external/inih"]
-	path = external/inih
-	url = git@github.com:benhoyt/inih.git
-[submodule "external/list"]
-	path = external/list
-	url = git@github.com:clibs/list.git
-[submodule "external/libbpf"]
-	path = external/libbpf
-	url = https://github.com/libbpf/libbpf.git
 [submodule "libbpf"]
 	path = external/libbpf
 	url = https://github.com/libbpf/libbpf.git

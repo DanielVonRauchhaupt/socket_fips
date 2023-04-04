@@ -49,7 +49,6 @@ struct ipv6_frag_hdr {
 struct {
   __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
   __uint(max_entries,1000000);
-  __uint(map_flags,BPF_F_NO_PREALLOC);
   __type(key,__u32);
   __type(value,__u64);
   __uint(pinning,LIBBPF_PIN_BY_NAME);
@@ -60,12 +59,12 @@ struct {
 struct {
   __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
   __uint(max_entries,100000);
-  __uint(map_flags,BPF_F_NO_PREALLOC);
   __type(key,__uint128_t);
   __type(value,__u64);
   __uint(pinning,LIBBPF_PIN_BY_NAME);
 // subnet v1: just one map for user/kernel value not counter!
 } blacklistv6 SEC(".maps");
+
 struct {
   __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
   __uint(max_entries,100000);
@@ -80,7 +79,6 @@ struct {
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries,100000);
-  __uint(map_flags,BPF_F_NO_PREALLOC);
   __type(key,__u64);
   __type(value,__u64);
   __uint(pinning,LIBBPF_PIN_BY_NAME);
