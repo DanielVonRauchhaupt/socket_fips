@@ -1,0 +1,105 @@
+%
+% $Id: thesis.tex 3914 2009-06-18 12:55:36Z sliske $
+%
+% See styles/readme.txt for further details and explanations on
+% the used classes. 
+%
+% BE REMINDED, THAT WE EXPECT THE DIPLOMA THESIS TO BE TWOSIDED!
+%
+% Usage of the 'bsvs-thesis', which is based on KOMA default class
+% 'scrreprt'. Thus the options are completely identical to the ones
+% described by the KOMA-Doc (KOMA-Doc, Ch.3.1).
+\documentclass[
+  % Most of the default options are initiated well. (KOMA-Doc,
+  % Tab.3.2), but some can be improved :-)
+  % Additionally, KOMA offers some more options for its document
+  % classes.
+  %
+  % Hint (LaTeX-Book Ch.2.1.1, Ch.A.5.4, Ch.A.5.8): The class options
+  % set in '\documentclass' are directly passed through the single
+  % '\usepackage'. Packages that are included via '\RequirePackage'
+  % and '\LoadClassWithOptions' will get the options too.
+  % If one option stays unused, there will be a corresponding LaTeX
+  % warning during compilation.
+  %
+  % Compatibility options (KOMA-Doc, Ch.3.1.1)  
+  % there is no option set yet, that bases on KOMA-Doc, Ch.3.1.1
+  % Page spread options (KOMA-Doc, Ch.3.1.2)
+  BCOR11mm, % Binding correction (unrequired? -> comment out [default=0])
+  DIV12, % Number of divisions for the page spread construction (unrequired? -> comment out [default=9])
+  % Layout options (KOMA- Doc, Ch.3.1.3)
+  twoside, % two sided (unrequired? -> comment out [default='oneside'])
+  headsepline, % separate head-line from content optically (horizontal row) (KOMA-Doc, Ch.'Kopf- und Fusszeilen')
+  % Font family options (KOMA-Doc, Ch.3.1.4)
+  % there is no option set yet, that bases on KOMA-Doc, Ch.3.1.4
+  % List of content options (KOMA-Doc, Ch.3.1.5)
+  liststotoc, % include list of tables/figures to list of content
+  bibtotoc, % include list of literature to list of content
+  idxtotoc, % include index to list of content
+  % Lists of float environment options (KOMA-Doc, Ch.3.1.6)
+  % there is no option set yet, that bases on KOMA-Doc, Ch.3.1.6
+  % Formating options (KOMA-Doc, Ch.3.1.7)
+  abstracton, % Put an coresponding header to the abstract (unrequired? -> comment out [default='abstractoff'])
+  pointlessnumbers, % suppress ending dot in numberations (required? -> 'pointednumbers')
+  %semidraft, % print 'draft' information, e.g. black border indicating oversized lines, DRAFT-watermark (unrequired? -> comment out [default='final'])
+  % Now, there are other, KOMA-independend options that will be
+  % provided to the required packages.
+  %german % german modification of several LaTeX behaviour (unrequired? -> comment out)
+]{bsvs-thesis}
+\newenvironment{dtZusammenfassung}{\chapter*{\centering \normalsize Deutsche Zusammenfassung}}
+
+% include thesis' meta data
+\InputIfFileExists{thesis.cfg}{}{\ClassError{thesis.tex}{Missing file [thesis.cfg]!}{Create a configuration file.}}
+
+\hyphenation{
+   Soft-ware
+   ad-ded
+   compi-lers
+}     
+% 
+% THE MAIN DOCUMENT
+%
+
+\begin{document}
+\ofoot[\pagemark]{\pagemark}
+
+% include intro
+\include{preface}
+\captionsetup[table]{skip=10pt}
+% prepare main document
+\cleardoublepage
+\pagenumbering{arabic}
+\pagestyle{chapterstyle}
+
+% reset acronym counter
+\acresetall
+% include a chapter
+\include{introduction}
+% reset acronym counter
+%%acresetall
+% include a chapter
+\include{background}
+% reset acronym counter
+%%acresetall
+% include a chapter
+\include{design-and-implementation}
+% reset acronym counter
+%%acresetall
+% include a chapter
+\include{evaluation}
+% reset acronym counter
+%%acresetall
+% include a chapter
+\include{conclusion}
+% reset acronym counter 
+%%%acresetall 
+% include a chapter 
+%\include{chapter7}
+% reset acronym counter
+%%%acresetall
+% include a chapter
+%\include{chapter8}
+% include outro 
+\include{outro}
+
+\end{document}

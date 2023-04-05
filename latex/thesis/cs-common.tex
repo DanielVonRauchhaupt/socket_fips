@@ -1,0 +1,258 @@
+%
+% $Id: cs-common.tex 3546 2009-03-22 13:15:23Z jozinke $
+%
+
+%
+% COMMON PACKAGES
+%
+
+% acronyms/abbreviations
+\RequirePackage[printonlyused]{acronym}
+
+% extended math
+\RequirePackage{amsmath}
+
+% include ams symbol fonts
+% (needed by proof environment, and others)
+\RequirePackage{amssymb}
+
+% load packages for german umlauts, word separation rules
+\if@german
+  \RequirePackage[english,
+                  ngerman]{babel}
+\else
+  \RequirePackage[english]{babel}
+\fi
+
+% extended caclulations
+% (length, a.s.o)
+\RequirePackage{calc}
+
+% text colors
+\RequirePackage{color}
+
+% inlcude eps graphics
+\RequirePackage{epsfig}
+
+% encode resulting document with more than the starting 128 characters of font sets
+\RequirePackage[T1]{fontenc}
+
+% include graphics
+\RequirePackage{graphicx}
+\RequirePackage{lipsum}
+%
+% set some university colors
+%
+% university blue 100% hex: #00305e
+\definecolor{university100blue}{rgb}{0,0.18825,0.36864}
+% university blue 80%  hex: #284a75
+\definecolor{university80blue}{rgb}{0.15686,0.2902,0.45882}
+% university blue 60%  hex: #5a6c92
+\definecolor{university60blue}{rgb}{0.35294,0.42354,0.57256}
+% university blue 40%  hex: #8d97b3
+\definecolor{university40blue}{rgb}{0.55293,0.59216,0.70197}
+% university blue 20%  hex: #c4c8d8
+\definecolor{university20blue}{rgb}{0.76862,0.78431,0.84705}
+
+% math-nat blue hex: #007fb3
+\definecolor{mathnathblue}{rgb}{0,0.49804,0.70196}
+
+% include hyperref for link formating
+\RequirePackage{hyperref}
+
+\hypersetup{hyperfootnotes=false,
+            pdfpagelabels=true,
+            plainpages=false,
+            colorlinks=true,
+            breaklinks=true,
+            citecolor=university100blue,
+            linkcolor=university100blue,
+            menucolor=university100blue,
+            urlcolor=university100blue}
+
+% exteneded control sequences
+\RequirePackage{ifthen}
+
+% the tex files are expected to be UTF8-encoded
+\RequirePackage[utf8]{inputenc}
+
+% format source-codes
+\RequirePackage{listings}
+
+% creating an index
+% (overrides '\makeindex' from LaTeX)
+\RequirePackage{makeidx}
+
+% generic reference prefixes
+\RequirePackage{prettyref}
+
+% font style
+\RequirePackage{pslatex}
+
+% relative font sizes
+\RequirePackage{relsize}
+
+% set spaces
+\RequirePackage{setspace}
+
+% configuration of header and footer
+\RequirePackage[automark,
+                headsepline]{scrlayer-scrpage}
+
+% beamer together with caption/subfig is broken
+
+% formating captions
+%\RequirePackage[format=hang,
+%                margin=10pt,
+%                font=small,
+%                labelfont=bf]{caption}
+
+% include subfigures
+%\RequirePackage{subfig}
+
+% extended table options
+\RequirePackage{tabularx}
+
+% url handling
+% (needed for hyperref)
+\RequirePackage{url}
+
+% enable definition of new float environments
+% (include package at the end for compatibility reasons)
+\RequirePackage{float}
+
+%
+% COMMON MACROS
+%
+
+% set counters\setcounter{tocdepth}{4} and \setcounter{secnumdepth}{4}
+\setcounter{tocdepth}{4}
+\setcounter{secnumdepth}{4}
+
+% define several pretty references
+\newrefformat{prt}{\iflanguage{ngerman}{Teil}{Part}~\ref{#1}}
+\newrefformat{cha}{\iflanguage{ngerman}{Kapitel}{Chapter}~\ref{#1}}
+\newrefformat{sec}{\iflanguage{ngerman}{Abschnitt}{Section}~\ref{#1}}
+\newrefformat{ssec}{\iflanguage{ngerman}{Teilabschnitt}{Subsection}~\ref{#1}}
+\newrefformat{sssec}{\iflanguage{ngerman}{Unterabschnitt}{Subsubsection}~\ref{#1}}
+\newrefformat{par}{\iflanguage{ngerman}{Absatz}{Paragraph}~\ref{#1}}
+\newrefformat{spar}{\iflanguage{ngerman}{Teilabsatz}{Subparagraph}~\ref{#1}}
+\newrefformat{fig}{\iflanguage{ngerman}{Abbildung}{Figure}~\ref{#1} \iflanguage{ngerman}{auf Seite}{on page}~\pageref{#1}}
+\newrefformat{tab}{\iflanguage{ngerman}{Tabelle}{Table}~\ref{#1} \iflanguage{ngerman}{auf Seite}{on page}~\pageref{#1}}
+\newrefformat{alg}{\iflanguage{ngerman}{Algorithmus}{Algorithm}~\ref{#1} \iflanguage{ngerman}{auf Seite}{on page}~\pageref{#1}}
+\newrefformat{eq}{\textup{(\ref{#1})}}
+\newrefformat{thm}{Theorem~\ref{#1}}
+\newrefformat{prp}{\iflanguage{ngerman}{Satz}{Proposition}~\ref{#1}}
+\newrefformat{cor}{\iflanguage{ngerman}{Korollar}{Corollary}~\ref{#1}}
+\newrefformat{lem}{Lemma~\ref{#1}}
+\newrefformat{xmp}{\iflanguage{ngerman}{Beispiel}{Example}~\ref{#1}}
+\newrefformat{rem}{\iflanguage{ngerman}{Anmerkung}{Remark}~\ref{#1}}
+\newrefformat{def}{Definition~\ref{#1}}
+\newrefformat{prf}{\iflanguage{ngerman}{Beweis}{Proof}~\ref{#1}}
+
+% Provide an additional command for newline in tabular
+% since html converters often don not know tabularnewline.
+% This avoids errors on conversion later.
+\providecommand{\tabularnewline}{\\}
+
+% hyphenate in the tt environment too
+\newcommand{\origttfamily}{}
+\let\origttfamily=\ttfamily
+\renewcommand{\ttfamily}{\origttfamily \hyphenchar\font=`\-}
+\newcommand{\origtt}{}
+\let\origtt=\tt
+\renewcommand{\tt}{\origtt \hyphenchar\font=`\-}
+
+% redefine quotation environment
+\newsavebox{\quotename}
+\renewenvironment{quote}[1][]{
+  \sbox{\quotename}{#1}\begin{list}{}{%
+  \setlength{\rightmargin}{\leftmargin}}%
+  \item[]
+}{
+  \hspace*{\fill}\nolinebreak[1]\hspace*{\fill}\usebox{\quotename}\end{list}
+}
+\makeatletter
+\renewenvironment{quotation}[1][]{
+  \sbox{\quotename}{#1}\begin{list}{}{
+%
+  \setlength{\listparindent}{1em}%
+  \setlength{\itemindent}{\listparindent}%
+  \setlength{\rightmargin}{\leftmargin}%
+  \setlength{\parsep}{\z@\@plus\p@}}%
+  \item[]\relax
+}{
+  \hspace*{\fill}\nolinebreak[1]\hspace*{\fill}\usebox{\quotename}\end{list}
+}
+\makeatother
+
+%
+% provide common figure styles
+%
+% count reference in captions toolatex schriftfarbe
+\makeatletter
+\newcommand\figcaption{\def\@captype{figure}\caption}
+\makeatother
+% single figures
+\newcommand{\pic}[5][~]{%
+  \begin{figure}[htbp]%
+    \begin{center}%
+      \includegraphics[width=#3]{#2}%
+      \ifthenelse{\equal{#1}{~}}{%
+        \figcaption{#4}%
+      }{%
+        \figcaption[#1]{#4}%
+      }%
+      \label{#5}%
+    \end{center}%
+  \end{figure}%
+}
+% single floating figures
+\newcommand{\fpic}[5][~]{%
+  \begin{figure}[htbp]%
+    \begin{center}%
+      \setlength{\fboxrule}{0.4pt}%
+      \fbox{\includegraphics[width=#3]{#2}}%
+      \ifthenelse{\equal{#1}{~}}{%
+        \figcaption{#4}%
+      }{%
+        \figcaption[#1]{#4}%
+      }%
+      \label{#5}%
+    \end{center}%
+  \end{figure}%
+}
+% double figures
+\newcommand{\twopics}[5][~]{%
+  \begin{figure}[htbp]%
+    \begin{center}%
+      \includegraphics[width=.45\textwidth]{#2}%
+      \hspace{0.05\textwidth}%
+      \includegraphics[width=.45\textwidth]{#3}%
+      \ifthenelse{\equal{#1}{~}}{%
+        \figcaption{#4}%
+      }{%
+        \figcaption[#1]{#4}%
+      }%
+      \label{#5}%
+    \end{center}%
+  \end{figure}%
+}
+
+% author tool comment
+\setlength{\fboxrule}{1.5mm}
+\newcommand{\comment}[1]{\begin{center}\fcolorbox{university40blue}{university20blue}{\parbox[][][c]{\textwidth-4em}{#1}}\end{center}}
+
+% add degree
+\newcommand{\degree}{\ensuremath{^\circ}}
+
+% Format date printage.Fortunately, '\today' is already defined
+% by package 'babel'.
+% Additionally, support month+year and year:
+\makeatletter
+\newcommand{\tomonth}{\iflanguage{ngerman}{\month@german\space \number\year}{\ifcase\month\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi\space \number\year}}
+\makeatother
+\newcommand{\toyear}{\number\year}
+
+% New environment for german abstract
+% Deutsche Zusammenfassung 

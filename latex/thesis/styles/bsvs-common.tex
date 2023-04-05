@@ -1,0 +1,34 @@
+%
+% $Id: bsvs-common.tex 2668 2008-06-06 12:54:55Z jozinke $
+%
+
+%
+% COMMON MACROS
+%
+
+% format source listings
+\lstset{numbers=left,
+  showstringspaces=false,
+  frame={tb},
+  captionpos=b,
+  lineskip=0pt,
+  basicstyle=\ttfamily,
+  extendedchars=true,
+  stepnumber=1,
+  numberstyle=\small,
+  xleftmargin=1em,
+  breaklines
+}
+
+% subject
+\subject{\bsvsSubject}
+
+% Set some 'hyperref' meta data.
+\hypersetup{
+  pdftitle    = {\bsvsTitle},
+  pdfsubject  = {\bsvsSubject,~\bsvsDate},
+  pdfauthor   = {\bsvsAuthorname~\bsvsAuthorsurname,~\bsvsAuthoremail},
+  pdfkeywords = {\bsvsKeywords}%,
+%   pdfcreator  = {pdfTeX with Hyperref and Thumbpdf},
+%   pdfproducer = {LaTeX, hyperref, thumbpdf}
+}
