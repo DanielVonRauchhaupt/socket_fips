@@ -342,7 +342,23 @@
 	\caption[Simplefail2ban, Shared Memory, IPv4 \& IPv6, 10m \ac{PPS}]{Some text}
 \end{figure}
 
-\section{Shared Memory Special Measurements}
+\begin{figure}[p]
+	\label{fig:simplefail2ban:shm:ip46:30m}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_shm_ipv46_v10k_iv30m_c131068.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		8095.28 & 8017.72 & 99.13 & 21 & 76.23 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Shared Memory, IPv4 \& IPv6, 30m \ac{PPS}]{Some text}
+\end{figure}
+
+\section{Shared Memory Feature Measurements}
 
 \begin{figure}[p]
 	\label{fig:simplefail2ban:shm:2r}
@@ -408,18 +424,3 @@
 	\caption[Simplefail2ban, Shared Memory without Regex Matching]{Some text}
 \end{figure}
 
-\begin{figure}[p]
-	\label{fig:simplefail2ban:shm:ip46:30m}
-	\centering
-	\scriptsize
-	\begin{tabular}{c}
-    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_shm_ipv46_v10k_iv30m_c131068.png}}
-	\end{tabular}
-	\begin{tabular}{lllll}
-		\toprule
-		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
-		8095.28 & 8017.72 & 99.13 & 21 & 76.23 \\
-		\bottomrule
-	\end{tabular}
-	\caption[Simplefail2ban, Shared Memory, IPv4 \& IPv6, 30m \ac{PPS}]{Some text}
-\end{figure}

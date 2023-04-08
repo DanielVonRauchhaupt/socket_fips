@@ -8,15 +8,15 @@
 Since the advent of the Internet, bandwiths available to both
 commercial and private users have been ever increasing. While this opens up new possibilitys for high bandwiths
 network applications, it also poses new security challenges for dealing with potentially malicious network traffic. In addition to traditional firewalls, 
-Host-based Intrusion Detection Systems (\ac{HIDS}) are a commonly used security measure, to protect a system  . Traditionally, \ac{HIDS} make use of application logfiles, which are parsed
-for information on possible attacks and to identify malicious clients. The Introduction Prevention Systems (\ac{IPS}) Fail2ban\cite{fail2ban} is 
+\ac{HIDS} are a commonly used security measure, to protect a system  . Traditionally, \ac{HIDS} make use of application logfiles, which are parsed
+for information on possible attacks and to identify malicious clients. The \ac{IPS} Fail2ban\cite{fail2ban} is 
 is an one of the most prim
 \par
 The goal of this thesis will be the design and implementation of a new \ac{IPC} architecture for the
 transmission of log messages, that is able to facilitate low latency communication
 between sender and receiver. Additionally, the design should be able to scale to multiple
 recipients, in order to accommodate more complex security system, in which several processes
-require access to a hosts application log. For this purpose, a Proof-of-Concept \ac{IPS} will be 
+require access to a hosts application log. For this purpose, a Proof of Concept \ac{IPS} will be 
 developed, that utilizes the proposed \ac{IPC} architecture to receive log messages and ban malicious
 clients in the style of Fail2ban. 
 
