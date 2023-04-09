@@ -10,11 +10,21 @@
 
 \chapter{Evaluation}
 
-\section{Testenviroment}
+The following section presents the performance evaluation of the proof of concept \ac{IPS} Simplefail2ban, in conjunction
+with the test application. First, an overview over the test environment and the experimental design is given and the Fail2Ban performance
+issues discovered by Florian Mikolajczak are replicated for the test application. Subsequently, the result for Simplefail2ban in both the logfile
+and shared memory based variants are presented. The section concludes with an evaluation of different features of the shared memory implementation. 
+
+\section{Test Environment}
+
+To conduct the evaluation, two machines with an identical hardware and software configuration where used. The specific hardware and software version are listed in Table \ref{tab:specs}.
+One machine served as the dut, running the test application, as well as Fail2Ban / Simplefail2ban. The second machine was used for traffic generation with trex.  
 
 \begin{table}[b!]
 	\renewcommand{\arraystretch}{1.5}
-	\caption[Testbed Summary]{}
+	\caption[Testbed Summary]{Hardware and Software parameters for the test environment. The measurements where conducted
+	on two identical machines, where one machines served as the \ac{DUT}, running the test application and Fail2Ban / Simplefail2ban,
+	while the other generated test traffic with trex.}
 	 \label{tab:specs}
 	 \centering
 	\small
@@ -34,6 +44,17 @@
 \end{table}
 
 \section{Experimental Design}
+
+The experimental design is closely oriented towards experiment 1 conducted by Florian Mikolajczak in \cite{mikolajczak2022}, in order to provide comparable results.
+In the experiment, a \ac{DOS} attack on a server under a normal workload is simulated, through a small stream of valid a request and a significantly larger
+stream of invalid request. The original experiment used a BIND9 DNS server as the target of the \ac{DOS} attack, which triggered log messages for clients exceeding a certain rate limit. For   
+the following evaluation, the test application introduced in \ref{} will serve at the target, differentiating valid and invalid request by the first byte of the sent payload\footnote{Request are considered invalid, if the first byte if the payload has the unsigned value 42 (ASCII Letter B)}.
+While this way of determining the validity of a request is not necessarily realistic, it is efficient and allows the test application to quickly produce log messages. The test subject 
+of the experiment For invalid request, a log messages containing the current date, time and client IP address is written to either a logfile or the shared memory ringbuffer.  
+
+The goal of this evaluation is to test, how the proof of concept \ac{IPS} implementation performs in the test scenario described above. 
+
+Following the criteria 
 
 \section{Fail2ban Replication Measurements}
 

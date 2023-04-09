@@ -6,7 +6,7 @@
 
 #include <ip_to_str.h>
 
-#define ITERATIONS 1000000
+#define ITERATIONS 10000000
 
 #define TIME_DIFF(timer1, timer2) \
 (( timer2.tv_sec * 1.0E+9 + timer2.tv_nsec ) - \

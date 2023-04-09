@@ -24,8 +24,14 @@ struct file_io_t {
 	char fbuf2[BUFSIZE];
 };
 
-int uring_getline(struct file_io_t * fio_arg, char ** lineptr);
+// Reads a single line from a file (buffered)
+int uring_getline(struct file_io_t * fio_arg, 
+                  char ** lineptr);
 
-int uring_getlines(struct file_io_t * fio_arg, struct iovec * ivoecs, uint16_t vsize, uint16_t bufsize);
+// Reads multiple lines from a file (buffered)
+int uring_getlines(struct file_io_t * fio_arg, 
+                   struct iovec * ivoecs, 
+                   uint16_t vsize, 
+                   uint16_t bufsize);
 
 #endif

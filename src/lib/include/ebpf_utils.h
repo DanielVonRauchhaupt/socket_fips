@@ -44,8 +44,13 @@
 #define FILE_PORT_BLACKLIST_COUNT_TCP "/sys/fs/bpf/port_blacklist_drop_count_tcp"
 #define FILE_PORT_BLACKLIST_COUNT_UDP "/sys/fs/bpf/port_blacklist_drop_count_udp"
 
-int ebpf_cleanup(const char * device, bool unpin, bool verbose);
+// Loads ebpf program to device and pins ebpf maps
 int ebpf_setup(const char * device, bool verbose);
+
+// Unloads ebpf program from device and unpins ebpf maps
+int ebpf_cleanup(const char * device, bool unpin, bool verbose);
+
+
 int open_bpf_map(const char *file);
 
 
