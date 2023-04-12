@@ -122,7 +122,7 @@ to the write pointers is required. The individual entries within the segment rin
 size lines, the length of which in bytes is determined by the line size field in the global header. Each line corresponds
 to one log message, the same way a line in a logfile would.  
 Limiting buffer entries to a fixed maximum size has some obvious disadvantages. The primary concern
-is inefficient use of memory, as the line size will have to be chosen to accommodate the largest possible log message, as multi line
+is inefficient use of memory, as the line size will have to be chosen to accommodate the largest possible log message, since multi line
 messages are not intended in the design. If log messages vary greatly in length, this may cause a lot of unused memory
 for shorter messages. The fixed size was chosen for a more convenient implementation of the overwrite feature, which is enable with the overwrite filed in the global header and will be covered in more detail
 later. Allowing for variable length entries is still an important consideration for further development of the design. The line count variable in the global header 
@@ -142,10 +142,10 @@ potentially obtain a corrupted value. Using atomic indices allows for lock free 
 switch threads between waiting and execution states that result from lock-based synchronization. However, atomic operations are also more costly compared to regular reads writes \footnote{The performance evaluation of atomic vs lock based synchronization is not part of this thesis, but could be a consideration for a potential further development of this architecture.}. 
 The lines of the segment begin below the segment header. The segment buffer capacity in bytes is given by line size "*" line count and the capacity of the entire buffer is given by segment capacity "*" segment count.  
 
-\subsection{Initialization}
+\subsection{Implementation}
 In the following, the implementation of the design in figure \ref{fig:shm_architecture} and relevant API functions is presented.
-The entire API was implemented as a static library in C. The associated header and source files are shm\_rbuf.h and shm\_rbuf.c, which can be found 
-under src/lib in the Git repository for this thesis \cite{gitlab}. All API functions return numeric error codes, the meaning of which is also documented in shm\_rbuf.h.  
+The entire API was implemented as a static library in C. The associated header and source files are \texttt{shm\_rbuf.h} and \texttt{shm\_rbuf.c}, which can be found 
+under src/lib in the Git repository for this thesis \cite{gitlab}. All API functions return numeric error codes, the meaning of which is also documented in \texttt{shm\_rbuf.h}.  
 \par
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=86, lastline=92]{listings/shm_ringbuf.h}
@@ -153,11 +153,11 @@ under src/lib in the Git repository for this thesis \cite{gitlab}. All API funct
     \caption[Shared Memory Ringbuffer: Initialization and Cleanup]{Initialization and cleanup function for the shared memory ringbuffer.}
 \end{algorithm}
 Algorithm \ref{alg:shm:set_clean} displays the function signature for  the initialization and finalizations functions.
-shmrbuf\_init is used to create or attach to an existing shared memory buffer and has to be called before read or write operations
-on the buffer can be executed. shmrbuf\_finalize is the corresponding function to detach or destroy the shared memory buffer and should be called
-upon ending the interaction with the buffer, for instance when exiting an application. shmrbuf\_finalize will only destroy the shared memory segment,
+\texttt{shmrbuf\_init} is used to create or attach to an existing shared memory buffer and has to be called before read or write operations
+on the buffer can be executed. \texttt{shmrbuf\_finalize} is the corresponding function to detach or destroy the shared memory buffer and should be called
+upon ending the interaction with the buffer, for instance when exiting an application. \texttt{shmrbuf\_finalize} will only destroy the shared memory segment,
 if no other process is attached. Otherwise the memory will simple be unmapped and the attachment field in the global header (as described in \ref{sec:design}) is released. 
-shmrbuf\_init and shmrbuf\_finalize can be called by both reader and writer 
+\texttt{shmrbuf\_init} and \texttt{shmrbuf\_finalize} can be called by both reader and writer 
 processes, which is why a role has to be specified as an additional parameter in the function call. The role determines, what type of struct the union pointer shmrbuf\_arg\_t is being cast to,
 which contains further parameters used by the functions. 
 
@@ -169,11 +169,11 @@ which contains further parameters used by the functions.
 
 Algorithm \ref{alg:shm:writer_arg} displays the struct, that is used by a writing processes, to store and pass related parameters to the API functions.
 In the current implementation, creation of a buffer can only be performed by a writing process. The reason for this is, that parameters such as the line
-size of segment count need to be tailored to the writing process. The writer creates a new buffer by parameterising a shmrbuf\_writer\_arg\_t struct with
-the desired parameters for the buffer and calling shmrbuf\_init. In addition to the already discussed parameters line size and line, segment and reader count, 
+size of segment count need to be tailored to the writing process. The writer creates a new buffer by parameterising a \texttt{shmrbuf\_writer\_arg\_t} structure with
+the desired parameters for the buffer and calling \texttt{shmrbuf\_init}. In addition to the already discussed parameters line size and line, segment and reader count, 
 a key parameter is required. The key has to be a valid filepath within the file system and is used by System Vs shared memory API, to identify the shared segment\footnote{The System V shared memory API \cite{systemvshm} was used instead of the more modern POSIX API, since its support for memory allocation with huge pages was more convenient. Allocating the buffer with huge pages, should make read and write operations on a large buffer more efficient, since fewer entries are required in the translation lookaside buffer (TLB), making TLB misses less likely.}.  
 If no shared memory segment referenced by the given path exists, a new segment of appropriate size will be allocated and mapped into the calling processes address space. Subsequently, its global header will 
-be initialized with the parameters provided in the shmrbuf\_writer\_arg\_t struct.  
+be initialized with the parameters provided in the \texttt{shmrbuf\_writer\_arg\_t} structure.  
 
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=50, lastline=58]{listings/shm_ringbuf.h}
@@ -181,24 +181,24 @@ be initialized with the parameters provided in the shmrbuf\_writer\_arg\_t struc
     \caption[Shared Memory Ringbuffer: Global Header]{Structure to represent the global header of the shared memory ringbuffer.}
 \end{algorithm}
 
-Algorithm \ref{alg:shm:global_hdr} displays the struct for the global header of the shared memory buffer. When the header has been initialized
+Algorithm \ref{alg:shm:global_hdr} displays the structure for the global header of the shared memory buffer. When the header has been initialized
 the checksum field is set to the sum over all constant header fields of the header. This is done as an additional security check for other processes attaching to the buffer. 
-If the checksum is not correct, shmrbuf\_init will fail, to avoid writing to or reading from potentially corrupted memory. After initializing the header,
-shmrbuf\_init sets the indices of all segment headers to zero. As an alternative to creating a new buffer,
-a writer can also reattach to an existing buffer. When reattaching, the buffer parameters provided in shmrbuf\_writer\_arg\_t are ignored. To enable reattachment, the REATT flags has to be specified in the flags field of the shmrbuf\_writer\_arg\_t, otherwise the call   
-to shmrbuf\_init will fail for an existing buffer. Reattachment is included in the API, so the writing application can be restarted (for instance for maintenance) without the need to
-destroy the shared memory segment, if readers are attached. The overwrite feature is also specified via the flag field by specifying the OVWR flag.
-Finally, shmrbuf\_init initializes an array of segment header structures in shmrbuf\_writer\_arg\_t and sets the global\_hdr pointer to point to the start of the shared memory segment.
+If the checksum is not correct, \texttt{shmrbuf\_init} will fail, to avoid writing to or reading from potentially corrupted memory. After initializing the header,
+\texttt{shmrbuf\_init} sets the indices of all segment headers to zero. As an alternative to creating a new buffer,
+a writer can also reattach to an existing buffer. When reattaching, the buffer parameters provided in \texttt{shmrbuf\_writer\_arg\_t} are ignored. To enable reattachment, the \texttt{REATT} flags has to be specified in the flags field of the shmrbuf\_writer\_arg\_t, otherwise the call   
+to \texttt{shmrbuf\_init} will fail for an existing buffer. Reattachment is included in the API, so the writing application can be restarted (for instance for maintenance) without the need to
+destroy the shared memory segment, if readers are attached. The overwrite feature is also specified via the flag field by specifying the \texttt{OVWR} flag.
+Finally, \texttt{shmrbuf\_init} initializes an array of segment header structures in \texttt{shmrbuf\_writer\_arg\_t} and sets the \texttt{global\_hdr} pointer to point to the start of the shared memory segment.
 
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=67, lastline=71]{listings/shm_ringbuf.h}
     \label{alg:shm_seg_write}
     \caption[Shared Memory Ringbuffer: Writer Segment Header]{Structure to store writer information for a segment of the shared memory ringbuffer.}
 \end{algorithm}
-Algorithm \ref{alg:shm_seg_write} displays the struct  used in the segment header array. The struct does not represent the actual segment header the way its layed out in memory, but holds convenience pointers for a segment, that are used for writing operations.   
+Algorithm \ref{alg:shm_seg_write} displays the structure  used in the segment header array. The structure does not represent the actual segment header the way its layed out in memory, but holds convenience pointers for a segment, that are used for writing operations.   
    
 \par
-For readers, attaching to an existing buffer is also done with a call to shmrbuf\_init. This functions analogous the writer, with the exception that the
+For readers, attaching to an existing buffer is also done with a call to \texttt{shmrbuf\_init}. This functions analogous the writer, with the exception that the
 shared memory segment pointed to by the provided path has to exist. 
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=38, lastline=46]{listings/shm_ringbuf.h}
@@ -206,8 +206,8 @@ shared memory segment pointed to by the provided path has to exist.
     \caption[Shared Memory Ringbuffer: Reader Parameters]{Structure to store reader parameters for the shared memory ringbuffer.}
 \end{algorithm}
 Algorithm \ref{alg:shm:reader} displays the structure used for storing reader parameters. If the attachment to the shared memory segment
-and the checksum were successful, the reader will obtain a unique reader id, as described in section \ref{sec:design}. If all reader slots are already occupied, the shmrbuf\_init fails.
-Subsequently, shmrbuf\_init will initialize the pointers to the global header and the array of segment headers structures in the provided shmrbuf\_reader\_arg\_t structure.  
+and the checksum were successful, the reader will obtain a unique reader id, as described in section \ref{sec:design}. If all reader slots are already occupied, the \texttt{shmrbuf\_init} call fails.
+Subsequently, \texttt{shmrbuf\_init} will initialize the pointers to the global header and the array of segment headers structures in the provided \texttt{shmrbuf\_reader\_arg\_t} structure.  
 Readers have their own structure for storing segment header information, which is displayed in Algorithm \ref{alg:shm:seg_read}.  
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=60, lastline=65]{listings/shm_ringbuf.h}
@@ -215,9 +215,9 @@ Readers have their own structure for storing segment header information, which i
     \caption[Shared Memory Ringbuffer: Reader Segment Header]{Structure to store reader information for a segment of the shared memory ringbuffer.}
 \end{algorithm}
 
-The struct includes a pointer to the index of the reader within the segment header. Which read index of a segment header is assigned to a reader, is determined 
+The structure includes a pointer to the index of the reader within the segment header. Which read index of a segment header is assigned to a reader, is determined 
 by their reader id. Additionally, the structure contains a mutex lock, that is used to synchronize access to the segment when reding with multiple threads.
-After a successful call to shmrbuf\_init, both reader an writer can start using their respective APIs for the buffer.
+After a successful call to \texttt{shmrbuf\_init}, both reader an writer can start using their respective APIs for the buffer.
 
 \subsection{Write API}
 
@@ -227,20 +227,20 @@ After a successful call to shmrbuf\_init, both reader an writer can start using 
     \caption[Shared Memory Ringbuffer: Write API]{Write API for the shared memory ringbuffer.}
 \end{algorithm}
 
-Algorithm \ref{alg:shm:write_api} displays the write API for the shared memory ringbuffer. shmrbuf\_write 
+Algorithm \ref{alg:shm:write_api} displays the write API for the shared memory ringbuffer. \texttt{shmrbuf\_write}
 writes a single log message to a specified segment within the buffer. The segment being written to has to be reference with an id, which is simply its index within $\{0..n\}$, where
-n is the number of segments. The src argument is a pointer to the string that should be written to the buffer and wsize specifies the length of the string.
-If wsize exceeds the line size specified in the global header of the buffer, the write operation will fail with a size error. When issuing a call to shmrbuf\_write without overwrite, the 
+n is the number of segments. The src argument is a pointer to the string that should be written to the buffer and \texttt{wsize} specifies the length of the string.
+If \texttt{wsize} exceeds the line size specified in the global header of the buffer, the write operation will fail with a size error. When issuing a call to \texttt{shmrbuf\_write} without overwrite, the 
 the function will atomically load all reader indices in the segment header and check their distance to the write index. If no reader is directly ahead of the write index, the line will be written
 to the buffer and the writer index will be atomically updated to its new position, otherwise, the function call returns with an error. If the overwrite operation is specified in the header, synchronization between writer and reader is
 effectively disabled and the write operation will conclude, regardless of the readers positions. This incurs the risk, that a reader and writer simultaneously access 
 the same line, which may potentially corrupt the data being read. An advantage of overwrite is, that the writer avoids costly atomic operations and also cant be blocked 
 by a slow or stale reader. The performance of the overwrite feature will be evaluated in section \ref{sec:evaluation}.
-The write API provides a seconds write function in shmrbuf\_writev. Instead of writing a single line, the function receives an  
-an array of iovec structures. The iovec structure defined in struct\_iovec.h within the standard C library, is a generic container for vectored
+The write API provides a seconds write function in \texttt{shmrbuf\_writev}. Instead of writing a single line, the function receives an  
+an array of \texttt{iovec} structures. The \texttt{iovec} structure defined in \texttt{struct\_iovec.h} within the standard C library, is a generic container for vectored
 io operations. It contains a void pointer to a data field and a variable to specify the length of the data in bytes. 
-shmrbuf\_writev works analogous to shmrbuf\_write, with the only difference that vsize lines referenced the corresponding iovec
-structure in iovecs will be written to the buffer. Performance inspection of shmrbuf\_write with the benchmarking tool
+shmrbuf\_writev works analogous to \texttt{shmrbuf\_write}, with the only difference that \texttt{vsize} lines referenced the corresponding \texttt{iovec}
+structure in iovecs will be written to the buffer. Performance inspection of \texttt{shmrbuf\_write} with the benchmarking tool
 perf \cite{perf} revealed, that about 75\% of the execution time is being spent for executing the atomic operations. Hence, 
 using a vectored write operation should improve performance, as the synchronization only has to be applied once for multiple log messages.
 For the sake of performance, neither write function implements synchronization for the write index. Calling a write operation
@@ -255,42 +255,52 @@ Algorithm \ref{alg:shm:read_api} presents the functions of the reader API.
     \caption[Shared Memory Ringbuffer: Read API]{Read API for the shared memory ringbuffer.}
 \end{algorithm}
 
-shmrbuf\_read is the corresponding read operation to shmrbuf\_write. It reads a single from
+\texttt{shmrbuf\_read} is the corresponding read operation to \texttt{shmrbuf\_write}. It reads a single from
 the specified segment into the provided buffer. If the provided buffer size is exceeded by the
 size of the line, the read call fails, hence, the buffer should always at least have maximum line size, specified 
-in the global header. Upon a call to shmrbuf\_read, the function atomically loads the write index for the segment. 
+in the global header. Upon a call to \texttt{shmrbuf\_read}, the function atomically loads the write index for the segment. 
 If the position of the write index differs from that of the readers read index, the line pointed to by 
 the reader index will be copied to the external buffer and the read index will be atomically updated to its new position.
-On success, shmrbuf\_read returns the (maximum) line size or zero, if the buffer is empty \footnote{In its current implementation, the buffer allows any type of binary data to be copied to a line. Hence, the actual length of the
-string in the line buffer is not checked, as the terminating zero byte could still be part of the payload. Restricting the buffer to
-non zero characters, or moving to a variable line length design, would make the return value more meaningful, as it could be altered to represent the actual length of the string.}.     
-Analogous to the write API, a vectored read function exists in shmrbuf\_readv, which should incur the same performance benefits.
-Instead of reading a single line, vsize lines are copied to the buffers specified by in corresponding iovec structures in iovecs.
+On success, \texttt{shmrbuf\_read} returns the (maximum) line size or zero, if the buffer is empty \footnote{In its current implementation, the buffer allows any type of binary data to be copied to a line. This is a problem for determining the actual length of a string
+in the line buffer, since the terminating zero byte could still be part of the payload. Therefore, the maximum line length is always returned. Restricting the buffer to
+non zero characters, or moving to a variable line length design, would enable the function to determine the length of the string contained in the line buffer, making the return value more meaningful.}.     
+Analogous to the write API, a vectored read function exists in \texttt{shmrbuf\_readv}, which should incur the same performance benefits.
+Instead of reading a single line, \texttt{vsize} lines are copied to the buffers specified by in corresponding \texttt{iovec} structures in \texttt{iovecs}.
 Unlike the write API, all read operations called on the same segment by threads within the same processes are thread safe. 
-At the beginning of each read operation, the mutex lock in the corresponding shmrbuf\_seg\_rhdr\_t structure is claimed and release after the read index has been updated.
+At the beginning of each read operation, the mutex lock in the corresponding \texttt{shmrbuf\_seg\_rhdr\_t} structure is claimed and release after the read index has been updated.
 For performance reasons, frequent locking of a segment by different reading threads should be avoided and threads should ideally be assigned segments that they access exclusively.
-The read API contains to further functions. shmrbuf\_read\_rng is a convenience wrapper around shmrbuf\_read. It its useful for the case, that the reading
+The read API contains to further functions. \texttt{shmrbuf\_read\_rng} is a convenience wrapper around \texttt{shmrbuf\_read}. It its useful for the case, that the reading
 application uses fewer reading threads than there are segments in the buffer. shmrbuf\_read\_rng allow the specification a segment range through the upper
-and lower parameters. When calling shmrbuf\_read\_rng, the function will iterate over all segments in the range in a round-robin fashion and perform a read call, until the first non empty segment is found or one cycle is completed.
+and lower parameters. When calling \texttt{shmrbuf\_read\_rng}, the function will iterate over all segments in the range in a round-robin fashion and perform a read call, until the first non empty segment is found or one cycle is completed.
 The iteration index is persistent across function calls, ensuring that subsequent calls will continue the round-robin at the same position. This allows
-starvation-free reading from the specified segment range. The boolean pointer wsteal allows for the option of workload stealing.
-If wsteal is non null and all segments within the specified range are empty, the function will additionally iterate over all
+starvation-free reading from the specified segment range. The boolean pointer \texttt{wsteal} allows for the option of workload stealing.
+If \texttt{wsteal} is non null and all segments within the specified range are empty, the function will additionally iterate over all
 segments outside of the specified range until a line has been read successfully or all segments have been checked. If a line was read from 
-outside the specified range, wsteal will be set to true. The intention of the workload stealing feature is to mitigate scenarios,
+outside the specified range, \texttt{wsteal} will be set to true. The intention of the workload stealing feature is to mitigate scenarios,
 where writing operation are not equally distributed across segments. If a reader, for instance, assigns two reading threads to one segments each,
 but only one of the segments is being written to, then one reading thread would be idle, while the other has to handle all reading operations.
 Workload stealing mitigates this, by having threads read across their assigned boundaries, if they would otherwise be idle.
-shmrbuf\_readv\_rng is the last function in the read API and corresponds to shmrbuf\_read\_rng with the only difference
-that multiple lines can be read from each segment, up to the number specified by vsize. The wsteal parameter is
-also an integer instead of a boolean pointer and will be set to the number of lines read from outside the specified range, if wsteal is non null.
+\texttt{shmrbuf\_readv\_rng} is the last function in the read API and corresponds to \texttt{shmrbuf\_read\_rng} with the only difference,
+that multiple lines can be read from each segment, up to the number specified by \texttt{vsize}. The \texttt{wsteal} parameter is
+also an integer instead of a boolean pointer and will be set to the number of lines read from outside the specified range, if \texttt{wsteal} is non null.
 
 \section{Proof-of-Concept IPS}
 
-\begin{algorithm}[h!]
-    \lstinputlisting[language=c, firstline=27, lastline=35]{listings/uring_getline.h}
-    \label{alg:uring_getline}
-    \caption[Asynchronous line reading]{this is some text}
-\end{algorithm}
+The following section presents the design and implementation of the proof of concept \ac{IPS}, for testing the \ac{IPC} architecture covered in the past sections.
+In order to be comparable, the \ac{IPS} will be closely modelled after Fail2ban. The goal is however not to fully reimplement Fail2bans full set of feature, as that would go beyond
+the scope of this thesis. Instead, a minimal set of features will be supported, the allows for the replication of the experiment covered in section \ref{sec:fail2ban}. 
+The requirements for the \ac{Poc} are as follows:
+\begin{itemize}
+    \item Ability to monitor an application log, via traditional logfile parsing and the new \ac{IPC} solution.
+    \item Ability to parse log messages with a customly definable regular expression.
+    \item Ability to create filter rules for a clients IP addresses for both \ac{IPv4} \& \ac{IPv6}.
+    \item Support for a ban limit, i.e. a customly definable number of matches per client before a ban is executed.
+    \item Support for a ban time, i.e. a customly definable duration for the ban of a clients IP address. 
+\end{itemize} 
+
+Figure \ref{fig:ips_architecture} illustrates the proposed design for the \ac{PoC}, which will from hereon be referred to as Simplefail2ban. The source file 
+for the implementation of Simplefail2ban is \texttt{simplefailban.c} in the \texttt{src/programs} directory of the thesis Git repository \cite{gitlab}.
+
 
 \begin{figure}[p]
     \includegraphics[width=\textwidth]{images/ips_architecture.png}
@@ -298,15 +308,62 @@ also an integer instead of a boolean pointer and will be set to the number of li
     parse them with a predefined regular expressions. For messages that match the expression, the clients IP address is extracted from the log message and added to a hashtable, that keeps count of
     the number of matches per address. If the count reaches the configured limit, the address is added to the list of banned addresses with a current timestamp and inserted into the eBPF map. One ``unbanning
    thread'' routinely iterates through the banned list and checks, if a clients bantime hast elapsed. Clients with an elapsed bantime are removed from the eBPF map, banned list and hashtable.}
-   \label{fig:meta_architecture}
+   \label{fig:ips_architecture}
 \end{figure}
+
+The functionality of the application will be separated into two classes of threads. A variable number of ``banning'' threads
+and a single ``unbanning'' thread. The banning threads are tasked with monitoring the application log. The routinely call a read
+function, to check if new messages have been added to the log. The read function varies, depending on the type of \ac{IPC} architecture
+being used. For multi-threaded use, the read function has to be thread-safe and should ideally be lock free, to allow for optimal performance.
+When using the shared memory ringbuffer as the source for log messages, \texttt{shmrbuf\_readv\_rng} is used, where the buffer segments
+are equally distributed among the banning threads. For traditional logfile parsing, a custom read function was implemented, on the
+basis of the asynchronous \ac{IO} library liburing introduced in \ref{sec:io_uring}.
+
+\begin{algorithm}[h!]
+    \lstinputlisting[language=c, firstline=27, lastline=35]{listings/uring_getline.h}
+    \label{alg:uring_getline}
+    \caption[Asynchronous Getline Function]{Function signatures for the io\_uring based getline functions.}
+\end{algorithm}
+
+\ref{alg:uring_getline} displays the function signatures. \texttt{uring\_getline} was modelled after the getline function
+from the \texttt{stdio.h} library within the C standard library \cite{getline}. The function is passed a pointer to a \texttt{file\_io\_t} structure   
+which contains file descriptor for the designated file, as well two buffers for the data being read. When the function is called, both buffers are checked for lines from an earlier function call.
+If both buffers are empty, a liburing based read operation
+is initiated. The read data is then tokenized into lines via a linear search for newline characters. If the read operation fills the entire buffer, another read
+operation is scheduled for the second buffer. The return of the read operation is not awaited and will only be checked on a subsequent function call. The idea is,
+that, in anticipation of subsequent function calls, data is being asynchronously read ahead, so that for most function calls, the function can resort to the buffer instead
+of reading from the actual file. This should hopefully be more performant than regular blocking calls to \texttt{read}. The file offset for the read operation is tracked in
+the \texttt{file\_io\_t} structure and updated after each read. \texttt{uring\_getlines} works analogous to \texttt{uring\_getline}, with the difference that up to \texttt{vsize}
+lines can be read in a single function call. The lines and their size in byte are copied to the corresponding \texttt{iovec} structure in \texttt{iovecs}.
+\texttt{uring\_getline} and \texttt{uring\_getlines} are not build for thread-safety, hence, the logfile based version of Simplefail2ban only supports single threaded monitoring\footnote{It its unclear, wether multi-threaded file reading would provide a performance benefit, since the read operations would have to be serialized by the operating system. Hence the decision to not support multi-threading.}.
+\par
+If a banning thread has successfully read one or multiple log messages, the messages are then matched against a regular expressions, which can be defined at the start of the application.
+For \ac{REGEX}-matching the regular expressions engine Hyperscan, introduced in section \ref{sec:hyperscan}, is used. Hyperscan is used in multi-pattern matching mode, scanning
+for both the provided \ac{REGEX} as well as expressions for \ac{IPv4} and \ac{IPv6}, to extract the clients \ac{IP} address from the log message. If the message was successfully matched against
+the provided \ac{REGEX}, the clients \ac{IP} address identified by the \ac{IP}-\ac{REGEX} will be translated to its binary form for further processing. If the scan does not find a match, 
+the processing moves on to the next log message. Alternatively, Simplefail2ban can also be configured to directly translate the entire log message to an \ac{IP} address, without regular expression matching.
+This is not explicitly referenced in \ref{fig:ips_architecture} and was only implemented as reference, to measure the impact of \ac{REGEX}-matching on the overall performance of the application.
+\par
+Once a clients binary \ac{IP} address has been determined (either through successful matching or direct translation), a hash table lookup for the address is performed.
+The purpose if this is to determine, if a client has reached the ban limit, which is configured at the start of the application. 
+The hash table stores key value pairs, where the key can be a \ac{IPv4} or \ac{IPv6} address in binary form and the value is a counter,
+indicating the number of times the key has been queried. A custom hash table was implemented as a static library, the sources files for which are \texttt{ip\_hashtable.h}
+and \texttt{ip\_hashtable.c} in the \texttt{src/lib} directory of the thesis Git repository \cite{gitlab}. 
 
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=29, lastline=38]{listings/ip_hashtable.h}
     \label{alg:ip_hashtable}
-    \caption[IP Hashtable]{this is some text}
+    \caption[IP Hash Table]{Structure for storing a single entry in the IP hash table. The \texttt{key} pointer 
+    points to the binary address, the size of which depends on wether the domain value is \texttt{AF\_INET} or \texttt{AF\_INET6}.}
 \end{algorithm}
 
+\ref{alg:ip_hashtable} displays the structure used for storing a single entry in the hash table. The base
+table consist of an array of bins, with a default size of 6000011\footnote{The array size was purposefully chosen as a prime number, to allow for a more equal spread among the bins.}.
+When an ip address is inserted into the table, an index within the array is determined by calculated the value of a hash function modulo 
+the size of the array. The address and its associated counter value are then stored in the bin at the determined index, if it is empty. 
+The hash function used for the implementation is spookyc, which is a C implementation of
+the spooky hash function by Bob Jenkins \cite{spookyc}. If the bin at the determined is not empty, a collision occurs.
+Collisions are handled via a linked list, where the bin in the base array constitutes the first node of the list.
 \begin{table}[h!]
     \label{tab:hash_col}
     \centering
@@ -319,11 +376,47 @@ also an integer instead of a boolean pointer and will be set to the number of li
         600011 & 36.81 & 36.77 & 36.8 \\
         \bottomrule
     \end{tabular}
-    \caption[Hash Collisions]{Some text}
+    \caption[Hash Collisions]{Percentage of hash collisions by key type for different numbers of insertions. The results were obtained
+    with \texttt{hashfunc\_benchmark.c} in the \texttt{src/utilities} directory of the thesis Git repository \cite{gitlab}.}
 \end{table}
+
+Table \ref{tab:hash_col} presents experimental results for the collisions performance of the hash function. 
+There appear to be no significant differences in collision behaviors between \ac{IPv4} and \ac{IPv6} addresses.
+For 6000011 insertions (size of the base table), a little more than a third of all insertions resulted in a collision. 
+The hash table is global to the application, since different banning threads may handle log messages for the same
+client and need to synchronize their match count. To ensure thread-safe operations on the hash table, locking via mutexes is used.
+The granularity of the locking is at bin level, hence, parallel operations on the table are possible if different bins are accessed.
+\par
+If the hash table lookup returns a count that is equal to the ban limit, the banning thread facilitates a ban
+action, analogous to Fail2ban. To implement \ac{IP} address filtering, the \ac{eBPF} program developed by Florian Mikolajczak \cite{mikolajczak2022}
+ as described in \ref{sec:fail2ban}, was used. The program can be loaded onto an network interface and is executed event based on incoming packets\footnote{For a more through and detailed explanation, see \cite{mikolajczak2022}}.
+To determine which packets should be dropped, the program used maps containing \ac{IP} addresses, which are pinned to the \ac{eBPF} file system.
+At the start of Simplefail2ban, the \ac{eBPF} program will be loaded onto a configured interface. The function used for loading and unloading
+the \ac{eBPF} program and corresponding maps are slightly adapted from the implementation by  Florian Mikolajczak and can be found in \texttt{ebpf\_helpers.h}
+and \texttt{ebpf\_helpers.c} in the \texttt{src/lib} directory of the thesis Git repository \cite{gitlab}. The ban action executed by the banning thread
+consists of adding a clients binary \ac{IP} address to the corresponding \ac{eBPF} map. There are two distinct maps being used for \ac{IPv4} and \ac{IPv6} addresses.
+Once the address has been added to the map, the \ac{eBPF} program will drop all incoming packets from that address, for as long as the address is contained in the map.
+Additionally, the banning thread adds the \ac{IP} address to a linked list (referred to as banned list in \ref{fig:ips_architecture}) together with a 
+current timestamp. The linked list is used to store client that are currently banned. The source files for the linked list implementation are \texttt{ip\_llist.h}
+and \texttt{ip\_hllist.c} and can be found in the \texttt{src/lib} directory of the thesis Git repository \cite{gitlab}. The unbanning thread will routinely iterate over the list 
+and checked the amount of time that has passed since the timestamp. If the configured ban time has elapsed, the unbanning thread will unban the client.
+To unban a client, the unbanning thread removes its entry in the linked list as well as the entry in the \ac{eBPF} map. Finally, the address entry in the
+hash table is removed. This resets the matching count, so a client can be banned, if the ban limit is reached again.    
 
 \section{Test Application}
 
+To evaluate the \ac{IPC} architecture in conjunction with Simplefail2ban, a test application is needed, which utilizes the \ac{IPC} API to transmit log
+messages. For this purpose, a test server was developed, the source file for which is \texttt{udp\_server.c} in the \texttt{src/programs} directory of the thesis Git repository \cite{gitlab}. 
+Alternatively, the \ac{IPC} architecture could have been integrated into a real application, like the BIND server used in the previous Fail2ban measurements by Florian Mikolajczak. While this would have provided a more 
+realistic basis for the evaluation, the associated implementation effort was deemed beyond the scope of this thesis. 
+The test server serves as a stand in for a real \ac{UDP} based application such as BIND. It listens on a configurable port,
+and replies to incoming packets with a single one byte payload UDP packet. Based on the first payload byte of the received request,
+the server decides wether to write a log string for the requesting client\footnote{The byte to trigger logging can be determined with the \texttt{INVALID\_PAYLOAD} macro in \texttt{udp\_server.c}.}.
+The log string contains the current date, time and \ac{IP} address of the client, as well as a descriptive message and is written to either a logfile or the shared memory ringbuffer.  
+Alternatively, the test server can be configured to only log a clients \ac{IP} address. The test server uses multiple threads to listen for incoming packets 
+and is designed to handle a large amount of requests and logging operation per second, in order to not be a bottleneck for the evaluation of Simplefail2ban. 
+Perf \cite{perf} evaluation of the test server revealed, that a about 20\% of the execution time on the application side was spent translating \ac{IP} addresses to string form.  
+To facilitates fast creation of log strings, a custom function was written for the transformation of a binary \ac{IP} address to string form. 
 \begin{table}[h!]
     \label{tab:ip_str}
     \centering
@@ -331,15 +424,27 @@ also an integer instead of a boolean pointer and will be set to the number of li
     \begin{tabular}{lll}
         \toprule
         \textbf{Function} & \textbf{Execution Time IPv4 [Seconds]} & \textbf{Execution Time IPv6 [Seconds]} \\ \midrule 
-        inet\_ntop & 1.29 & 3.98 \\ \midrule
-        ip\_to\_str & 0.21 & 0.53 \\ 
+        \texttt{inet\_ntop} & 1.29 & 3.98 \\ \midrule
+        \texttt{ip\_to\_str} & 0.21 & 0.53 \\ 
         \bottomrule
     \end{tabular}
-    \caption[IP String Conversion]{Some text}
+    \caption[IP String Conversion]{Performance evaluation for binary IP address to string conversion. The evaluated functions are
+    \texttt{inet\_ntop} from \texttt{arpa/inet.h} in the C standard library and a custom function \texttt{ip\_to\_str}. The corresponding source 
+    files are \texttt{ip\_to\_str.h}
+    and \texttt{ip\_to\_str.c} in the \texttt{src/lib} directory and the evaluation was conducted with
+    \texttt{ip\_string\_benchmark.c} in the \texttt{src/utilities} directory of the thesis Git repository \cite{gitlab}}
 \end{table}
 
+Table \ref{tab:ip_str} summaries the evaluation results for the custom function \texttt{ip\_to\_str} and the standard library function \texttt{inet\_ntop}. 
+\texttt{ip\_to\_str} is on average about 6 times faster for translating \ac{IPv4} addresses and about 7 times for \ac{IPv6}. Since the test server
+can write up to a million log messages per second, overall performance should be improved by the use of \texttt{ip\_to\_str}\footnote{This could be further evaluated by the comparing overall difference of the server for both functions, but I unfortunately did not have the time to implement further test.}. 
 
-\section{Other application}
+\section{Other Applications}
 
-
+Two other applications where developed as part of this thesis. To test the multi reader capability of the proposed
+shared memory architecture, an application serving as an additional reader was implemented. The application models a 
+log aggregator such as Logstash (discussed in \ref{sec:ipc_types}) and writes the log messages contained in the buffer to a configurable 
+logfile. The source file for this application is \texttt{simplelogstash.c} in the \texttt{src/utilities} directory of the thesis Git repository \cite{gitlab}.
+The second application is a utility for inspection and debugging the shared memory ringbuffer. It allows the inspection of the header as well
+as the display of load statistics on the individual segments and the entire buffer. The source file is \texttt{poll\_rbuf.c} in the \texttt{src/utilities} directory of the thesis Git repository \cite{gitlab}. 
 
