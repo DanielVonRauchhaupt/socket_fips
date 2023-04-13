@@ -139,6 +139,8 @@ In total, 4 measurements are conducted.
 \par
 In the following sections, the results of experiments 1 through 4 are presented.
 
+\pagebreak
+
 \section{Experiment 1: Fail2ban Replication}
 
 \begin{figure}[h!]
@@ -168,6 +170,8 @@ has a strong impact on the performance of Fail2ban, even at low traffic rates.
 \par 
 Overall, the replication managed to show, that Fail2bans performance issues still persist in the new test environment. Both the rate of traffic as well as the number of clients appear
 to be significant factors, for which Fail2bans performance scales poorly.  
+
+\pagebreak
 
 \section{Simplefail2ban Measurements}
 
@@ -263,7 +267,7 @@ The results are similar to those of Fail2ban in figure \ref{fig:fail2ban:mikolaj
 does not manage to recover before the end of the ban cycle. For the \ac{IPv6} measurement Simplefail2ban managed to process only about 89\% of the total log messages written by the server. For the joint measurement
 the number is significantly lower at around 64\%. Overall the result show, that, even though the threshold appears to be larger, the same issues of file based log message parsing persist for Simplefail2ban.
 
-
+\pagebreak
 
 \subsection{Experiment 3: Shared Memory Variant}
 
@@ -289,6 +293,8 @@ for the logfile based Simplefail2ban at a traffic rate of 100 thousand invalid \
 version of Simplefail2ban. Again a relative drop rate of over 99\% percent is achieved across the board. The only noticeable difference to logfile-based result is, that the \ac{CPU} usage appear to be slightly higher.
 However, this observation is skewed by the fact, that the execution time of the kernel performing the io\_uring based reads is not included in the statistic. 
 
+\pagebreak
+
 \begin{figure}[!h]
 	\label{fig:simplefail2ban:shm:ip46:1m}
 	\centering
@@ -310,6 +316,8 @@ for the logfile based Simplefail2ban at a traffic rate of 1 million invalid \ac{
 measurements. Overall, the shared memory based Fail2ban performs slightly better across the board, with a relative drop rate of around 99\%. Interestingly, there appears 
 to be no significant performance difference between the pure \ac{IPv4} and \ac{IPv6} and the joint measurements, even though
 the latter has to process double the amount of clients.
+
+\pagebreak
 
 \begin{figure}[!h]
 	\label{fig:simplefail2ban:shm:ip46:10m}
@@ -334,6 +342,8 @@ pure \ac{IPv4} measurement performed the worst, at only 96.72 \%. The reason for
 indication that the performance of Simplefail2ban varies more than the initial measurements indicated. Hence, further replication
 is necessary to provide a more stable estimation of the expected performance. 
 
+\pagebreak
+
 \begin{figure}[!h]
 	\centering
 	\scriptsize
@@ -357,7 +367,9 @@ the entire incoming traffic. As evident by the variance in the drop curve, witho
 In total, only around 8.095 billion  packets out of 9.003 billion packets were registered. Similar behavior was already observed by Florian Mikolajczak \cite{mikolajczak2022} for traffic rates beyond
 30 million packets per second.
 
-\subsection{Experiment 3: Shared Memory Features}
+\pagebreak
+
+\subsection{Experiment 4: Shared Memory Features}
 
 In the following, features of the shared memory implementation are evaluated. All measurements are conducted with same traffic and client levels as the measurements presented in figure \ref{fig:simplefail2ban:shm:ip46:10m}.
 Hence, the measurement servers as a baseline for comparing performance difference with additionally enabled features.
@@ -384,6 +396,8 @@ point to 97.4\% of dropped invalid traffic. Additionally, the variance of when c
 than in most of the previous measurements. This may caused by the fact, that the test server has to drop messages, as buffer reaches capacity due to the slower second reader.
 About 54\% of all log messages by the server are dropped.   
 
+\pagebreak
+
 \begin{figure}[!h]
 	\centering
 	\scriptsize
@@ -405,6 +419,8 @@ the performance is not significantly better, at less then a percentage point of 
 written by the server, while the second reader read only about 41\% of all messages. This behavior is unexpected and points at a potential bug in the implementation of the overwrite
 feature. For potential further development of Simplefail2ban, the overwrite feature should be inspected closely and potentially revised, if performance does not improve. 
 
+\pagebreak
+
 \begin{figure}[!h]
 	\centering
 	\scriptsize
@@ -425,6 +441,8 @@ Figure \ref{fig:simplefail2ban:shm:ws} presents the results for shared memory Si
 the test scenario is also not ideal for testing workload stealing, as the number of log messages was relatively equal distributed across the buffer segment. Still, about 12\% of all processed log messages were
 read via workload stealing. Workload sharing would be expected to have 
 larger performance impact, when distribution of messages is highly unequal, as stealing should become more frequent. Creating a specialized test for this scenario could be an objective for future development. 
+
+\pagebreak
 
 \begin{figure}[!h]
 	\centering

@@ -81,23 +81,50 @@ Given the requirements and abstract architecture, the goal is to find a concrete
 
 \section{Choice of IPC Type}
 
-During the development of this thesis, several \ac{ICP} mechanism where considered as suitable candidates for the proposed architecture. The initial
-objectives was to create multiple implementation that each use a different \ac{IPC} type, in order to compare their performance empirically. 
-To prevent the required time effort and scope of this thesis to get out of hand, the idea was abandoned in favor of a single implementation.
-This has the additional benefit, of devoting more time to refine the concrete design and implement additional features. 
+During the development of this thesis, all of the \ac{ICP} mechanism introduced in \ref{sec:ipc_types} where considered as suitable candidates for the proposed architecture. The initial
+objectives was to create multiple implementations, that each use a different \ac{IPC} type. This would have allowed to compare their performance empirically and make a more informed decision as to 
+which \ac{IPC} type is most appropriate for the given requirements.
+Due to time issues, the idea was abandoned in favor of a single implementation.
 \par
-All of the \ac{IPC} types introduced in section \ref{sec:ipc_types} 
+Shared memory was the first candidate considered for the design. The main reason for this is speed, since low latency communication is 
+the primary requirement for the proposed architecture. As aforementioned, shared memory has the significant advantage of not involving the 
+kernel for read or write operations. As long as the overhead for synchronizing the communicating processes is kept low, shared memory essentially
+operates at the speed of normal memory accesses, which is unlikely to be surpassed by any kernel-based \ac{IPC} method. Shared memory also grants 
+great flexibility in the design of the API. This also provides a challenge, as, to the best of my knowledge, no standard for the shared memory based
+transmission of log messages exists, making it harder to integrate the architecture with real world applications. Also, synchronization for multi-threaded
+and multi-process use will have to be implemented as part of the API. Another downside to shared memory is, that
+it does not trivially scale beyond the local system, which could be desired for more complex systems, where \ac{IPS} and server do not share the same host.
+\par 
+Named pipes are another potential option to implement the design. Unlike shared memory, the already provide a well defined read and write API,
+that can be integrated into the proof of concept \ac{IPS} as well as a log aggregator such as Rsyslog or Logstash. Additionally, pipes are safe for multi-process
+and multi-threaded reading. Multi-threaded writing by a single process is also thread-safe, as long as the data written is smaller than \texttt{PIPE\_BUF} (4096 bytes on Linux)\cite{pipe}.
+A downside to the usage of pipes the requirement of systemcalls for \ac{IO} operations. Especially, since thread-safe writing only allows for small message sizes, making it more complicated 
+to reduce the amount of systemcalls through batched write operations. 
+\par  
+A socket based implementation was also considered. A straightforward strategy for implementing the one to many communication required by the abstract architecture, would be the use of \ac{IPv6}
+multicast. \ac{IPv6} multicast allows several processes to join a distinct multi-cast group. Each member of the group receives the packets sent to the multicast address. This would additionally
+allow support of the syslog protocol, which could make for easier integration of the architecture with existing logging applications. The architecture could also scale beyond the local system to support 
+network-based logging. A downside of a socket based approach, same as for named pipes, is the overhead associated with involving the kernel.
+\par 
+Lastly, a message queue design, using the ZeroMQ library was considered. ZeroMQ is a logical choice, since the library natively supports a publish subscribe pattern, that could be used to
+implement the required one to many communication. In addition to that, Rsyslog and Logstash support ZeroMQ sockets as input, which would allow easy integration with the architecture.
+One issue with a ZeroMQ based implementation is, that the \texttt{SO\_REUSEPORT} flag, for reusing a single socket among several threads, is not supported by ZeroMQ\cite{zeromq_issue}. 
+ZeroMQ sockets are not otherwise thread-safe\footnote{\url{https://zguide.zeromq.org/docs/chapter2/}}\cite{zeromq}. Hence, to the best of my knowledge, a publish subscribe pattern with a 
+multi threaded producer can not be trivially implemented without external synchronization. 
+\par 
+Ultimately, the decision was made, to develope a shared memory based implementation of the architecture. The main motivation for this is, that it it is the most promising
+candidate for low-latency, high bandwidth communication, which is a critical aspect of the design. However, the proof of concept \ac{IPS} will be designed as modular as possible, so
+that implementations based on other \ac{IPC} types can be integrated for future development. 
 
-\section{Ringbuffer API}
+\section{Shared Memory API}
 
-The following section presents the design and implementation of the shared memory based architecture for the transmission
+The following section presents the design and implementation of the new shared memory based architecture for the transmission
 of log messages. \\
 
-\subsection{Design}
-\label{sec:design}
-For the base structure of the shared memory design, a ringbuffer was chosen. A ringbuffer is a queue-like data structure, used to store
+\subsection{Design} \label{sec:rbuf_design}
+For the base structure of the shared memory design, a ring buffer was chosen. A ring buffer is a queue-like data structure, used to store
 multiple entries in a sequence. The entries are processed \ac{FIFO} manner, hence data is being read in the same order that is was written. 
-Ringbuffers are a commonly used structure to buffer data streams, especially network application \cite{}.
+Ring buffers are a commonly used structure to buffer data streams, especially for network applications \cite{barrington2015}.
 They are usually realized as a fixed size array with additional pointers, that indicate the current location
 of readers and writers within the buffer. When the end of the buffer is reached during a read or write operation, the pointer
 wraps around to the begin of the buffer, threating the array, as if start and end where connected in a circular shape. 
@@ -105,20 +132,20 @@ wraps around to the begin of the buffer, threating the array, as if start and en
 \begin{figure}[h!]
     \label{fig:shm_architecture}
     \includegraphics[width=\textwidth]{images/shm_architecture.png}
-    \caption[Shared Memory Architecture]{Architecture for the single-writer, multi-reader shared memory ringbuffer for the transmission
+    \caption[Shared Memory Architecture]{Architecture for the single-writer, multi-reader shared memory ring buffer for the transmission
     of log messages. }
 \end{figure}
 
-Figure \ref{fig:shm_architecture} display the proposed ringbuffer architecture, adapted from the abstract design in Figure \ref{fig:abstract_architecture}.
+Figure \ref{fig:shm_architecture} display the proposed ring buffer architecture, adapted from the abstract design in Figure \ref{fig:abstract_architecture}.
 The shared memory region consists of a global header as well as a variable amount of segments,
-that each have their own segments header. Each segment constitutes a ringbuffer that is independent of the
+that each have their own segments header. Each segment constitutes a ring buffer that is independent of the
 the other segments. The global header contains contains information that is global to
 the entire buffer and is used for initialization, when processes attach to the buffer. The buffer parameters within the global
 header are initializes by the processes creating the buffer and are supposed to be constant for the lifetime of the shared memory segment.
 The segment count variable indicates the amount of segments within the buffer. As illustrated
 in \ref{fig:shm_architecture}, the number of segments is supposed to map 1:1 to the number 
-of writing threads. Since each writing threads has their own ringbuffer, no synchronization for access
-to the write pointers is required. The individual entries within the segment ringbuffers are fixed
+of writing threads. Since each writing threads has their own ring buffer, no synchronization for access
+to the write pointers is required. The individual entries within the segment ring buffers are fixed
 size lines, the length of which in bytes is determined by the line size field in the global header. Each line corresponds
 to one log message, the same way a line in a logfile would.  
 Limiting buffer entries to a fixed maximum size has some obvious disadvantages. The primary concern
@@ -126,7 +153,7 @@ is inefficient use of memory, as the line size will have to be chosen to accommo
 messages are not intended in the design. If log messages vary greatly in length, this may cause a lot of unused memory
 for shorter messages. The fixed size was chosen for a more convenient implementation of the overwrite feature, which is enable with the overwrite filed in the global header and will be covered in more detail
 later. Allowing for variable length entries is still an important consideration for further development of the design. The line count variable in the global header 
-determines the number of entries each segment ringbuffer has. Making all segments equal in size implicitly assumes, that the distribution of log messages written
+determines the number of entries each segment ring buffer has. Making all segments equal in size implicitly assumes, that the distribution of log messages written
 is equal among the writing threads. However, variable size segments could be trivially added to the design, should a use case for that emerge. 
 Finally, the global header contains a field for the number of allowed readers, as well as boolean fields, that indicate the attachment of the writer and the readers.
 Keeping the number of allowed readers fixed limits the ability of dynamically adding new readers, but makes the implementation more convenient. The attachment field are used for
@@ -150,7 +177,7 @@ under src/lib in the Git repository for this thesis \cite{gitlab}. All API funct
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=86, lastline=92]{listings/shm_ringbuf.h}
     \label{alg:shm:set_clean}
-    \caption[Shared Memory Ringbuffer: Initialization and Cleanup]{Initialization and cleanup function for the shared memory ringbuffer.}
+    \caption[Shared Memory Ringbuffer: Initialization and Cleanup]{Initialization and cleanup function for the shared memory ring buffer.}
 \end{algorithm}
 Algorithm \ref{alg:shm:set_clean} displays the function signature for  the initialization and finalizations functions.
 \texttt{shmrbuf\_init} is used to create or attach to an existing shared memory buffer and has to be called before read or write operations
@@ -164,7 +191,7 @@ which contains further parameters used by the functions.
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=27, lastline=36]{listings/shm_ringbuf.h}
     \label{alg:shm:writer_arg}
-    \caption[Shared Memory Ringbuffer: Writer Parameters]{Structure to store writer parameters for the shared memory ringbuffer.}
+    \caption[Shared Memory Ringbuffer: Writer Parameters]{Structure to store writer parameters for the shared memory ring buffer.}
 \end{algorithm}
 
 Algorithm \ref{alg:shm:writer_arg} displays the struct, that is used by a writing processes, to store and pass related parameters to the API functions.
@@ -178,7 +205,7 @@ be initialized with the parameters provided in the \texttt{shmrbuf\_writer\_arg\
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=50, lastline=58]{listings/shm_ringbuf.h}
     \label{alg:shm:global_hdr}
-    \caption[Shared Memory Ringbuffer: Global Header]{Structure to represent the global header of the shared memory ringbuffer.}
+    \caption[Shared Memory Ringbuffer: Global Header]{Structure to represent the global header of the shared memory ring buffer.}
 \end{algorithm}
 
 Algorithm \ref{alg:shm:global_hdr} displays the structure for the global header of the shared memory buffer. When the header has been initialized
@@ -193,7 +220,7 @@ Finally, \texttt{shmrbuf\_init} initializes an array of segment header structure
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=67, lastline=71]{listings/shm_ringbuf.h}
     \label{alg:shm_seg_write}
-    \caption[Shared Memory Ringbuffer: Writer Segment Header]{Structure to store writer information for a segment of the shared memory ringbuffer.}
+    \caption[Shared Memory Ringbuffer: Writer Segment Header]{Structure to store writer information for a segment of the shared memory ring buffer.}
 \end{algorithm}
 Algorithm \ref{alg:shm_seg_write} displays the structure  used in the segment header array. The structure does not represent the actual segment header the way its layed out in memory, but holds convenience pointers for a segment, that are used for writing operations.   
    
@@ -203,7 +230,7 @@ shared memory segment pointed to by the provided path has to exist.
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=38, lastline=46]{listings/shm_ringbuf.h}
     \label{alg:shm:reader_arg}
-    \caption[Shared Memory Ringbuffer: Reader Parameters]{Structure to store reader parameters for the shared memory ringbuffer.}
+    \caption[Shared Memory Ringbuffer: Reader Parameters]{Structure to store reader parameters for the shared memory ring buffer.}
 \end{algorithm}
 Algorithm \ref{alg:shm:reader} displays the structure used for storing reader parameters. If the attachment to the shared memory segment
 and the checksum were successful, the reader will obtain a unique reader id, as described in section \ref{sec:design}. If all reader slots are already occupied, the \texttt{shmrbuf\_init} call fails.
@@ -212,7 +239,7 @@ Readers have their own structure for storing segment header information, which i
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=60, lastline=65]{listings/shm_ringbuf.h}
     \label{alg:shm:seg_read}
-    \caption[Shared Memory Ringbuffer: Reader Segment Header]{Structure to store reader information for a segment of the shared memory ringbuffer.}
+    \caption[Shared Memory Ringbuffer: Reader Segment Header]{Structure to store reader information for a segment of the shared memory ring buffer.}
 \end{algorithm}
 
 The structure includes a pointer to the index of the reader within the segment header. Which read index of a segment header is assigned to a reader, is determined 
@@ -224,10 +251,10 @@ After a successful call to \texttt{shmrbuf\_init}, both reader an writer can sta
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=94, lastline=103]{listings/shm_ringbuf.h}
     \label{alg:shm:write_api}
-    \caption[Shared Memory Ringbuffer: Write API]{Write API for the shared memory ringbuffer.}
+    \caption[Shared Memory Ringbuffer: Write API]{Write API for the shared memory ring buffer.}
 \end{algorithm}
 
-Algorithm \ref{alg:shm:write_api} displays the write API for the shared memory ringbuffer. \texttt{shmrbuf\_write}
+Algorithm \ref{alg:shm:write_api} displays the write API for the shared memory ring buffer. \texttt{shmrbuf\_write}
 writes a single log message to a specified segment within the buffer. The segment being written to has to be reference with an id, which is simply its index within $\{0..n\}$, where
 n is the number of segments. The src argument is a pointer to the string that should be written to the buffer and \texttt{wsize} specifies the length of the string.
 If \texttt{wsize} exceeds the line size specified in the global header of the buffer, the write operation will fail with a size error. When issuing a call to \texttt{shmrbuf\_write} without overwrite, the 
@@ -252,7 +279,7 @@ Algorithm \ref{alg:shm:read_api} presents the functions of the reader API.
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=105, lastline=133]{listings/shm_ringbuf.h}
     \label{alg:shm:read_api}
-    \caption[Shared Memory Ringbuffer: Read API]{Read API for the shared memory ringbuffer.}
+    \caption[Shared Memory Ringbuffer: Read API]{Read API for the shared memory ring buffer.}
 \end{algorithm}
 
 \texttt{shmrbuf\_read} is the corresponding read operation to \texttt{shmrbuf\_write}. It reads a single from
@@ -315,7 +342,7 @@ The functionality of the application will be separated into two classes of threa
 and a single ``unbanning'' thread. The banning threads are tasked with monitoring the application log. The routinely call a read
 function, to check if new messages have been added to the log. The read function varies, depending on the type of \ac{IPC} architecture
 being used. For multi-threaded use, the read function has to be thread-safe and should ideally be lock free, to allow for optimal performance.
-When using the shared memory ringbuffer as the source for log messages, \texttt{shmrbuf\_readv\_rng} is used, where the buffer segments
+When using the shared memory ring buffer as the source for log messages, \texttt{shmrbuf\_readv\_rng} is used, where the buffer segments
 are equally distributed among the banning threads. For traditional logfile parsing, a custom read function was implemented, on the
 basis of the asynchronous \ac{IO} library liburing introduced in \ref{sec:io_uring}.
 
@@ -413,10 +440,10 @@ realistic basis for the evaluation, the associated implementation effort was dee
 The test server serves as a stand in for a real \ac{UDP} based application such as BIND. It listens on a configurable port,
 and replies to incoming packets with a single one byte payload UDP packet. Based on the first payload byte of the received request,
 the server decides wether to write a log string for the requesting client\footnote{The byte to trigger logging can be determined with the \texttt{INVALID\_PAYLOAD} macro in \texttt{udp\_server.c}.}.
-The log string contains the current date, time and \ac{IP} address of the client, as well as a descriptive message and is written to either a logfile or the shared memory ringbuffer.  
+The log string contains the current date, time and \ac{IP} address of the client, as well as a descriptive message and is written to either a logfile or the shared memory ring buffer.  
 Alternatively, the test server can be configured to only log a clients \ac{IP} address. The test server uses multiple threads to listen for incoming packets 
 and is designed to handle a large amount of requests and logging operation per second, in order to not be a bottleneck for the evaluation of Simplefail2ban. 
-Perf \cite{perf} evaluation of the test server revealed, that a about 20\% of the execution time on the application side was spent translating \ac{IP} addresses to string form.  
+Perf \cite{perf} evaluation of the test server revealed, that about 20\% of the execution time on the application side was spent translating \ac{IP} addresses to string form.  
 To facilitates fast creation of log strings, a custom function was written for the transformation of a binary \ac{IP} address to string form. 
 \begin{table}[h!]
     \centering
@@ -446,6 +473,6 @@ Two other applications where developed as part of this thesis. To test the multi
 shared memory architecture, an application serving as an additional reader was implemented. The application models a 
 log aggregator such as Logstash (discussed in \ref{sec:ipc_types}) and writes the log messages contained in the buffer to a configurable 
 logfile. The source file for this application is \texttt{simplelogstash.c} in the \texttt{src/utilities} directory of the thesis Git repository \cite{gitlab}.
-The second application is a utility for inspection and debugging the shared memory ringbuffer. It allows the inspection of the header as well
+The second application is a utility for inspection and debugging the shared memory ring buffer. It allows the inspection of the header as well
 as the display of load statistics on the individual segments and the entire buffer. The source file is \texttt{poll\_rbuf.c} in the \texttt{src/utilities} directory of the thesis Git repository \cite{gitlab}. 
 

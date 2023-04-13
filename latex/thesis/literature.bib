@@ -12,15 +12,11 @@
   howpublished = {\url{https://www.cs.uni-potsdam.de/bs/teaching/docs/thesis/2022/mikolajczak.pdf}}
 }
 
-@article{bridges2019,
-  title={A survey of intrusion detection systems leveraging host data},
-  author={Bridges, Robert A and Glass-Vanderlan, Tarrah R and Iannacone, Michael D and Vincent, Maria S and Chen, Qian},
-  journal={ACM Computing Surveys (CSUR)},
-  volume={52},
-  number={6},
-  pages={1--35},
-  year={2019},
-  publisher={ACM New York, NY, USA}
+@misc{trex,
+  author       = {Cisco Systems},
+  title        = {{Official TRex Website}},
+  howpublished = {\url{https://trex-tgn.cisco.com}},
+  note = {{Last visited on: 13.04.2023}}
 }
 
 @inproceedings{ford2016,
@@ -37,15 +33,23 @@
   title         = {{Official Fail2Ban  Website}},
   year          = {2011},
   howpublished = {\url{https://www.fail2ban.org}},
-      note = {{Last visited on: 14.04.2023}}
+  note = {{Last visited on: 13.04.2023}}
 }
+
+@misc{scapy,
+  author        = {Scapy},
+  title         = {{Official Scapy Website}},
+  howpublished = {\url{https://scapy.net/}},
+  note = {{Last visited on: 13.04.2023}}
+}
+
 
 @misc{zeromq,
   author        = {ZeroMQ},
   title         = {{Official ZeroMQ Website}},
   year          = {2022},
   howpublished = {\url{https://zeromq.org/}},
-      note = {{Last visited on: 14.04.2023}}
+  note = {{Last visited on: 13.04.2023}}
 }
 
 @misc{gitlab,
@@ -61,7 +65,7 @@
   title         = {{Systen V IPC Manpage}},
   year          = {2020},
   howpublished = {\url{https://man7.org/linux/man-pages/man7/sysvipc.7.html}},
-      note = {{Last visited on: 14.04.2023}}
+  note = {{Last visited on: 13.04.2023}}
 }
 
 @misc{perf,
@@ -69,7 +73,7 @@
   title         = {{Perf Manpage}},
   year          = {2022},
   howpublished = {\url{https://www.man7.org/linux/man-pages/man1/perf.1.html}},
-      note = {{Last visited on: 14.04.2023}}
+  note = {{Last visited on: 11.04.2023}}
 }
 
 
@@ -78,7 +82,7 @@
   title         = {{Unix Socket Manpage}},
   year          = {2021},
   howpublished = {\url{https://man7.org/linux/man-pages/man7/unix.7.html}},
-      note = {{Last visited on: 14.04.2023}}
+  note = {{Last visited on: 12.04.2023}}
 }
 
 @misc{posixmsq,
@@ -86,22 +90,39 @@
   title         = {{POSIX Message Queue Manpage}},
   year          = {2020},
   howpublished = {\url{https://man7.org/linux/man-pages/man7/mq_overview.7.html}},
-      note = {{Last visited on: 14.04.2023}}
+  note = {{Last visited on: 13.04.2023}}
 }
+
+@misc{iptables,
+  author        = {Linux man-pages project},
+  title         = {{Iptables Manpage}},
+  year          = {2020},
+  howpublished = {\url{https://www.man7.org/linux/man-pages/man8/iptables.8.html}},
+  note = {{Last visited on: 13.04.2023}}
+}
+
+@misc{netfiler,
+  author       = {Netfilter Project},
+  title        = {Official Netfiler Website},
+  howpublished = {\url{https://www.netfilter.org/}},
+  note = {{Last visited on: 11.04.2023}}
+}
+
 
 @misc{pipe,
   author        = {Linux man-pages project},
   title         = {{Pipe Manpage}},
   year          = {2021},
   howpublished = {\url{https://www.man7.org/linux/man-pages/man7/pipe.7.html}},
-      note = {{Last visited on: 14.04.2023}}
+      note = {{Last visited on: 12.04.2023}}
 }
 
 @misc{getline,
   author       = {Linux man-pages project},
-  howpublished = {\url{https://www.man7.org/linux/man-pages/man3/getline.3.html}},
   title        = {{Getline Manpage}},
-  year         = {2021}
+  year         = {2021},
+  howpublished = {\url{https://www.man7.org/linux/man-pages/man3/getline.3.html}},
+  note = {{Last visited on: 13.04.2023}}
 }
 
 
@@ -109,22 +130,31 @@
   author        = {Linux man-pages project},
   title         = {{Posix Shared Memory Manpage}},
   year          = {2021},
-  howpublished = {\url{https://man7.org/linux/man-pages/man7/shm_overview.7.html}},
-      note = {{Last visited on: 14.04.2023}}
+  howpublished = {\url{https://man7.org/linux/man-pages/man7/shm\_overview.7.html}},
+  note = {{Last visited on: 13.04.2023}}
 }
 
 @misc{liburing,
 	author = {Axboe, Jens},
 	title = {{Liburing}},
 	howpublished = {\url{https://github.com/axboe/liburing}},
-  note = {{library for the io_uring Linux kernel interface}}
+  note = {{library for the io\_uring Linux kernel interface}}
+}
+
+
+@misc{io_uring,
+  author       = {Axboe, Jens},
+  howpublished = {\url{https://kernel.dk/io\_uring.pdf}},
+  note = {{Last visited on: 12.04.2023}},
+  title        = {Efficient IO with io\_uring},
+  year         = {2019}
 }
 
 @misc{hyperscan,
 	author = {Intel},
-	title = {{Hyperscan}},
+	title = {{Hyperscan, high-performance regular expression matching library}},
 	howpublished = {\url{https://github.com/intel/hyperscan}},
-  note = {{high-performance regular expression matching library}}
+  note = {{Last visited on: 12.04.2023}}
 }
 
 @misc{libbpf,
@@ -155,6 +185,14 @@
   publisher={Prentice Hall, NJ, USA}
 }
 
+@misc{zeromq_issue,
+  author       = {Libzmq},
+  howpublished = {\url{Support for SO_REUSEPORT}},
+  title        = {Github Issue: Support for SO\_REUSEPORT},
+  year         = {2015},
+  note = {{Last visited on: 13.04.2023}}
+}
+
 @misc{recio2007,
   title={RFC 5040: A remote direct memory access protocol specification},
   author={Recio, R and Metzler, B and Culley, P and Hilland, J and Garcia, D},
@@ -176,6 +214,54 @@
   author={Gerhards, Rainer},
   year={2009},
   publisher={RFC Editor}
+}
+
+@misc{logstash,
+  author       = {Elasticsearch B.V.},
+  howpublished = {\url{https://www.elastic.co/logstash/}},
+  note = {{Last visited on: 13.04.2023}},
+  title = {Logstash}
+}
+
+@article{bhatt2014operational,
+  title={The operational role of security information and event management systems},
+  author={Bhatt, Sandeep and Manadhata, Pratyusa K and Zomlot, Loai},
+  journal={IEEE security \& Privacy},
+  volume={12},
+  number={5},
+  pages={35--41},
+  year={2014},
+  publisher={IEEE}
+}
+
+
+@article{vinoski2006advanced,
+  title={Advanced message queuing protocol},
+  author={Vinoski, Steve},
+  journal={IEEE Internet Computing},
+  volume={10},
+  number={6},
+  pages={87--89},
+  year={2006},
+  publisher={IEEE}
+}
+
+@inproceedings{jeong2013high,
+  title={High performance logging system for embedded UNIX and GNU/Linux applications},
+  author={Jeong, Jaein},
+  booktitle={2013 IEEE 19th International Conference on Embedded and Real-Time Computing Systems and Applications},
+  pages={310--319},
+  year={2013},
+  organization={IEEE}
+}
+
+
+
+@misc{rsyslog,
+  author       = {Gerhards, Rainer},
+  title        = {Rsyslog},
+  howpublished = {\url{https://www.man7.org/linux/man-pages/man7/pipe.7.html}},
+  note = {{Last visited on: 13.04.2023}}
 }
 
 @article{anderson1980,
