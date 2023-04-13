@@ -338,11 +338,11 @@ lines can be read in a single function call. The lines and their size in byte ar
 \texttt{uring\_getline} and \texttt{uring\_getlines} are not build for thread-safety, hence, the logfile based version of Simplefail2ban only supports single threaded monitoring\footnote{It its unclear, wether multi-threaded file reading would provide a performance benefit, since the read operations would have to be serialized by the operating system. Hence the decision to not support multi-threading.}.
 \par
 If a banning thread has successfully read one or multiple log messages, the messages are then matched against a regular expressions, which can be defined at the start of the application.
-For \ac{REGEX}-matching the regular expressions engine Hyperscan, introduced in section \ref{sec:hyperscan}, is used. Hyperscan is used in multi-pattern matching mode, scanning
-for both the provided \ac{REGEX} as well as expressions for \ac{IPv4} and \ac{IPv6}, to extract the clients \ac{IP} address from the log message. If the message was successfully matched against
-the provided \ac{REGEX}, the clients \ac{IP} address identified by the \ac{IP}-\ac{REGEX} will be translated to its binary form for further processing. If the scan does not find a match, 
+For \ac{Regex}-matching the regular expressions engine Hyperscan, introduced in section \ref{sec:hyperscan}, is used. Hyperscan is used in multi-pattern matching mode, scanning
+for both the provided \ac{Regex} as well as expressions for \ac{IPv4} and \ac{IPv6}, to extract the clients \ac{IP} address from the log message. If the message was successfully matched against
+the provided \ac{Regex}, the clients \ac{IP} address identified by the \ac{IP}-\ac{Regex} will be translated to its binary form for further processing. If the scan does not find a match, 
 the processing moves on to the next log message. Alternatively, Simplefail2ban can also be configured to directly translate the entire log message to an \ac{IP} address, without regular expression matching.
-This is not explicitly referenced in \ref{fig:ips_architecture} and was only implemented as reference, to measure the impact of \ac{REGEX}-matching on the overall performance of the application.
+This is not explicitly referenced in \ref{fig:ips_architecture} and was only implemented as reference, to measure the impact of \ac{Regex}-matching on the overall performance of the application.
 \par
 Once a clients binary \ac{IP} address has been determined (either through successful matching or direct translation), a hash table lookup for the address is performed.
 The purpose if this is to determine, if a client has reached the ban limit, which is configured at the start of the application. 
@@ -404,6 +404,7 @@ To unban a client, the unbanning thread removes its entry in the linked list as 
 hash table is removed. This resets the matching count, so a client can be banned, if the ban limit is reached again.    
 
 \section{Test Application}
+\label{sec:test_server}
 
 To evaluate the \ac{IPC} architecture in conjunction with Simplefail2ban, a test application is needed, which utilizes the \ac{IPC} API to transmit log
 messages. For this purpose, a test server was developed, the source file for which is \texttt{udp\_server.c} in the \texttt{src/programs} directory of the thesis Git repository \cite{gitlab}. 
@@ -418,7 +419,6 @@ and is designed to handle a large amount of requests and logging operation per s
 Perf \cite{perf} evaluation of the test server revealed, that a about 20\% of the execution time on the application side was spent translating \ac{IP} addresses to string form.  
 To facilitates fast creation of log strings, a custom function was written for the transformation of a binary \ac{IP} address to string form. 
 \begin{table}[h!]
-    \label{tab:ip_str}
     \centering
     \small
     \begin{tabular}{lll}
@@ -433,6 +433,7 @@ To facilitates fast creation of log strings, a custom function was written for t
     files are \texttt{ip\_to\_str.h}
     and \texttt{ip\_to\_str.c} in the \texttt{src/lib} directory and the evaluation was conducted with
     \texttt{ip\_string\_benchmark.c} in the \texttt{src/utilities} directory of the thesis Git repository \cite{gitlab}}
+    \label{tab:ip_str}
 \end{table}
 
 Table \ref{tab:ip_str} summaries the evaluation results for the custom function \texttt{ip\_to\_str} and the standard library function \texttt{inet\_ntop}. 

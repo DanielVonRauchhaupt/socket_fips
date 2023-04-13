@@ -92,7 +92,7 @@
  \acro{RIPE}{Réseaux IP Européens (European \ac{IP} Networks)}
  \acro{RISC}{Reduced Instruction Set Computer}
  \acro{RFC}{Request for Comments}
- \acro{REGEX}{Regular Expression}
+ \acro{Regex}{Regular Expression}
  \acro{skbuff}[\texttt{sk\textunderscore buff}]{Socket Buffer}
  \acro{SSH}{Secure Shell}
  \acro{SIEM}{Security Information and Event Management}
@@ -113,6 +113,201 @@ The source code is available in a git repository at: \href{https://gitup.uni-pot
 Access can be requested through me, or the second supervisor Max Schrötter.
 %\endgroup
 
+\chapter{Measurements}
+
+
+\begin{figure}[h!p]
+	\label{fig:simplefail2ban:disk:ip4:100k}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_disk_ipv4_v10k_iv100k_c65534.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		33 & 27.93 & 99.59 & 2.07 & 10.51 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Logfile IPv4, 100k \ac{PPS}]{Some text}
+\end{figure}
+
+\begin{figure}[h!]
+	\label{fig:simplefail2ban:disk:ip4:1m}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_disk_ipv4_v10k_iv1m_c65534.png}}
+    \end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		303 & 294.43 & 98.79 & 4.7 & 14.99 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Logfile IPv4, 1m \ac{PPS}]{Some text}
+\end{figure}
+
+\begin{figure}[h!]
+	\label{fig:simplefail2ban:disk:ip4:10m}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_disk_ipv4_v10k_iv10m_c65534.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		2986.89 & 2884.14 & 96.72 & 34.39 & 83.72 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Logfile IPv4, 10m \ac{PPS}]{Some text}
+\end{figure}
+
+\begin{figure}[!h]
+	\label{fig:simplefail2ban:disk:ip6:100k}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_disk_ipv6_v10k_iv100k_c65534.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		33 & 27.96 & 99.67 & 2.04 & 11.75 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Logfile IPv6, 100k \ac{PPS}]{Some text}
+\end{figure}
+
+\begin{figure}[!h]
+	\label{fig:simplefail2ban:disk:ip6:1m}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_disk_ipv6_v10k_iv1m_c65534.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		303 & 293.49 & 98.48 & 5.58 & 21.08 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Logfile IPv6, 1m \ac{PPS}]{Some text}
+\end{figure}
+
+\begin{figure}[!h]
+	\label{fig:simplefail2ban:disk:ip6:10m}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_disk_ipv6_v10k_iv10m_c65534.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		2992.43 & 2065.28 & 69.13 & 205.4 & 346.73 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Logfile IPv6, 10m \ac{PPS}]{Some text}
+\end{figure}
+
+
+\begin{figure}[!h]
+	\label{fig:simplefail2ban:shm:ip4:100k}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_shm_ipv4_v10k_iv100k_c65534.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		33 & 27.95 & 99.64 & 2.05 & 13.68 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Shared Memory, IPv4, 1m \ac{PPS}]{Some text}
+\end{figure}
+
+\begin{figure}[!h]
+	\label{fig:simplefail2ban:shm:ip4:1m}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_shm_ipv4_v10k_iv1m_c65534.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		303 & 294.34 & 98.88 & 4.61 & 15.52 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Shared Memory, IPv4, 1m \ac{PPS}]{Some text}
+\end{figure}
+
+\begin{figure}[!h]
+	\label{fig:simplefail2ban:shm:ip4:10m}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_shm_ipv4_v10k_iv10m_c65534.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		2991.48 & 2948.51 & 96.72 & 7.69 & 25.59 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Shared Memory, IPv4, 10m \ac{PPS}]{Some text}
+\end{figure}
+
+\begin{figure}[!h]
+	\label{fig:simplefail2ban:shm:ip6:100k}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_shm_ipv6_v10k_iv100k_c65534.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		33 & 27.95 & 99.67 & 2.05 & 15.55 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Shared Memory, IPv6, 100k \ac{PPS}]{Some text}
+\end{figure}
+
+\begin{figure}[!h]
+	\label{fig:simplefail2ban:shm:ip6:1m}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_shm_ipv6_v10k_iv1m_c65534.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		303 & 294.77 & 98.9 & 4.39 & 17.46 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Shared Memory, IPv6, 1m \ac{PPS}]{Some text}
+\end{figure}
+
+\begin{figure}[!h]
+	\label{fig:simplefail2ban:shm:ip6:10m}
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/simplefail2ban_shm_ipv6_v10k_iv10m_c65534.png}}
+	\end{tabular}
+	\begin{tabular}{lllll}
+		\toprule
+		\textbf{Total packets [$10^6$]} & \textbf{Packets dropped [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		2991.93 & 2947.1 & 98.66 & 8.88 & 32.36 \\
+		\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, Shared Memory, IPv6, 10m \ac{PPS}]{Some text}
+\end{figure}
 
 %
 % bibliography
