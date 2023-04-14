@@ -18,7 +18,7 @@ utilizes the servers logfiles, to identify and subsequently ban clients, that fi
 Previous work has shown, that the performance of Fail2ban scales poorly, when large amount of log messages need to be processed in a short time frame \cite{mikolajczak2022}. This constitutes
 a problem for high bandwidth networks, as millions of clients can send request simultaneously, leading to a significant influx of security relevant log events, in case of an attack.  
 If these messages are not processed, the system becomes vulnerable to security breaches or \ac{DoS} attacks. One identified reason for Fail2bans performance issues, is the high latency associated with
-the file-based transmission of log messages. This inhibits its responsiveness in a high-bandwidth attacks and consequently, results in Fail2ban being overwhelmed, by the amount of log events to process. 
+the file-based transmission of log messages. This inhibits its responsiveness in high-bandwidth attacks and consequently, results in Fail2ban being overwhelmed, by the amount of log events to process. 
 Therefore, replacing logfile parsing with a faster method of log message transmission, could improve the capability of handling high load attack scenarios, that can occur in modern networks. 
 \par
 The goal of this thesis will be the design and implementation of a new \ac{IPC} based architecture, for the

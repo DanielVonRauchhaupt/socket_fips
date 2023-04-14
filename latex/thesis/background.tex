@@ -36,19 +36,19 @@ Most commonly, the action issued by Fail2ban, is to ban the clients IP address. 
 \texttt{Iptables} is a utility program for Linux systems, that allows the interaction with the \texttt{netfilter} kernel framework, to implement packet filtering rules \cite{netfiler,iptables}. When banning a client, Fail2ban adds an iptables rule for the clients IP address, that leads 
 to the dropping of all subsequent network packets from that address.
 \par
-Fail2bans netfilter-based approach of packet filtering has the disadvantage of scaling poorly for large traffic rates, since packets need to traverse several processing steps of the kernel network stack, before they are ultimately discarded.
-In his master thesis, Florian Mikolajczak proposed the alternative usage of eBPF programs, as a more efficient way of implementing packet filtering for intrusion prevention systems\cite{mikolajczak2022}. The \ac{eBPF}      
+Fail2bans netfilter-based approach of packet filtering has the disadvantage, of scaling poorly for large traffic rates, since packets need to traverse several processing steps of the kernel network stack, before they are ultimately discarded.
+In his master thesis, Florian Mikolajczak proposed the alternative usage of eBPF programs, as a more efficient way of implementing packet filtering for intrusion prevention systems \cite{mikolajczak2022}. The \ac{eBPF}      
 is an interface of the Linux kernel, that allows the event based execution of verified, user defined programs within the kernel. Packet filtering through \ac{eBPF} can be facilitated with an \ac{eBPF} program,
 that is executed on incoming packets and delivers a verdict, of wether the packets should be dropped or further processed by the kernel. Via the \ac{XDP}, \ac{eBPF} programs can be attached to different hooks in 
 the packet processing pipeline. For supported devices, programs can be attached in \texttt{XDP\_DRIVER} mode, where they are executed as part of the network device diver routine, very early into the packet processing. Florian Mikolajczak adapted an existing \ac{eBPF} program by Jesper Brouer
-and Andy Gospodarek to handle \ac{IPv6} traffic and integrated it with Fail2ban to replace netfilter-based packet filtering. While he was able to demonstrate significant performance improvements over netfilter-based filtering, his measurements 
+and Andy Gospodarek, to handle \ac{IPv6} traffic. He then integrated it with Fail2ban, to replace netfilter-based packet filtering. While he was able to demonstrate substantial performance improvements over netfilter-based filtering, his measurements 
 revealed, that Fail2ban has significant performance issues, when faced with a large influx of log messages. 
 
 \begin{figure}[h!]
 	\centering
 	\scriptsize
     \centerline{\includegraphics[width=1.2\textwidth]{images/Fail2Ban2.png}}
-    \caption[Fail2ban measurement by \cite{mikolajczak2022}]{Results of experiment 1 from the  master thesis of Florian Mikolajczak\cite{mikolajczak2022}. In the experiment, 1 million \ac{PPS} of invalid traffic and 50 thousand \ac{PPS} of valid traffic where send to a server writing corresponding log messages for invalid requests. Fail2ban was 
+    \caption[Fail2ban measurement by \cite{mikolajczak2022}]{Results of experiment 1 from the  master thesis of Florian Mikolajczak \cite{mikolajczak2022}. In the experiment, 1 million \ac{PPS} of invalid traffic and 50 thousand \ac{PPS} of valid traffic where send to a server writing corresponding log messages for invalid requests. Fail2ban was 
 	configured to ban clients for a duration of 300 seconds. Even in conjunction with more efficient \ac{eBPF} filtering, Fail2ban performed poorly, likely due to the slow speed of file-based log message transmission.}
 	\label{fig:fail2ban:mikolajczak2022}
 \end{figure}
@@ -66,8 +66,7 @@ thesis and will serve as a benchmark for the \ac{IPC} architecture and \ac{PoC} 
 \subsection{Types of IPC}
 \label{sec:ipc_types}
 
-Inter-process communication allows the exchange of data between different processes, through \acp{API} provided by the operating system. Since the
-the development environment for this thesis will be Linux, the focus is restricted to \ac{IPC} APIs, that are available on UNIX-like systems.
+Inter-process communication allows the exchange of data between different processes, through \acp{API} provided by the operating system. Since the development environment for this thesis will be Linux, the focus is restricted to \ac{IPC} APIs, that are available on UNIX-like systems.
 \minisec{Shared Memory}
 A commonly used mechanism, for sharing large amounts of data between two processes on the same system, is shared memory \cite[p.301ff.]{stevens1998ipc}.
 Shared memory allows the allocation of a memory segment in \ac{RAM}, that can mapped into the address space of several processes. The memory segment has associated file permissions, 
@@ -82,16 +81,16 @@ associated with a special file in the filesystem, which can be accessed by diffe
 a \ac{FIFO} manner, hence why named pipes are also commonly referred to as FIFOs. The maximum capacity, up to which a pipe can buffer data is limited, which by default is 65535 bytes on Linux, but can be adapted by a user. \cite{pipe}   
 \par
 \minisec{Sockets}
-Sockets are another common\ac{IPC} type for data transfer, that allow for one-to-one as well as one-to-many 
+Sockets are another common \ac{IPC} type for data transfer, that allow for one-to-one as well as one-to-many 
 communication, via a range of protocols\cite[p.57ff.]{stevens1998sock}. Sockets send data in formatted packets, that can be transmitted on a local host or via a network. For communication on a local system, UNIX systems offer UNIX Domain sockets. UNIX Domain sockets can be bound to a valid path in the filesystem, which serves as a way of addressing
 the socket from another processes \cite{unixsock}. For data transfer beyond the local system, the Internet protocol \ac{IP} in conjunction with the \ac{TCP} or \ac{UDP} is most common. TCP offers connection oriented data transmission, that requires an orderly connection establishment, through a handshake between the commutating parties. It further ensures a reliable transfer of data, by       
 detecting transmission errors trough acknowledgment and retransmitting unacknowledged packets. \ac{UDP} in contrast, provides no guarantees on reliable transfer, with the benefit of lower latency and less communication overhead. \cite[p.29ff.]{stevens1998sock}
 \par
 \minisec{Message Queues}
 Finally, message queues are another commonly used \ac{IPC} mechanism, that allow the exchange of messages between processes. Linux natively supports the System V and POSIX message queue APIs, but third party
-implementations exist as well, for instance the ZeroMQ library \cite{sysystemvshm,mposixmsqzeromq}. Message queues essentially function as a buffer, which can store messages up to a certain capacity. A writing process adds messages to the queue, while
-reading processes remove messages from the queue. Unlike with sockets, writing and reading can occur asynchronously i.e. messages do not have to be read immediately after being added to a queue. ZeroMQ specifically, supports a range of communication 
-patterns, among them the publish-subscribe pattern, where a writer sends messages to multiple subscribed readers, or the request-reply pattern, that can be used to implement remote procedure calls.         
+implementations exist as well, for instance the ZeroMQ library \cite{systemvshm,posixmsq,zeromq}. Message queues essentially function as a buffer, which can store messages up to a certain capacity. A writing process adds messages to the queue, while
+reading processes remove messages from the queue. Unlike with sockets, writing and reading can occur asynchronously i.e. messages do not have to be read immediately after being added to a queue. ZeroMQ specifically, supports a range of common communication 
+patterns. Among them are the publish-subscribe pattern, where a writer sends messages to multiple subscribed readers, or the request-reply pattern, that can be used, to implement remote procedure calls.         
 
 \subsection{IPC based logging} \label{sec:ipc_logging}
 Other than traditional file-based logging, syslog is a commonly used protocol to facilitate network based-logging
@@ -102,14 +101,14 @@ the aggregation of log events from different sources and also serves to function
 and further processing. 
 Syslog messages have a standardized format, that contains sender information, date and time of the event, as well as a facility and severity code. The facility indicates
 the category of the logging application, while the severity indicates urgency and impact of the logged event\footnote{A full list of codes can be found in \cite[p.10-11]{gerhards2009}}. 
-The syslog protocol is most commonly used with \ac{UDP} but does not specify a transport protocol and can also be used in 
+The syslog protocol is most commonly used with \ac{UDP}, but does not specify a transport protocol and can also be used in 
 encrypted form, via the \ac{TLS} protocol. 
 Rsyslog is a modern implementation and extension of the syslog protocol, developed by Rainer Gebhards\cite{rsyslog}.
 It is intended as a high-performance log processing system for enterprise systems, that allows the aggregation of log events
-from a variety of sources such ase files, named pipes, sockets or message queues, via the \ac{AMQP}\cite{vinoski2006advanced}. 
+from a variety of sources, such as files, named pipes, sockets or message queues, via the \ac{AMQP}\cite{vinoski2006advanced}. 
 \par
 Logstash is another commonly used system, that supports \ac{IPC} based data aggregation \cite{logstash}. It provides input 
-plugins for a range of inputs including files, sockets, pipes and messages queues. Logstash is part of the Elasticsearch technology stack, that allows 
+plugins for a range of inputs, including files, sockets, pipes and messages queues. Logstash is part of the Elasticsearch technology stack, that allows 
 aggregation, processing and analysis of various data sources. Log aggregators, like Rsyslog and Logstash, have application in a security context,
 as they can be integrated as part of \ac{SIEM} systems. \ac{SIEM} systems collect data from various security relevant contexts, such as firewalls or intrusion detection 
 systems, to provide comprehensive real-time security monitoring and analysis of complex systems \cite{bhatt2014operational}.
@@ -127,51 +126,51 @@ to the pure use of user-level \ac{IPC} ,that avoids costly context switches to t
  
 Hyperscan is a open source regular expressions matching engine developed by Intel. 
 It is specifically designed for high performance use cases, such as the application in security contexts and is being used by the intrusion detection systems Snort and Suricata.  
-The process of regular expressions matching with Hyperscan is separated into compile- and run-time. At compile-time, a set regular expressions in string representation are compiled into a 
+The process of regular expressions matching with Hyperscan, is separated into compile- and run-time. At compile-time, a regular expressions in string representation are compiled into a 
 database, with additional configuration options. These include the processing mode, which 
 can be streaming, block or vectored mode. Streaming mode allows the scanning of a continuous data stream,
 which is facilitated via a state, maintained between function calls. Block and vectored mode operate on data
 that is readily available and can be scanned in a single call. Other compile options include 
 case-less and multiline scanning, instructing Hyperscan to only match an expression
-once or to report the leftmost start index of a match\footnote{By default, only the end index of a match is provided.}. The latter comes with detrimental performance implications.
+once, or to report the leftmost start index of a match\footnote{By default, only the end index of a match is provided.}. The latter, comes with detrimental performance implications.
 Hyperscan allows the compilation
 of multiple patterns into a single database, which can be scanned for in parallel. 
 For scanning, Hyperscan allows the user to define a callback function, that is 
 called when a match occurs. The matched pattern can be identified with an id parameter. \cite{hyperscan}
 \par 
 For the purpose of this thesis, Hyperscan will be used as the regular expression engine, for
-the matching of patterns in log messages, received by the proof of concept \ac{IPS}.    
+the matching of patterns against log messages, received by the proof of concept \ac{IPS}.    
 
 \subsection{io\_uring} \label{sec:io_uring}
 
 io\_uring is an asynchronous \ac{IO} framework of the Linux kernel, that was first introduced in kernel version 5.1 \cite{io_uring}.
-In contrast to traditional read and write systemcalls, io\_uring provides non-block \ac{IO} operations on
-file descriptors. This is facilitated via in memory queues, that are shared between a user process and the kernel.
-The first queue is a submission queue, that the application uses to register \ac{IO} operations to the
+In contrast to traditional read and write systemcalls, io\_uring provides non-blocking \ac{IO} operations on
+file descriptors. This is facilitated via in-memory queues, that are shared between a user process and the kernel.
+The first queue is a submission queue, that the application uses, to register \ac{IO} operations to the
 kernel. The second queue is a completion queue, that the kernel fills with information on completed \ac{IO} requests.
 An application can register several \ac{IO} operations, which are ultimately submitted to the kernel.
-The application can then continuous execution, while the \ac{IO} operation is asynchronously executed by the kernel.
+The application can then continue execution, while the \ac{IO} operation is asynchronously executed by the kernel.
 Via the completion queue, the application can poll the status of the submitted operations
 and receive information about their completion.        
 \par
 Liburing is a library written by Jens Axboe, that provides a high level interface to the io\_uring framework \cite{liburing}.
 It allows the setup of a a io\_uring instance, which can be subsequently used to conduct \ac{IO} operations
-on files, but also other types of file descriptors such as sockets.
+on files, but also other types of file descriptors, such as sockets.
 \par
 For the purpose of this thesis, liburing will be used to implement asynchronous file reading and writing,
-for both the proof concept \ac{IPS} as well as auxiliary applications. 
+for both the proof concept \ac{IPS}, as well as auxiliary applications. 
 
-\subsection{Trex} \label{sec:trex}
+\subsection{TRex} \label{sec:trex}
 
 TRex is a traffic generating tool developed by Cisco System \cite{trex}. It supports the generation of both
-stateless as well stateful traffic, from network up to application layer protocols. TRex is build with the Data Plane Development Kit framework,
+stateless as well stateful traffic, for network up to application layer protocols. TRex is build with the Data Plane Development Kit framework,
 that offers user space based packet acceleration, enabling TRex to reach traffic rates up to 200Gb/s, given appropriate hardware support. 
-Traffic can be generated either via pcap files or Python scripts, using the packet manipulation library scapy \cite{scapy}.
+Traffic can be generated either via pcap files or Python scripts, that use the packet manipulation library scapy \cite{scapy}.
 \par 
-For the purpose of this thesis, TRex will be used to conducted measurements and evaluate the proof of concept \ac{IPS}.
+For the purpose of this thesis, TRex will be used, to conducted measurements and evaluate the proof of concept \ac{IPS}.
 During initial measurements, its was discovered, that TRex struggles to maintain the advertised traffic rates for stateful traffic in certain scenarios.
 More specifically, the absence of an acknowledgment packet to a \ac{TCP}-SYN packet sent by TRex, appears to inhibit performance.
 Hence, measuring a \ac{DoS} scenario, as described in section \ref{sec:fail2ban}, is problematic for \ac{TCP} based traffic, as SYN packets from banned clients
-emulated by TRex will not be answered by server protected by Fail2ban or the proof of concept \ac{IPS}. For this reason, all measurements conducted in this
+emulated by TRex will not be answered by a server protected by Fail2ban or the proof of concept \ac{IPS}. For this reason, all measurements conducted in this
 thesis will be \ac{UDP} based.
 
