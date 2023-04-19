@@ -112,19 +112,6 @@ int ip_hashtable_init(struct ip_hashtable_t ** htable)
 int ip_hashtable_insert(struct ip_hashtable_t * htable, void * addr, int domain)
 {
 
-    /**
-     * Description : Inserts a ipv4 or ipv6 address into the hashtable. 
-     * If the address is already present, its counter is incremented instead. 
-     * 
-     * Parameters : 
-     *      struct ip_hashtable_t * htable : Hashtable to insert the address into
-     *      void * addr : Pointer to 4 byte uint for ipv4 or 16 byte uint for ipv6
-     *      int domain : AFINET for ipv4 or AFINET6 for ipv6
-     * 
-     * Returns : Number of times the address has been inserted into the hashtable or 
-     * negative value on error (see io_ipc.h for error codes)
-    */
-
     if(htable == NULL || addr == NULL)
     {
         return IP_HTABLE_NULLPTR_ERR;

@@ -1,5 +1,7 @@
 #include "include/ebpf_utils.h"
 
+
+
 bool glob_verbose = false;
 
 int open_bpf_map(const char *file)
@@ -116,6 +118,7 @@ int ebpf_setup(const char * device, bool verbose){
 
     unsigned int xdp_fd;
 
+	/* Check if the program is already loaded */
     if((bpf_xdp_query_id(if_index, 0, &xdp_fd)) != -1)
 	{
         ebpf_cleanup(device, false, verbose);
