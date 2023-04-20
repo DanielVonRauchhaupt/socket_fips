@@ -62,7 +62,7 @@ The configuration files for fail2ban can be found in `src/fail2ban-config`. The 
 
 `udp_server`,`simplefail2ban` and `simplelogstash` can be found in `/build`, after building successfully.
 
-`udp_server` is a simple UDP-based server, that sends one byte replies to incoming packets. It can be run with the following options:
+`udp_server` is a simple UDP-based server, that sends one byte replies to incoming packets. It logs certain requests, based on their payload and supports both file and shared memory based logging. `udp_server` can be run with the following options:
 - `-f, --file[=LOGFILE]`       Specifies logfile as ipc type for logging (optional: specify path to logfile)
 - `-l, --logshort`             Enable short logging (will only log a clients IP
                              address)
