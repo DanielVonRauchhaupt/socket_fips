@@ -1,3 +1,14 @@
+/**
+ *  Library for creating a shared memory ring buffer that can be used for the transmission of log messages 
+ *  between a single writer and multiple readers. For more detail, see thesis chapter 3
+ *  
+ * 
+ * 
+ * 
+ * 
+*/
+
+
 #ifndef _SHMRBUF_H
 #define _SHMRBUF_H
 
@@ -13,14 +24,14 @@
 
 #include <io_ipc.h>
 
-#define SHMRBUF_PERM 0644
+#define SHMRBUF_PERM 0644 // File permission on the shared memory segment
 
 // Flags
-#define SHMRBUF_REATT 0x01
-#define SHMRBUF_FRCAT 0x02
-#define SHMRBUF_OVWR 0x04
-#define SHMRBUF_NOREG 0x08
-#define SHMRBUF_RESET 0x016
+#define SHMRBUF_REATT 0x01 // Enables reattachment to an existing buffer for the writer (writer only)
+#define SHMRBUF_FRCAT 0x02 // No current purpose
+#define SHMRBUF_OVWR 0x04 // Enables overwrite for write operations to the buffer (writer only)
+#define SHMRBUF_NOREG 0x08 // Enables a reader to attach to the buffer, without registering as a reader (for inspection purposes) (reader only)
+#define SHMRBUF_RESET 0x016 // Resets the read pointers in all segments to the position of the writer, when reattaching as a reader 
 
 
 // Writer parameters 
@@ -70,7 +81,7 @@ struct shmrbuf_seg_whdr_t
     void * data;  
 };
 
-// Possible roles when calling shmrbuf_init or shmrbuf_finalize
+// Possible, roles when calling shmrbuf_init or shmrbuf_finalize
 enum shmrbuf_role_t 
 {
     SHMRBUF_WRITER,
