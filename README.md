@@ -54,7 +54,7 @@ Source and destination IP addresses also may have to be adapted to the test envi
 
 # DUT Setup
 
-The applications required for experiments 1-4 are `udp_server`, `fail2ban`, `simplefail2ban` and `simplelogstash`.
+The applications required for experiments 1-4 (chapter 4 in the thesis) are `udp_server`, `fail2ban`, `simplefail2ban` and `simplelogstash`.
 
 `fail2ban` can be found [here](https://github.com/fail2ban/fail2ban) or alternatively installed via a packet manager, such as apt.
 The configuration files for fail2ban can be found in `src/fail2ban-config`. The contents of `jail.local` need to be copied into
@@ -115,7 +115,7 @@ the master thesis of Florian Mikolajczak, which can be used instead.
 The are two major known bugs for the implementation. 
 
 When the `BPF_F_NO_PREALLOC`
-flag is specified in `ip_the blacklist.bpf.c` eBPF program, memory allocation for 
+flag is specified in the `ip_the blacklist.bpf.c` eBPF program, memory allocation for 
 new map entries may fail, when larges amount of addresses are added in a short time frame. This causes `simplefail2ban` to display an error message for both the write to the eBPF map, as well as the subsequently failing removal from eBPF map and the hash table by the banning thread. 
 However, performance and functionality did not appear to be heavily impacted by this during measurements. The error can be prevented by unspecifiying the the `BPF_F_NO_PREALLOC`flag in `ip_the blacklist.bpf.c`.
 
