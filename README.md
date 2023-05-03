@@ -98,7 +98,7 @@ with `control+c`.
 
 Additionally, neighbor cache entries, for the client IP addresses used by TRex, will have to be added to the neighbor table of the DUT. This can be done using the script:
 `add_arp.sh` in `src/scripts/dut`. Parameters of the script may have to be adapted 
-to the test environment.
+to the test environment. For IPv6, a custom route may have to be added, to route IPv6 replies to the device running TRex.
 
 
 # Measurement
