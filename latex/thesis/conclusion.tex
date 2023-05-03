@@ -1,0 +1,35 @@
+%
+% $Id: chapter6.tex 2628 2008-06-04 11:21:59Z jozinke $
+%
+%%\pagestyle{scrheadings}
+%%\ohead[]{}
+%%\ihead[]{}
+%%\chead[]{}
+%%\ofoot[\pagemark]{\pagemark}
+%%\ifoot[]{}
+\chapter{Conclusion}
+
+In this thesis, a new, shared memory based \ac{IPC} architecture for the transmission of log messages was developed.
+Additionally, the proof of concept \ac{IPS} Simplefail2ban was implemented and evaluated, in conjunction with the \ac{IPC} architecture.
+Overall, the evaluation results are generally positive. Both the  logfile and shared memory based variants of Simplefail2ban largely performed as expected, blocking more than 95\% of all unwanted
+traffic, in all but two measurement scenarios. Performance differences between logfile and shared memory
+based transmission of logfiles, where surprisingly small, with the exception of the 10 million \ac{PPS} measurement.
+Compared to Fail2ban, significantly higher loads, both in terms of unwanted traffic 
+rate a well as the number of clients, were achieved. However, issues with the replication
+of the measurement for the 10 million \ac{PPS} scenario, present a significant caveat to the results. The
+evaluation for Simplefail2ban under high traffic loads, will have to be thoroughly replicated, to obtain a more 
+realistic estimate of the average performed. Unfortunately, this could not be done in time for submission of this thesis
+and will be handed in as an addendum. 
+\par
+While the performance ceiling of Simplefail2ban remains to be more accurately assessed, 
+the minimal goal of outperforming Fail2ban for the \ac{DoS} scenario, described in \ref{sec:fail2ban}
+was achieved. Therefore, this thesis demonstrated, that the shared memory based transmission of log messages, can
+deliver better performance, than the traditional logfile-parsing based approach.
+\par 
+For future development of the shared memory architecture, the focus could be, to 
+improved the integrability of the design with real world applications. The current \ac{API}
+only offers a very low level interface, that could be improved, to support a standardizes protocol like syslog, or possibly
+plugins for log aggregators such as Logstash. As aforementioned, the performance of Simplefail2ban also needs
+to be further evaluated, both in regards to its behavior under high load, as well as to the overwrite feature, which
+did not perform as well as expected. Additionally, further implementation of \ac{IPC} based based logging systems could be added
+and be compared to the performance of the shared memory architecture.

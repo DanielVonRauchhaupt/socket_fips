@@ -44,17 +44,6 @@ target_link_libraries(simplelogstash
     PUBLIC uring
 )
 
-# Poll_rbuf utility
-add_executable(poll_rbuf ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/poll_rbuf.c)
-target_include_directories(poll_rbuf
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
-)
-
-target_link_libraries(poll_rbuf 
-    PUBLIC shm_ringbuf
-    PUBLIC Threads::Threads
-)
-
 # BPF Setup
 set(BPFOBJECT_BPFTOOL_EXE ${CMAKE_CURRENT_BINARY_DIR}/external/bpftool/bootstrap/bpftool)
 set(BPFOBJECT_VMLINUX_H ${CMAKE_CURRENT_SOURCE_DIR}/external/vmlinux/vmlinux.h)
@@ -93,3 +82,34 @@ target_link_libraries(simplefail2ban
     PUBLIC hs
     PUBLIC uring
     PUBLIC Threads::Threads) 
+
+# Poll_rbuf utility
+add_executable(poll_rbuf ${CMAKE_CURRENT_SOURCE_DIR}/src/utilities/poll_rbuf.c)
+target_include_directories(poll_rbuf
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+)
+
+target_link_libraries(poll_rbuf 
+    PUBLIC shm_ringbuf
+    PUBLIC Threads::Threads
+)
+
+# Benchmarks
+add_executable(ip_string_benchmark ${CMAKE_CURRENT_SOURCE_DIR}/src/utilities/ip_string_benchmark.c)
+target_include_directories(ip_string_benchmark
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+)
+
+target_link_libraries(ip_string_benchmark 
+    PUBLIC ip_to_str
+)
+
+# Benchmarks
+add_executable(hashfunc_benchmark ${CMAKE_CURRENT_SOURCE_DIR}/src/utilities/hashfunc_benchmark.c)
+target_include_directories(hashfunc_benchmark
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+)
+
+target_link_libraries(hashfunc_benchmark 
+    PUBLIC ip_hashtable
+)

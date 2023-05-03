@@ -1,0 +1,35 @@
+%
+% $Id: chapter1.tex 2908 2008-11-19 13:56:30Z sliske $
+%
+
+\chapter{Introduction}
+\label{sec:intro}
+
+Ever since the advent of the public internet in the past century, bandwidths available to both
+private and commercial users have continuously expanded. While this provides new opportunities for services and bandwidth-extensive 
+applications, it also poses new security challenges, for dealing with potentially malicious network traffic. In addition to traditional firewalls, 
+\acp{IDS} are a commonly used security measure, to protect hosts in both public and private networks. They
+monitor system and network resources, with the goal of identifying security breaches and potential attacks. \acp{HIDS} in particular, rely
+on information provided by the host system, one possible source for which are application logs. Traditionally, \ac{HIDS} gather log information by 
+parsing the logfiles maintained by relevant applications or the \ac{OS}. One notable example for this, is the open source software Fail2ban \cite{fail2ban}. Fail2ban is
+an \ac{IPS}, that is widely used, to protect servers against different network based attacks. It
+utilizes the servers logfiles, to identify and subsequently ban clients, that fit predefined patterns of harmful behavior. 
+\par
+Previous work has shown, that the performance of Fail2ban scales poorly, when large amount of log messages need to be processed in a short time frame \cite{mikolajczak2022}. This constitutes
+a problem for high bandwidth networks, as millions of clients can send request simultaneously, leading to a significant influx of security relevant log events, in case of an attack.  
+If these messages are not processed, the system becomes vulnerable to security breaches or \ac{DoS} attacks. One identified reason for Fail2bans performance issues, is the high latency associated with
+the file-based transmission of log messages. This inhibits its responsiveness in high-bandwidth attacks and consequently, results in Fail2ban being overwhelmed, by the amount of log events to process. 
+Therefore, replacing logfile parsing with a faster method of log message transmission, could improve the capability of handling high load attack scenarios, that can occur in modern networks. 
+\par
+The goal of this thesis will be the design and implementation of a new \ac{IPC} based architecture, for the
+transmission of log messages, that is able to facilitate low latency communication
+between sender and receiver, in the context of \ac{HIDS}. Additionally, the design should be able to scale to multiple
+recipients, to accommodate more complex security system, in which several processes
+require real-time access to an application log. For the purpose of evaluation, a \ac{PoC} \ac{IPS} will be 
+developed, that utilizes the proposed \ac{IPC} architecture to receive log messages and ban malicious
+clients, in the style of Fail2ban. The \ac{PoC} will be evaluated and compared to Fail2ban, to asses the viability of the new architecture. 
+\par 
+This thesis will be structured as follows: The background section provides 
+information on relevant concepts and introduces the problem setting in further detail. Subsequently, design and implementation
+of the new \ac{IPC} architecture and the proof of concept \ac{IPS} are presented. The evaluation section provides the experimental design and the results for the 
+evaluation of both Fail2ban and the \ac{PoC}. The final section concludes and offers an outlook for further development.   

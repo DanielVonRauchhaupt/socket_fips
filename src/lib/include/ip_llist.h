@@ -1,3 +1,10 @@
+/**
+ *  Simple linked list to store IPv4 and IPv6 addresses with a corresponding timestamp
+ * 
+ *  
+ * 
+*/
+
 #ifndef _IP_LLIST_H
 #define _IP_LLIST_H
 #include <stdlib.h>
@@ -7,13 +14,6 @@
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include <stddef.h>
-
-/**
- *  Small and simple linked list to store IPv4 and IPv6 addresses with a correspoding timestamp
- * 
- *  
- * 
-*/
 
 #define IP_LLIST_SUCCESS (0) // Success return code
 #define IP_LLIST_ARG_ERR (-1) // Error type for invalid argument errors

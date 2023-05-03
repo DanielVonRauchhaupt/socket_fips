@@ -1,3 +1,9 @@
+/**
+ * Utility functions for loading and unloading the ip_blacklist eBPF program and related maps.
+ * Code was adapted from the original implementation by Florian Mikolajczak (see thesis for literature reference)
+ * 
+*/
+
 #ifndef __EBPF_UTILS_H
 #define __EBPF_UTILS_H
 #define _GNU_SOURCE 1
@@ -29,11 +35,7 @@
 #define EXIT_FAIL_BPF_ELF	41
 #define EXIT_FAIL_BPF_RELOCATE	42
 
-/* Export eBPF map for IPv4 blacklist as a file
- * Gotcha need to mount:
- *   mount -t bpf bpf /sys/fs/bpf/
- */
-
+// eBPF map paths
 #define FILE_BLACKLIST_IPV4 "/sys/fs/bpf/blacklistv4"
 #define FILE_BLACKLIST_IPV6 "/sys/fs/bpf/blacklistv6"
 #define FILE_VERDICT "/sys/fs/bpf/verdict_cnt"
@@ -44,8 +46,13 @@
 #define FILE_PORT_BLACKLIST_COUNT_TCP "/sys/fs/bpf/port_blacklist_drop_count_tcp"
 #define FILE_PORT_BLACKLIST_COUNT_UDP "/sys/fs/bpf/port_blacklist_drop_count_udp"
 
-int ebpf_cleanup(const char * device, bool unpin, bool verbose);
+// Loads ebpf program to device and pins ebpf maps
 int ebpf_setup(const char * device, bool verbose);
+
+// Unloads ebpf program from device and (optionally) unpins ebpf maps
+int ebpf_cleanup(const char * device, bool unpin, bool verbose);
+
+// Opens a file descriptor for an eBPF map
 int open_bpf_map(const char *file);
 
 
