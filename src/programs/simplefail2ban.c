@@ -80,7 +80,7 @@ static int ipv6_ebpf_map;
 
 // Timeout value for unbanning thread
 #define NANOSECONDS_PER_MILLISECOND 1000000
-#define TIMEOUT 500 * NANOSECONDS_PER_MILLISECOND
+#define TIMEOUT 200 * NANOSECONDS_PER_MILLISECOND
 
 // Helpers
 #define UNUSED(x)((void)x)

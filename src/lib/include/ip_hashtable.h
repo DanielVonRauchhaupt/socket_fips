@@ -68,5 +68,6 @@ int ip_hashtable_set(struct ip_hashtable_t * htable, void * key, int domain, uin
 */
 int ip_hashtable_destroy(struct ip_hashtable_t ** htable); 
 
+//inline uint32_t spooky_hash(void * src, uint8_t len);
 
 #endif

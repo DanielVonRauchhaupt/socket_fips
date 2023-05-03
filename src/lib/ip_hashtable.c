@@ -1,5 +1,4 @@
 #include "include/ip_hashtable.h"
-#include <stdio.h>
 
 #define GET_KEY_IP4(key)(*((uint32_t *)key))
 #define GET_KEY_IP6(key)(*((__uint128_t *)key))
