@@ -4,6 +4,7 @@
  * 
  * 
 */
+#pragma once
 
 #ifndef _IP_TO_STR_H
 #define _IP_TO_STR_H

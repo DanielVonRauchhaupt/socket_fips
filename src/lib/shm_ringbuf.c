@@ -71,7 +71,7 @@ static inline uint32_t get_hdr_checksum(struct shmrbuf_global_hdr_t * global_hdr
 
 int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
 {
-
+    // error if struct of arguments is empty/NULL
     if(args == NULL)
     {
         return IO_IPC_NULLPTR_ERR;
@@ -104,7 +104,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
 
         shm_flags = IPC_EXCL | IPC_CREAT | SHMRBUF_PERM;
 
-        key = ftok(args->wargs.shm_key,0);
+        key = ftok(args->wargs.shm_key,0); // calculates key for System V shared memory api
         size = sizeof(struct shmrbuf_global_hdr_t) + (args->wargs.reader_count - 1) * sizeof(atomic_bool) +
                args->wargs.segment_count * (args->wargs.line_count * args->wargs.line_size +
                (args->wargs.reader_count + 1) * sizeof(atomic_uint_fast32_t));

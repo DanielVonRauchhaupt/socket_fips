@@ -1,0 +1,11 @@
+# Target labels
+ libbpf
+# Source files and their labels
+/mnt/scratch/signer/master/fips-ipc/external/CMakeFiles/libbpf-build
+/mnt/scratch/signer/master/fips-ipc/external/CMakeFiles/libbpf-build.rule
+/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-build.rule
+/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-configure.rule
+/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-patch.rule
+/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-update.rule
+/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-download.rule
+/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-mkdir.rule

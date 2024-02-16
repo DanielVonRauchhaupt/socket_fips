@@ -4,6 +4,7 @@
  *  
  * 
 */
+#pragma once
 
 #ifndef _IP_LLIST_H
 #define _IP_LLIST_H

@@ -1,0 +1,247 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-pedantic",
+      "-O2",
+      "-pthread",
+      "-o",
+      "CMakeFiles/udp_server.dir/src/programs/udp_server.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/programs/udp_server.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/programs/udp_server.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/CMakeFiles/udp_server.dir/src/programs/udp_server.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-pedantic",
+      "-O2",
+      "-pthread",
+      "-o",
+      "CMakeFiles/simplelogstash.dir/src/programs/simplelogstash.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/programs/simplelogstash.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/programs/simplelogstash.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/CMakeFiles/simplelogstash.dir/src/programs/simplelogstash.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-I/mnt/scratch/signer/master/fips-ipc/external/libbpf/src",
+      "-I/mnt/scratch/signer/master/fips-ipc/build",
+      "-isystem",
+      "/mnt/scratch/signer/master/fips-ipc/build/external/libbpf",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-pedantic",
+      "-O2",
+      "-o",
+      "CMakeFiles/ebpf_utils.dir/src/lib/ebpf_utils.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/lib/ebpf_utils.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/lib/ebpf_utils.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/CMakeFiles/ebpf_utils.dir/src/lib/ebpf_utils.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/external/libbpf/src",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/programs",
+      "-I/usr/include/hs",
+      "-I/mnt/scratch/signer/master/fips-ipc/build",
+      "-isystem",
+      "/mnt/scratch/signer/master/fips-ipc/build/external/libbpf",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-pedantic",
+      "-O2",
+      "-pthread",
+      "-o",
+      "CMakeFiles/simplefail2ban.dir/src/programs/simplefail2ban.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/programs/simplefail2ban.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/programs/simplefail2ban.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/CMakeFiles/simplefail2ban.dir/src/programs/simplefail2ban.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-pedantic",
+      "-O2",
+      "-pthread",
+      "-o",
+      "CMakeFiles/poll_rbuf.dir/src/utilities/poll_rbuf.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/utilities/poll_rbuf.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/utilities/poll_rbuf.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/CMakeFiles/poll_rbuf.dir/src/utilities/poll_rbuf.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-pedantic",
+      "-O2",
+      "-o",
+      "CMakeFiles/ip_string_benchmark.dir/src/utilities/ip_string_benchmark.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/utilities/ip_string_benchmark.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/utilities/ip_string_benchmark.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/CMakeFiles/ip_string_benchmark.dir/src/utilities/ip_string_benchmark.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-pedantic",
+      "-O2",
+      "-o",
+      "CMakeFiles/hashfunc_benchmark.dir/src/utilities/hashfunc_benchmark.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/utilities/hashfunc_benchmark.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/utilities/hashfunc_benchmark.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/CMakeFiles/hashfunc_benchmark.dir/src/utilities/hashfunc_benchmark.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-g",
+      "-o",
+      "CMakeFiles/shm_ringbuf.dir/shm_ringbuf.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/lib/shm_ringbuf.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build/src/lib",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/lib/shm_ringbuf.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/src/lib/CMakeFiles/shm_ringbuf.dir/shm_ringbuf.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-g",
+      "-o",
+      "CMakeFiles/ip_to_str.dir/ip_to_str.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/lib/ip_to_str.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build/src/lib",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/lib/ip_to_str.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/src/lib/CMakeFiles/ip_to_str.dir/ip_to_str.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/lib/llvm-11/bin/clang",
+      "-g",
+      "-O2",
+      "-target",
+      "bpf",
+      "-D__TARGET_ARCH_x86",
+      "-idirafter /usr/local/include -idirafter /usr/lib/llvm-11/lib/clang/11.0.1/include -idirafter /usr/include/x86_64-linux-gnu -idirafter /usr/include",
+      "-I/mnt/scratch/signer/master/fips-ipc/external/vmlinux",
+      "-isystem",
+      "/mnt/scratch/signer/master/fips-ipc/build/external/libbpf",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/lib/ip_blacklist.bpf.c",
+      "-o",
+      "/mnt/scratch/signer/master/fips-ipc/build/ip_blacklist.bpf.o"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/lib/ip_blacklist.bpf.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/ip_blacklist.bpf.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-g",
+      "-o",
+      "CMakeFiles/spookyc.dir/spooky-c.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/lib/spooky-c.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build/src/lib",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/lib/spooky-c.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/src/lib/CMakeFiles/spookyc.dir/spooky-c.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-g",
+      "-o",
+      "CMakeFiles/ip_hashtable.dir/ip_hashtable.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/lib/ip_hashtable.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build/src/lib",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/lib/ip_hashtable.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/src/lib/CMakeFiles/ip_hashtable.dir/ip_hashtable.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-g",
+      "-o",
+      "CMakeFiles/ip_llist.dir/ip_llist.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/lib/ip_llist.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build/src/lib",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/lib/ip_llist.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/src/lib/CMakeFiles/ip_llist.dir/ip_llist.c.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-gcc-10",
+      "-I/mnt/scratch/signer/master/fips-ipc/src/lib/include",
+      "-g",
+      "-o",
+      "CMakeFiles/uring_getline.dir/uring_getline.c.o",
+      "-c",
+      "/mnt/scratch/signer/master/fips-ipc/src/lib/uring_getline.c"
+    ],
+    "directory": "/mnt/scratch/signer/master/fips-ipc/build/src/lib",
+    "file": "/mnt/scratch/signer/master/fips-ipc/src/lib/uring_getline.c",
+    "output": "/mnt/scratch/signer/master/fips-ipc/build/src/lib/CMakeFiles/uring_getline.dir/uring_getline.c.o"
+  }
+]

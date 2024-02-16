@@ -580,8 +580,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
 			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) 
             {
                 continue;
-			} 
-            else 
+			} else 
             {
                 error_msg("Error in recvmmsg : %s\n", strerror_r(errno, targs->strerror_buf, sizeof(targs->strerror_buf)));
                 cleanup_listen_and_reply(&msg_hdrs,
@@ -628,7 +627,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
         }
 
         uint32_t logstr_index = 0;
- 
+        
         for(i = 0; i < retval_rcv; i++)
         {
 

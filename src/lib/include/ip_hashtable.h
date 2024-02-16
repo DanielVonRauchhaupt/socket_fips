@@ -3,6 +3,7 @@
  *  and a related counter value.
  * 
 */
+#pragma once
 
 #ifndef _IP_HASHTABLE
 #define _IP_HASHTABLE

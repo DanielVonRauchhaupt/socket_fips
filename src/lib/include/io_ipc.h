@@ -1,9 +1,9 @@
-
 /**
  *  This is an auxiliary header file, that was originally meant to include
  *  different types of IPC libraries.
  * 
 */
+#pragma once
 
 #ifndef _IO_IPC_H
 #define _IO_IPC_H

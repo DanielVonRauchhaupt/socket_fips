@@ -1,0 +1,11 @@
+# Target labels
+ bpftool
+# Source files and their labels
+/mnt/scratch/signer/master/fips-ipc/external/CMakeFiles/bpftool-build
+/mnt/scratch/signer/master/fips-ipc/external/CMakeFiles/bpftool-build.rule
+/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-build.rule
+/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-configure.rule
+/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-patch.rule
+/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-update.rule
+/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-download.rule
+/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-mkdir.rule

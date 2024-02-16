@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/CMakeFiles/libbpf"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/CMakeFiles/libbpf.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/CMakeFiles/libbpf-complete.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-build.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-configure.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-download.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-install.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-mkdir.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-patch.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/libbpf/src/libbpf-stamp/libbpf-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"libbpf"
+		],
+		"name" : "libbpf"
+	}
+}

@@ -44,6 +44,19 @@ target_link_libraries(simplelogstash
     PUBLIC uring
 )
 
+#nsyslog
+add_executable(nsyslog ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/nsyslog.c)
+
+target_include_directories(nsyslog
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+)
+
+target_link_libraries(nsyslog 
+    PUBLIC Threads::Threads
+    PUBLIC shm_ringbuf
+    PUBLIC uring
+)
+
 # BPF Setup
 set(BPFOBJECT_BPFTOOL_EXE ${CMAKE_CURRENT_BINARY_DIR}/external/bpftool/bootstrap/bpftool)
 set(BPFOBJECT_VMLINUX_H ${CMAKE_CURRENT_SOURCE_DIR}/external/vmlinux/vmlinux.h)

@@ -3,7 +3,8 @@
  * Code was adapted from the original implementation by Florian Mikolajczak (see thesis for literature reference)
  * 
 */
-
+#pragma once
+ 
 #ifndef __EBPF_UTILS_H
 #define __EBPF_UTILS_H
 #define _GNU_SOURCE 1

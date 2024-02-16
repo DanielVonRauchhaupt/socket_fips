@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/CMakeFiles/bpftool"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/CMakeFiles/bpftool.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/CMakeFiles/bpftool-complete.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-build.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-configure.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-download.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-install.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-mkdir.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-patch.rule"
+		},
+		{
+			"file" : "/mnt/scratch/signer/master/fips-ipc/external/bpftool/src/bpftool-stamp/bpftool-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"bpftool"
+		],
+		"name" : "bpftool"
+	}
+}

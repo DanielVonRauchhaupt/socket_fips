@@ -8,10 +8,11 @@
  * 
 */
 
-
+//#pragma once
 #ifndef _SHMRBUF_H
 #define _SHMRBUF_H
 
+#pragma once
 #include <stdint.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -34,11 +35,14 @@
 #define SHMRBUF_RESET 0x016 // Resets the read pointers in all segments to the position of the writer, when reattaching as a reader 
 
 
-// Writer parameters 
+/**
+ * @brief 
+ * 
+ */
 struct shmrbuf_writer_arg_t 
 {
     const char * shm_key;
-    uint16_t line_size;
+    uint16_t line_tsize;
     uint32_t line_count;
     uint8_t segment_count, reader_count;
     struct shmrbuf_global_hdr_t * global_hdr;
@@ -94,11 +98,23 @@ union shmrbuf_arg_t
     struct shmrbuf_reader_arg_t rargs;
 };
 
-// Creates the ringbuffer or attaches to an existing one
+/**
+ * @brief Creates the ringbuffer or attaches to an existing one
+ * 
+ * @param args 
+ * @param role 
+ * @return int 
+ */
 int shmrbuf_init(union shmrbuf_arg_t * args,
                  enum shmrbuf_role_t role);
 
-// Detaches from the ringbuffer and removes the  memory segment, if no other process is attached 
+/**
+ * @brief Detaches from the ringbuffer and removes the  memory segment, if no other process is attached
+ * 
+ * @param shmrbuf_arg_t 
+ * @param role 
+ * @return int 
+ */
 int shmrbuf_finalize(union shmrbuf_arg_t *,
                      enum shmrbuf_role_t role);
 
