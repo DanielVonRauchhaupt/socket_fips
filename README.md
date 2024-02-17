@@ -20,7 +20,9 @@ successfully.
 On Debian, they can be installed via: `apt install liburing-dev libhyperscan-dev` 
 
 # Build
-To build the project, call `./cmake.sh`, once all external dependencies are satisfied. The binaries will be located in `build/`
+When the repository has been cloned for the first time, it is necessary to load the submodules in the external folder first. 
+This can be done with `git submodule update --init --recursive.
+The project can then be built using `./cmake.sh`, once all external dependencies are satisfied. The binaries will be located in `build/`
 
 # Experimental Setup
 
