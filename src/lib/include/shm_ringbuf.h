@@ -49,11 +49,11 @@ struct shmrbuf_writer_arg_t
     struct shmrbuf_global_hdr_t * global_hdr; /** pointer to struct with global information for shared memory */
     struct shmrbuf_seg_whdr_t * segment_hdrs; /** pointer to struct with information on read synchronization */
     int flags; /** flags for read/write options (see above), are set by bit masks */
-    int shm_id; /** shmget returns shared memory identivier for System V*/
+    int shm_id; /** shmget returns shared memory identifier for System V*/
 };
 
-// Reader parameters 
-struct shmrbuf_reader_arg_t 
+// Reader parameters
+struct shmrbuf_reader_arg_t
 {
     const char * shm_key;
     int shm_id, flags;
