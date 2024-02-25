@@ -254,7 +254,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
             
 
         }
-
+        // TODO change function parameters -> calloc(num_element, sizeof_element)
         if((args->rargs.segment_hdrs = (struct shmrbuf_seg_rhdr_t *) calloc(sizeof(struct shmrbuf_seg_rhdr_t),global_hdr->segment_count)) == NULL){
             shm_cleanup(args, role, true);
             return IO_IPC_MEM_ERR;
@@ -350,12 +350,14 @@ int shmrbuf_finalize(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
 int inline shmrbuf_write(struct shmrbuf_writer_arg_t *args, void *src,
                          uint16_t wsize, uint8_t segment_id) {
 
+  // check on empty arguments
   if (args == NULL || src == NULL || args->segment_hdrs == NULL) {
     return IO_IPC_NULLPTR_ERR;
   }
 
   struct shmrbuf_global_hdr_t *global_hdr = args->global_hdr;
 
+  // check if segment_id and size of input is within valid range
   if (segment_id >= global_hdr->segment_count ||
       wsize > global_hdr->line_size) {
     return IO_IPC_ARG_ERR;
@@ -365,15 +367,19 @@ int inline shmrbuf_write(struct shmrbuf_writer_arg_t *args, void *src,
     return wsize;
   }
 
+  // extract parameters for synchronization of chosen segment
   struct shmrbuf_seg_whdr_t *segment = &args->segment_hdrs[segment_id];
   uint32_t write_index = atomic_load(segment->write_index);
   uint32_t new_write_index =
       (write_index == global_hdr->line_count - 1) ? 0 : write_index + 1;
   uint16_t line_size = global_hdr->line_size;
+  // start point of writing operation (writing starts always in "new" line of
+  // ringbuffer)
   char *write_dest = ((char *)segment->data + write_index * line_size);
 
   if (!global_hdr->overwrite) {
-
+    // check if writer overtakes reader(s)
+    // while overwriting is not allowed terminate with error
     for (int i = 0; i < global_hdr->reader_count; i++) {
       if (new_write_index == atomic_load(segment->first_reader + i)) {
         return IO_IPC_SIZE_ERR;
@@ -384,7 +390,7 @@ int inline shmrbuf_write(struct shmrbuf_writer_arg_t *args, void *src,
   if (memcpy(write_dest, src, wsize) == NULL) {
     return IO_IPC_MEM_ERR;
   }
-
+  // fill up all unused space in the ringbuffer line with '\0'
   while (wsize < line_size) {
     *(write_dest + wsize++) = '\0';
   }
@@ -456,127 +462,133 @@ int inline shmrbuf_read(struct shmrbuf_reader_arg_t * args, void * rbuf, uint16_
 
 }
 
-int shmrbuf_writev(struct shmrbuf_writer_arg_t * args, struct iovec * iovecs, uint16_t vsize, uint8_t segment_id)
-{
-    if(args == NULL || iovecs == NULL || args->segment_hdrs == NULL)
-    {
-        return IO_IPC_NULLPTR_ERR;
-    }
+int shmrbuf_writev(struct shmrbuf_writer_arg_t *args, struct iovec *iovecs,
+                   uint16_t vsize, uint8_t segment_id) {
+  if (args == NULL || iovecs == NULL || args->segment_hdrs == NULL) {
+    return IO_IPC_NULLPTR_ERR;
+  }
 
-    else if(segment_id >= args->segment_count)
-    {
-        return IO_IPC_ARG_ERR;
-    }
+  else if (segment_id >= args->segment_count) {
+    return IO_IPC_ARG_ERR;
+  }
 
-    if(vsize == 0){
-        return vsize;
-    }
-
-    struct shmrbuf_seg_whdr_t * segment = &args->segment_hdrs[segment_id];
-    struct shmrbuf_global_hdr_t * global_hdr = args->global_hdr;
-    uint16_t line_size = global_hdr->line_size;
-    bool overwrite = global_hdr->overwrite;
-    uint32_t write_index = *segment->write_index, line_count = global_hdr->line_count;
-    char * write_dest = ((char *)segment->data + write_index*line_size);
-
-    vsize = (vsize > line_count) ? line_count : vsize;
-
-    if(!overwrite)
-    {
-
-        uint32_t read_index, dst;
-
-        for(int i = 0; i < global_hdr->reader_count; i++)
-        {
-            read_index = atomic_load(segment->first_reader + i);
-            dst = (read_index > write_index) ? read_index - write_index - 1 : line_count - (write_index - read_index) - 1;
-            vsize = (dst < vsize) ? dst : vsize;
-
-            if(vsize == 0) {return 0;}
-        }
-    }
-
-    uint32_t new_write_index = (write_index + vsize) % line_count;
-
-    if(new_write_index > write_index)
-    {
-
-        for(uint16_t i = 0; i < vsize; i++)
-        {
-            uint16_t wsize = iovecs[i].iov_len;
-
-            if(wsize > line_size) {return IO_IPC_SIZE_ERR;}
-
-            if(memcpy(write_dest, iovecs[i].iov_base, wsize) == NULL)
-            {
-                return IO_IPC_MEM_ERR;
-            }
-
-            while(wsize < line_size)
-            {
-                *(write_dest + wsize) = '\0';
-                wsize++;
-            }
-
-            write_dest += line_size;
-        }
-
-
-    }
-
-    else 
-    {
-        uint16_t dst = line_count - write_index , i;
-
-        for(i = 0; i < dst; i++)
-        {
-            uint16_t wsize = iovecs[i].iov_len;
-
-            if(wsize > line_size) {return IO_IPC_SIZE_ERR;}
-
-            if(memcpy(write_dest, iovecs[i].iov_base, wsize) == NULL)
-            {
-                return IO_IPC_MEM_ERR;
-            }
-
-            while(wsize < line_size)
-            {
-                *(write_dest + wsize) = '\0';
-                wsize++;
-            }
-
-            write_dest += line_size;
-        }
-
-        dst = vsize - dst;
-        write_dest = (char *)segment->data;
-
-        for(i = 0; i < dst; i++)
-        {
-            uint16_t wsize = iovecs[i].iov_len;
-
-            if(wsize > line_size) {return IO_IPC_SIZE_ERR;}
-
-            if(memcpy(write_dest, iovecs[i].iov_base, wsize) == NULL)
-            {
-                return IO_IPC_MEM_ERR;
-            }
-
-            while(wsize < line_size)
-            {
-                *(write_dest + wsize) = '\0';
-                wsize++;
-            }
-
-            write_dest += line_size;
-        }
-
-    }
-    
-    
-    atomic_store(segment->write_index,new_write_index);
-
+  if (vsize == 0) {
     return vsize;
+  }
+
+  struct shmrbuf_seg_whdr_t *segment = &args->segment_hdrs[segment_id];
+  struct shmrbuf_global_hdr_t *global_hdr = args->global_hdr;
+  uint16_t line_size = global_hdr->line_size;
+  bool overwrite = global_hdr->overwrite;
+  uint32_t write_index = *segment->write_index,
+           line_count = global_hdr->line_count;
+  char *write_dest = ((char *)segment->data + write_index * line_size);
+  // if number of iovec lines is higher than the number of lines in
+  // ringbuffer, than write only line_count elements in buffer segment
+  vsize = (vsize > line_count) ? line_count : vsize;
+
+  if (!overwrite) {
+
+    uint32_t read_index, dst;
+
+    for (int i = 0; i < global_hdr->reader_count; i++) {
+      read_index = atomic_load(segment->first_reader + i);
+      // check distance between writer and every reader id
+      // adapt distance (dst) variable so that only space between writer and
+      // reader is filled but not beyond that (overwriting is avoided)
+      dst = (read_index > write_index)
+                ? read_index - write_index - 1
+                : line_count - (write_index - read_index) - 1;
+      // number of line elements is reduced if overwriting would occur
+      vsize = (dst < vsize) ? dst : vsize;
+
+      if (vsize == 0) {
+        return 0;
+      }
+    }
+  }
+
+  // new write index is determined with modulo operation because of the
+  // ringbuffer architecture
+  uint32_t new_write_index = (write_index + vsize) % line_count;
+
+  // if write process ends before the end of the ring buffer cycle, all
+  // elements can be written to the buffer directly
+  if (new_write_index > write_index) {
+
+    for (uint16_t i = 0; i < vsize; i++) {
+      uint16_t wsize = iovecs[i].iov_len;
+
+      if (wsize > line_size) {
+        return IO_IPC_SIZE_ERR;
+      }
+
+      if (memcpy(write_dest, iovecs[i].iov_base, wsize) == NULL) {
+        return IO_IPC_MEM_ERR;
+      }
+
+      while (wsize < line_size) {
+        *(write_dest + wsize) = '\0';
+        wsize++;
+      }
+
+      write_dest += line_size;
+    }
+
+  }
+
+  // if the write process ends in the new ring buffer cycle, a buffer cycle is
+  // ended first and the remaining elements are written to a new buffer cycle.
+  else {
+    uint16_t dst = line_count - write_index, i;
+
+    for (i = 0; i < dst; i++) {
+      uint16_t wsize = iovecs[i].iov_len;
+
+      if (wsize > line_size) {
+        return IO_IPC_SIZE_ERR;
+      }
+
+      if (memcpy(write_dest, iovecs[i].iov_base, wsize) == NULL) {
+        return IO_IPC_MEM_ERR;
+      }
+
+      // fill up all unused space in the ringbuffer line with '\0'
+      while (wsize < line_size) {
+        *(write_dest + wsize) = '\0';
+        wsize++;
+      }
+
+      write_dest += line_size;
+    }
+
+    // write the remaining lines to the new ring buffer cycle
+    dst = vsize - dst;
+    write_dest = (char *)segment->data;
+
+    for (i = 0; i < dst; i++) {
+      uint16_t wsize = iovecs[i].iov_len;
+
+      if (wsize > line_size) {
+        return IO_IPC_SIZE_ERR;
+      }
+
+      if (memcpy(write_dest, iovecs[i].iov_base, wsize) == NULL) {
+        return IO_IPC_MEM_ERR;
+      }
+
+      while (wsize < line_size) {
+        *(write_dest + wsize) = '\0';
+        wsize++;
+      }
+
+      write_dest += line_size;
+    }
+  }
+
+  atomic_store(segment->write_index, new_write_index);
+
+  return vsize;
 }
 
 int shmrbuf_readv(struct shmrbuf_reader_arg_t * args, struct iovec * iovecs, uint16_t vsize, uint16_t bufsize, uint8_t segment_id)
