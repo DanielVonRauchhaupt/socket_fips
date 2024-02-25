@@ -207,7 +207,7 @@ int shmrbuf_init(union shmrbuf_arg_t * args, enum shmrbuf_role_t role)
         args->wargs.global_hdr = global_hdr;
         args->wargs.shm_id = shm_id;
         
-
+        /** @todo function call of calloc confusing*/
         if((args->wargs.segment_hdrs = (struct shmrbuf_seg_whdr_t *) calloc(sizeof(struct shmrbuf_seg_whdr_t),global_hdr->segment_count)) == NULL)
         {
             shm_cleanup(args, role, exists);
@@ -347,58 +347,51 @@ int shmrbuf_finalize(union shmrbuf_arg_t * args, enum shmrbuf_role_t role){
 
 }
 
-int inline shmrbuf_write(struct shmrbuf_writer_arg_t * args, void * src, uint16_t wsize, uint8_t segment_id)
-{
+int inline shmrbuf_write(struct shmrbuf_writer_arg_t *args, void *src,
+                         uint16_t wsize, uint8_t segment_id) {
 
-    if(args == NULL || src == NULL || args->segment_hdrs == NULL)
-    {
-        return IO_IPC_NULLPTR_ERR;
-    }
+  if (args == NULL || src == NULL || args->segment_hdrs == NULL) {
+    return IO_IPC_NULLPTR_ERR;
+  }
 
-    struct shmrbuf_global_hdr_t * global_hdr = args->global_hdr;
+  struct shmrbuf_global_hdr_t *global_hdr = args->global_hdr;
 
-    if(segment_id >= global_hdr->segment_count || wsize > global_hdr->line_size)
-    {
-        return IO_IPC_ARG_ERR;
-    }
+  if (segment_id >= global_hdr->segment_count ||
+      wsize > global_hdr->line_size) {
+    return IO_IPC_ARG_ERR;
+  }
 
-    if(wsize == 0){
-        return wsize;
-    }
-
-    struct shmrbuf_seg_whdr_t * segment = &args->segment_hdrs[segment_id];
-    uint32_t write_index = atomic_load(segment->write_index);
-    uint32_t new_write_index = (write_index == global_hdr->line_count - 1) ? 0 : write_index + 1;
-    uint16_t line_size = global_hdr->line_size; 
-    char * write_dest = ((char *)segment->data + write_index*line_size);
-
-    if(!global_hdr->overwrite)
-    {
-
-        for(int i = 0; i < global_hdr->reader_count; i++)
-        {
-            if(new_write_index == atomic_load(segment->first_reader + i))
-            {
-                return IO_IPC_SIZE_ERR;
-            }
-
-        }
-
-    }
-
-    if(memcpy(write_dest, src, wsize) == NULL)
-    {
-        return IO_IPC_MEM_ERR;
-    }
-
-    while(wsize < line_size)
-    {
-        *(write_dest + wsize++) = '\0';
-    }
-
-    atomic_store(segment->write_index,new_write_index);    
-
+  if (wsize == 0) {
     return wsize;
+  }
+
+  struct shmrbuf_seg_whdr_t *segment = &args->segment_hdrs[segment_id];
+  uint32_t write_index = atomic_load(segment->write_index);
+  uint32_t new_write_index =
+      (write_index == global_hdr->line_count - 1) ? 0 : write_index + 1;
+  uint16_t line_size = global_hdr->line_size;
+  char *write_dest = ((char *)segment->data + write_index * line_size);
+
+  if (!global_hdr->overwrite) {
+
+    for (int i = 0; i < global_hdr->reader_count; i++) {
+      if (new_write_index == atomic_load(segment->first_reader + i)) {
+        return IO_IPC_SIZE_ERR;
+      }
+    }
+  }
+
+  if (memcpy(write_dest, src, wsize) == NULL) {
+    return IO_IPC_MEM_ERR;
+  }
+
+  while (wsize < line_size) {
+    *(write_dest + wsize++) = '\0';
+  }
+
+  atomic_store(segment->write_index, new_write_index);
+
+  return wsize;
 }
 
 int inline shmrbuf_read(struct shmrbuf_reader_arg_t * args, void * rbuf, uint16_t bufsize, uint8_t segment_id)
