@@ -171,37 +171,86 @@ int shmrbuf_finalize(union shmrbuf_arg_t *, enum shmrbuf_role_t role);
 
 /**
  * @brief Writes a single line to a segment
- * 
+ *
  * @param args pointer to struct of writer information
- * @param src 
- * @param wsize 
- * @param segment_id 
- * @return int 
+ * @param src pointer to start of the element to be written to the shared memory
+ * segment
+ * @param wsize size of element to be written in the shared memory segment
+ * @param segment_id id of ringbuffer segment
+ * @return int size of elements written in shared memory segment
  */
 int shmrbuf_write(struct shmrbuf_writer_arg_t * args, 
                   void * src, uint16_t wsize, 
                   uint8_t segment_id);
 
-// Writes multiple lines to a segment
+/**
+ * @brief Writes multiple lines to a segment
+ *
+ * @param args struct to writer information
+ * @param iovecs vector structure with base pointer to start point and length of
+ * data
+ * @param vsize number of lines to be written in the shared memory segment
+ * @param segment_id
+ * @return int number of written lines to the shared memory segment
+ */
 int shmrbuf_writev(struct shmrbuf_writer_arg_t * args, 
                    struct iovec * iovecs, 
                    uint16_t vsize, 
                    uint8_t segment_id);
 
-// Reads a single line from a segment
+/**
+ * @brief Reads a single line from a segment and writes it to a read buffer.
+ *
+ * @param args struct to reader information
+ * @param rbuf void pointer to buffer into which the read line is copied
+ * @param bufsize size of read buffer
+ * @param segment_id id of the ringbuffer segment to be read in
+ * @return int total size of the elements that were read in
+ */
 int shmrbuf_read(struct shmrbuf_reader_arg_t * args, 
                  void * rbuf, 
                  uint16_t bufsize, 
                  uint8_t segment_id);
 
-// Reads multiple lines from a segment
+/**
+ * @brief Reads multiple lines from a segment and writes it to an iovev
+ * structure.
+ *
+ * @param args struct to reader information
+ * @param iovecs pointer to iovec structure
+ * @param vsize number of lines to be read (is adjusted depending on the
+ * position of the read and write index in the function)
+ * @param bufsize buffer size into which an element is to be written. Must be at
+ * least as large as line_size.
+ * @param segment_id id of the ringbuffer segment to be read in
+ * @return int number of lines read
+ */
 int shmrbuf_readv(struct shmrbuf_reader_arg_t * args, 
                   struct iovec * iovecs, 
                   uint16_t vsize, 
                   uint16_t bufsize, 
                   uint8_t segment_id);
 
-// Reads a line from a segment ouf of a specified range. 
+// Reads a line from a segment ouf of a specified range.
+/**
+ * @brief Reads a line from shared memory segments within the specified segment
+ * range.
+ *
+ * @details This function is helpful if there are fewer reader threads than ring
+ * buffer segments, as the thread iterates over the corresponding segment area
+ * in a round robin procedure and thus reads the lines evenly.
+ * @param args struct to reader information
+ * @param rbuf void pointer to buffer into which the read line is copied
+ * @param bufsize size of read buffer
+ * @param lower lower segment id, which marks the start area of the segment area
+ * to be read out
+ * @param upper upper segment id, which marks the end area of the segment area
+ * to be read out
+ * @param wsteal bool, which specifies whether rows outside the range should
+ * also be read (e.g. useful if there are no elements for reading in the
+ * specified range)
+ * @return int number of elements read
+ */
 int shmrbuf_read_rng(struct shmrbuf_reader_arg_t * args, 
                      void * rbuf, 
                      uint16_t bufsize, 
@@ -209,7 +258,28 @@ int shmrbuf_read_rng(struct shmrbuf_reader_arg_t * args,
                      uint8_t upper, 
                      bool * wsteal);
 
-// Reads multiple lines from a range of segments
+/** Reads multiple lines from shared memory segments within the specified segment
+ * range.
+ * @brief 
+ * 
+ * @details This function is helpful if there are fewer reader threads than ring
+ * buffer segments, as the thread iterates over the corresponding segment area
+ * in a round robin procedure and thus reads the lines evenly.
+ * @param args struct to reader information
+ * @param iovecs pointer to iovec structure 
+ * @param vsize number of lines to be read (is adjusted depending on the
+ * position of the read and write index in the function)
+ * @param bufsize buffer size into which an element is to be written. Must be at
+ * least as large as line_size.
+ * @param lower lower segment id, which marks the start area of the segment area
+ * to be read out 
+ * @param upper upper segment id, which marks the end area of the segment area
+ * to be read out  
+ * @param wsteal bool, which specifies whether rows outside the range should
+ * also be read (e.g. useful if there are no elements for reading in the
+ * specified range)
+ * @return int Cumulated number of elements in the lines read in
+ */
 int shmrbuf_readv_rng(struct shmrbuf_reader_arg_t * args, 
                       struct iovec * iovecs, 
                       uint16_t vsize, 
