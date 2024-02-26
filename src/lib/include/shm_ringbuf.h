@@ -258,9 +258,9 @@ int shmrbuf_read_rng(struct shmrbuf_reader_arg_t * args,
                      uint8_t upper, 
                      bool * wsteal);
 
-/** Reads multiple lines from shared memory segments within the specified segment
+/** @brief Reads multiple lines from shared memory segments within the specified segment
  * range.
- * @brief 
+ * 
  * 
  * @details This function is helpful if there are fewer reader threads than ring
  * buffer segments, as the thread iterates over the corresponding segment area
