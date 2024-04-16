@@ -1,4 +1,5 @@
 #include "hs_compile.h"
+#include <threads.h>
 #define _GNU_SOURCE 1
 #include <argp.h>
 #include <errno.h>
@@ -42,7 +43,7 @@
 // #define DEFAULT_MATCH_REGEX "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} client (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+) exceeded request rate limit"
 #define IP4_REGEX "((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.){3}(25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)"
 #define IP6_REGEX "([a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4})|([a-f0-9:]{0,35}::[a-f0-9:]{0,35})"
-#define DEFAULT_MATCH_REGEX "limit responses to (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+)"
+#define DEFAULT_MATCH_REGEX "limit responses to (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})(\\/)" //((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.){3}(25[0-5]|(2[0-4]|1\\d|[1-9]|)(\\/))"
 #define LINEBUF_SIZE 200
 #define NTHREADS 1
 #define QUEUE_SIZE 10 // Number of entries read at once
@@ -156,7 +157,6 @@ struct arguments
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
 	struct arguments *arguments = state->input;
-
 	switch (key) {
 	
 	case 'f':
@@ -245,7 +245,7 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 
             break;
 
-	case 'r':
+	case 'r': // TODO: not used?
 
 			matching = true;
 
@@ -561,12 +561,36 @@ int regex_match_handler(unsigned int id, unsigned long long from, unsigned long 
 	{
 	case DEFAULT_MATCH_REGEX_ID:
 		context->match = true;
-		printf("match id: %d\n", DEFAULT_MATCH_REGEX_ID);
-		return (context->domain != -1 ) ? 1 : 0;
+		// printf("match id: %d\n", DEFAULT_MATCH_REGEX_ID);
+		//printf("%s\n", context->logstr);
+		// printf("from: %llu\n", from);
+		// printf("from: %llu\n", to);
+		
+		// for(int i = 44; i<=(int)to-2; i++){
+		// 	printf("%c", context->logstr[i]);
+		// }
+		// printf("\n");
+		from = 44;
+		to = to - 2;
+		context->logstr[to] = '\0';
+
+		if (inet_pton(AF_INET,&context->logstr[from],&context->ip_addr.ipv4) == 1) 
+		{
+			// printf("finally here\n");
+			context->domain = AF_INET;
+			context->logstr[to] = ' ';
+			return (context->match) ? 1 : 0;
+		}
+		context->domain = -1;
+		context->logstr[to] = ' ';
+		return 0;
+		
+		
+		// return (context->domain != -1 ) ? 1 : 0;
 	
 	case IP4_REGEX_ID:
 		// printf("match id: %d\n", IP4_REGEX_ID);
-
+		printf("%s", context->logstr);
 		from = to;
 
 		// Adjust to and from if not at the end of the address (assumes withespace around address)
@@ -576,6 +600,10 @@ int regex_match_handler(unsigned int id, unsigned long long from, unsigned long 
 		while(from > 0 && context->logstr[from-1] != ' ') {from--;}
 
 		context->logstr[to] = '\0';
+
+		// for(int i = from; i<to; ++i){
+		// 	printf("%c", context->logstr[i]);
+		// }
 		
 
 		if (inet_pton(AF_INET,&context->logstr[from],&context->ip_addr.ipv4) == 1) 
@@ -680,6 +708,7 @@ void * ban_thread_routine(void * args)
 	{
 
 		shm_arg = (struct shmrbuf_reader_arg_t *) targs->ipc_args;
+		printf("global header segments: %d\n", shm_arg->global_hdr->segment_count);
 
 		if(targs->thread_id >= shm_arg->global_hdr->segment_count)
 		{
@@ -689,26 +718,48 @@ void * ban_thread_routine(void * args)
 
 		// Determine the ringbuffer segments for the thread, as well as the range for workload stealing.
 		seg_count = shm_arg->global_hdr->segment_count / thread_count;
-		printf("segment_count: %d\n", seg_count);
+		int remainder = shm_arg->global_hdr->segment_count % thread_count;
+		int segments_per_thread[thread_count+1];
+		segments_per_thread[0] = 0;
 
-		if((retval = shm_arg->global_hdr->segment_count % thread_count) > 0)
-		{
-			if(retval > targs->thread_id)
-			{
-				seg_count = seg_count + 1;
-				lower_seg = targs->thread_id * seg_count;
-			}
-			else 
-			{
-				lower_seg = targs->thread_id * (seg_count + 1);
-			}
+		for(int i = 0; i < thread_count; ++i){
+    		segments_per_thread[i+1] = (i < remainder) ? (seg_count + 1) : seg_count;
 		}
-		else 
-		{
-			lower_seg = targs->thread_id * seg_count;
+		
+		for (int i = 0; i<=targs->thread_id; ++i){
+			lower_seg += segments_per_thread[i];
+			upper_seg += segments_per_thread[i+1];
 		}
 
-		upper_seg = lower_seg + seg_count;
+		// BUG: Determination of lower_seg is not correct for all number of threads
+		// (i.e. number_segments = 7, number of threads = 3 leads to the following
+		// segment ranges:
+		// thread 0: 0-3
+		// thread 1: 3-5
+		// thread 2: 6-8
+
+		// if((retval = shm_arg->global_hdr->segment_count % thread_count) > 0)
+		// {
+		// 	if(retval > targs->thread_id)
+		// 	{
+		// 		seg_count = seg_count + 1;
+		// 		lower_seg = targs->thread_id * seg_count;
+		// 	}
+		// 	else 
+		// 	{
+		// 		lower_seg = targs->thread_id * (seg_count + 1);
+		// 	}
+		// }
+		// else 
+		// {
+		// 	lower_seg = targs->thread_id * seg_count;
+		// }
+
+		// upper_seg = lower_seg + seg_count;
+
+
+		printf("lower segment of thread %d: %d\n", targs->thread_id, lower_seg);
+		printf("upper segment of thread %d: %d\n", targs->thread_id, upper_seg);
 	}
 
 	if(block_signals(false))
@@ -804,9 +855,8 @@ void * ban_thread_routine(void * args)
 		// if(recv_retval > 0){
 		// 	printf("recv_retval: %d\n", recv_retval);
 		// }
-
 		if(recv_retval){
-
+		
 			rcv_count += recv_retval;
 
 			for(i = 0; i < recv_retval; i++)
@@ -849,14 +899,14 @@ void * ban_thread_routine(void * args)
 					}
 				}
 				
-				
+				// printf("context: %d\n", context.domain);
 				// Query htable for the number of times an ip address has been logged
 				switch (context.domain)
 				{
 				case AF_INET:
 						
 						retval = ip_hashtable_insert(htable, &context.ip_addr.ipv4, AF_INET);
-						printf("occurance in ip_hashtable: %d\n", retval);
+						// printf("occurance in ip_hashtable: %d\n", retval);
 						break;
 
 				case AF_INET6:
@@ -1069,9 +1119,9 @@ int main(int argc, char **argv)
 	// Setup regex matching, compile chosen regex.
 	if (matching) 
 	{
-		const char * const regexes[] = {regex, IP4_REGEX, IP6_REGEX};
-		const unsigned int flags[] = {HS_FLAG_SINGLEMATCH , HS_FLAG_SINGLEMATCH, HS_FLAG_SINGLEMATCH};
-		const unsigned int ids[] = {0 , 1, 2};
+		const char * const regexes[] = {regex}; // IP4_REGEX, IP6_REGEX};
+		const unsigned int flags[] = {HS_FLAG_SINGLEMATCH}; // , HS_FLAG_SINGLEMATCH, HS_FLAG_SINGLEMATCH};
+		const unsigned int ids[] = {0}; // 1, 2};
 
 
 		if((platform_info = (hs_platform_info_t *) calloc(sizeof(hs_platform_info_t), 1)) == NULL)
@@ -1086,7 +1136,7 @@ int main(int argc, char **argv)
 			platform_info = NULL;
 		}
 
-		if(hs_compile_multi(regexes, flags, ids, 3, HS_MODE_BLOCK, platform_info, &database, &compile_error) != HS_SUCCESS)
+		if(hs_compile_multi(regexes, flags, ids, 1, HS_MODE_BLOCK, platform_info, &database, &compile_error) != HS_SUCCESS)
 		{
 			fprintf(stderr,"hyperscan compilation failed with error code %d, %s\n", compile_error->expression, compile_error->message);
 			hs_free_compile_error(compile_error);
