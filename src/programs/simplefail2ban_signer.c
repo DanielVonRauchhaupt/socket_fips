@@ -571,7 +571,7 @@ int regex_match_handler(unsigned int id, unsigned long long from, unsigned long 
 		// }
 		// printf("\n");
 		from = 44;
-		to = to - 2;
+		to = to - 1;
 		context->logstr[to] = '\0';
 
 		if (inet_pton(AF_INET,&context->logstr[from],&context->ip_addr.ipv4) == 1) 
@@ -708,7 +708,7 @@ void * ban_thread_routine(void * args)
 	{
 
 		shm_arg = (struct shmrbuf_reader_arg_t *) targs->ipc_args;
-		printf("global header segments: %d\n", shm_arg->global_hdr->segment_count);
+		// printf("global header segments: %d\n", shm_arg->global_hdr->segment_count);
 
 		if(targs->thread_id >= shm_arg->global_hdr->segment_count)
 		{
@@ -906,7 +906,9 @@ void * ban_thread_routine(void * args)
 				case AF_INET:
 						
 						retval = ip_hashtable_insert(htable, &context.ip_addr.ipv4, AF_INET);
-						// printf("occurance in ip_hashtable: %d\n", retval);
+						char ip_string[16] = {'\0'};
+						inet_ntop(AF_INET, &context.ip_addr.ipv4, ip_string, 16);
+						printf("occurance of ipv4 %s in ip_hashtable: %d\n", ip_string, retval);
 						break;
 
 				case AF_INET6:
