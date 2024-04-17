@@ -28,6 +28,7 @@
 #define SHMRBUF_PERM 0644 // File permission on the shared memory segment
 
 // Flags
+/** Enables reattachment to an existing buffer for the writer (writer only) */
 #define SHMRBUF_REATT 0x01 // Enables reattachment to an existing buffer for the writer (writer only)
 #define SHMRBUF_FRCAT 0x02 // No current purpose
 #define SHMRBUF_OVWR 0x04 // Enables overwrite for write operations to the buffer (writer only)
@@ -155,7 +156,7 @@ union shmrbuf_arg_t {
  *
  * @param args contains struct to either reader or writer information
  * @param role reader or writer process
- * @return int int error code as defined in io_ipc.h
+ * @return int error code as defined in io_ipc.h
  */
 int shmrbuf_init(union shmrbuf_arg_t *args, enum shmrbuf_role_t role);
 

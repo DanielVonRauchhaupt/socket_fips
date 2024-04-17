@@ -1,10 +1,10 @@
 #include "include/shm_ringbuf.h"
+#include <stdio.h>
 
 #define MIN(a, b) ((a > b) ? b : a)
 #define MAX(a, b) ((a > b) ? a : b)
 
-static inline int shm_cleanup(union shmrbuf_arg_t *args,
-                              enum shmrbuf_role_t role, bool detach) {
+static inline int shm_cleanup(union shmrbuf_arg_t *args, enum shmrbuf_role_t role, bool detach) {
 
   int retval = IO_IPC_SUCCESS, shm_id;
   uint32_t size;
@@ -56,8 +56,7 @@ static inline int shm_cleanup(union shmrbuf_arg_t *args,
   return retval;
 }
 
-static inline uint32_t get_hdr_checksum(struct shmrbuf_global_hdr_t *global_hdr,
-                                        key_t key) {
+static inline uint32_t get_hdr_checksum(struct shmrbuf_global_hdr_t *global_hdr, key_t key) {
   return (key + global_hdr->line_count + global_hdr->line_size +
           global_hdr->overwrite + global_hdr->reader_count +
           global_hdr->segment_count) %
@@ -180,7 +179,7 @@ int shmrbuf_init(union shmrbuf_arg_t *args, enum shmrbuf_role_t role) {
       global_hdr->overwrite = overwrite;
       global_hdr->checksum = get_hdr_checksum(global_hdr, key);
       global_hdr->writer_att = true;
-
+      
       memset(&global_hdr->first_reader_att, 0,
              sizeof(atomic_bool) * global_hdr->reader_count);
     }
@@ -188,7 +187,7 @@ int shmrbuf_init(union shmrbuf_arg_t *args, enum shmrbuf_role_t role) {
     args->wargs.global_hdr = global_hdr;
     args->wargs.shm_id = shm_id;
 
-    /** @todo function call of calloc confusing*/
+    // TODO change function parameters -> calloc(num_element, sizeof_element)
     if ((args->wargs.segment_hdrs = (struct shmrbuf_seg_whdr_t *)calloc(
              sizeof(struct shmrbuf_seg_whdr_t), global_hdr->segment_count)) ==
         NULL) {
@@ -223,6 +222,7 @@ int shmrbuf_init(union shmrbuf_arg_t *args, enum shmrbuf_role_t role) {
       }
 
       if (!registered) {
+        fprintf(stderr, "Error is here");
         shm_cleanup(args, role, true);
         return IO_IPC_SIZE_ERR;
       }
@@ -400,7 +400,7 @@ int inline shmrbuf_read(struct shmrbuf_reader_arg_t *args, void *rbuf,
   // at most line_size elements can be read
   uint16_t rsize = MIN(line_size, bufsize);
 
-  // if the read and write indexes are the same size, there is nothing to read
+  // if the read and write indexes have the same value, there is nothing to read
   // so that the function can be terminated
   if (write_index == read_index) {
     if (pthread_mutex_unlock(&segment->segment_lock) == -1) {
@@ -484,7 +484,7 @@ int shmrbuf_writev(struct shmrbuf_writer_arg_t *args, struct iovec *iovecs,
       if (wsize > line_size) {
         return IO_IPC_SIZE_ERR;
       }
-
+      
       if (memcpy(write_dest, iovecs[i].iov_base, wsize) == NULL) {
         return IO_IPC_MEM_ERR;
       }
@@ -549,7 +549,7 @@ int shmrbuf_writev(struct shmrbuf_writer_arg_t *args, struct iovec *iovecs,
   }
 
   atomic_store(segment->write_index, new_write_index);
-
+  // fprintf(stderr, "vsize: %d\n", vsize);
   return vsize;
 }
 
@@ -575,7 +575,7 @@ int shmrbuf_readv(struct shmrbuf_reader_arg_t *args, struct iovec *iovecs,
   if (pthread_mutex_lock(&segment->segment_lock) == -1) {
     return IO_IPC_MUTEX_ERR;
   }
-
+              
   uint32_t read_index = *segment->read_index;
 
   if (write_index == read_index) {
@@ -610,11 +610,10 @@ int shmrbuf_readv(struct shmrbuf_reader_arg_t *args, struct iovec *iovecs,
     return IO_IPC_SIZE_ERR;
   }
 
-  // elements from the shared memory are written line by line iovec vector
-  // structure
+  // elements from the shared memory are written line by line into the iovec
+  // vector structure
   for (uint16_t i = 0; i < vsize; i++) {
     iov = &iovecs[i];
-
     if (memcpy(iov->iov_base, src, line_size) == NULL) {
       pthread_mutex_unlock(&segment->segment_lock);
       return IO_IPC_MEM_ERR;
