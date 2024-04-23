@@ -1,9 +1,16 @@
 cmake_minimum_required(VERSION 3.18.4)
 
 project(Bacherlorarbeit)
+# set(CMAKE_CXX_COMPILER "clang++")
+
 
 # Tell cmake where to find BpfObject module
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/external/tools/cmake)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 20)
+
+
 
 # External libraries
 add_subdirectory(external)
@@ -76,7 +83,9 @@ target_include_directories(ebpf_utils
 target_link_libraries(ebpf_utils ip_blacklist_skel)
 
 # SimpleFail2ban Programm
-add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)                                                         
+add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)
+add_executable(simplefail2ban_signer ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban_signer.c)                                                         
+
 
 target_include_directories(simplefail2ban
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src            
@@ -94,7 +103,31 @@ target_link_libraries(simplefail2ban
     PUBLIC shm_ringbuf
     PUBLIC hs
     PUBLIC uring
-    PUBLIC Threads::Threads) 
+    PUBLIC Threads::Threads
+    ) 
+
+include_directories("/root/.local/include/")
+
+target_include_directories(simplefail2ban_signer
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src            
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs
+    PUBLIC /usr/include/hs
+    PUBLIC /mnt/scratch/signer/fips/ips-action/src
+) 
+
+target_link_libraries(simplefail2ban_signer
+    PUBLIC ebpf_utils
+    PUBLIC uring_getline
+    PUBLIC ip_hashtable
+    PUBLIC ip_llist
+    PUBLIC ip_to_str
+    PUBLIC shm_ringbuf
+    PUBLIC hs
+    PUBLIC uring
+    PUBLIC Threads::Threads
+    PUBLIC stdc++
+    PUBLIC "/mnt/scratch/signer/fips/ips-action/src/libfips_grpc.a") 
 
 # Poll_rbuf utility
 add_executable(poll_rbuf ${CMAKE_CURRENT_SOURCE_DIR}/src/utilities/poll_rbuf.c)
@@ -126,3 +159,5 @@ target_include_directories(hashfunc_benchmark
 target_link_libraries(hashfunc_benchmark 
     PUBLIC ip_hashtable
 )
+
+
