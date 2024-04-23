@@ -1,4 +1,5 @@
 #include "hs_compile.h"
+#include "shm_ringbuf.h"
 #include <threads.h>
 #define _GNU_SOURCE 1
 #include <argp.h>
@@ -24,6 +25,8 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <liburing.h>
+
+#include <client_wrapper.h>
 
 // Local includes
 #include <ip_hashtable.h>
@@ -1109,6 +1112,16 @@ int main(int argc, char **argv)
 	pthread_t * thread_ids = NULL;
 	int retval;
 	uint8_t i;
+
+	// TEST GRPC CALL
+
+	intervention_client_t *MyClient = intervention_client_create();
+
+
+
+ 	// END TEST GRPC CALL
+
+
 
 	// Parse commandline arguments
 	retval = argp_parse(&argp, argc, argv, 0, NULL, &args);
