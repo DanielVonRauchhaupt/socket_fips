@@ -10,6 +10,9 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/external/tools/cmake)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)
 
+# set(CMAKE_CXX_COMPILER "g++")
+# set(CMAKE_C_COMPILER "gcc")
+
 
 
 # External libraries
@@ -84,7 +87,9 @@ target_link_libraries(ebpf_utils ip_blacklist_skel)
 
 # SimpleFail2ban Programm
 add_executable(simplefail2ban ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban.c)
-add_executable(simplefail2ban_signer ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban_signer.c)                                                         
+# add_executable(simplefail2ban_signer ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplefail2ban_signer.c)
+# add_executable(test_grpc ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/test_grpc.c)                                                         
+
 
 
 target_include_directories(simplefail2ban
@@ -106,28 +111,43 @@ target_link_libraries(simplefail2ban
     PUBLIC Threads::Threads
     ) 
 
-include_directories("/root/.local/include/")
+# include_directories("/root/.local/include/")
+# include_directories("/mnt/scratch/signer/fips/ips-action/src/")
 
-target_include_directories(simplefail2ban_signer
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src            
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs
-    PUBLIC /usr/include/hs
-    PUBLIC /mnt/scratch/signer/fips/ips-action/src
-) 
+# target_include_directories(simplefail2ban_signer
+#     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src            
+#     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+#     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs
+#     PUBLIC /usr/include/hs
+#     PUBLIC /mnt/scratch/signer/fips/ips-action/src
+# ) 
 
-target_link_libraries(simplefail2ban_signer
-    PUBLIC ebpf_utils
-    PUBLIC uring_getline
-    PUBLIC ip_hashtable
-    PUBLIC ip_llist
-    PUBLIC ip_to_str
-    PUBLIC shm_ringbuf
-    PUBLIC hs
-    PUBLIC uring
-    PUBLIC Threads::Threads
-    PUBLIC stdc++
-    PUBLIC "/mnt/scratch/signer/fips/ips-action/src/libfips_grpc.a") 
+# target_include_directories(test_grpc
+#     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libbpf/src            
+#     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+#     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/programs
+#     PUBLIC /usr/include/hs
+#     PUBLIC /mnt/scratch/signer/fips/ips-action/src
+# )
+
+# target_link_libraries(simplefail2ban_signer
+#     PUBLIC stdc++
+#     PUBLIC stdc++
+#     PUBLIC ebpf_utils
+#     PUBLIC uring_getline
+#     PUBLIC ip_hashtable
+#     PUBLIC ip_llist
+#     PUBLIC ip_to_str
+#     PUBLIC shm_ringbuf
+#     PUBLIC hs
+#     PUBLIC uring
+#     PUBLIC Threads::Threads
+#     "/mnt/scratch/signer/fips/ips-action/build/src/libfips_grpc.so"
+# )
+
+# target_link_libraries(test_grpc
+#     "/mnt/scratch/signer/fips/ips-action/build/src/libfips_grpc.so")
+
 
 # Poll_rbuf utility
 add_executable(poll_rbuf ${CMAKE_CURRENT_SOURCE_DIR}/src/utilities/poll_rbuf.c)
@@ -159,5 +179,3 @@ target_include_directories(hashfunc_benchmark
 target_link_libraries(hashfunc_benchmark 
     PUBLIC ip_hashtable
 )
-
-
