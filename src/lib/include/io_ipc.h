@@ -38,6 +38,7 @@
 enum ipc_type_t 
 {
     SHM,
+    SOCK,
     DISK,
 };
 

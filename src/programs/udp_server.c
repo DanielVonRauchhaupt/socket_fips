@@ -1,4 +1,6 @@
 #define _GNU_SOURCE 
+#include <math.h>
+#include <sys/un.h>
 #include <stdio.h> 
 #include <stdlib.h> 
 #include <time.h> 
@@ -21,6 +23,7 @@
 #include <sys/ioctl.h>
 #include <liburing.h>
 #include <argp.h>
+#include <stdint.h>
 
 // Local includes
 #include <ip_to_str.h>
@@ -33,13 +36,19 @@
 #define DEFAULT_PORT 8080
 #define DEFAULT_LOG "udpsvr.log"
 #define LOG_SHORT false
-#define IPC_TYPE DISK
-#define NTHREADS 1
-
+//#define IPC_TYPE DISK
+#define IPC_TYPE SOCK
+#define NTHREADS 2
 
 // Shared memory default configuration
 #define SHM_NLINES 100000
 #define NREADERS 1
+
+// Socket default configuration
+#define MAX_AMOUNT_OF_SOCKETS 2
+#define SOCKET_NAME_TEMPLATE "/tmp/unixDomainSock4SF2B_"
+// This has to be long enough to fit the number or the socket and a terminating \0
+#define SOCKET_TEMPLATE_LENGTH 128
 
 // Open options for logfile
 #define OPEN_MODE O_WRONLY | O_CREAT | O_TRUNC | O_APPEND
@@ -93,6 +102,7 @@ static uint8_t thread_count = NTHREADS;
 // Structs
 
 // Send / Receive buffers for listener threads
+// Currently unused
 struct packet_buf_t 
 {
     struct mmsghdr msgs[MAX_MSG];
@@ -105,6 +115,15 @@ struct disk_arg_t
 {
     int logfile_fd;
     struct io_uring ring;
+};
+
+// Socket writing parameters
+struct sock_arg_t
+{
+    // Temporarily fixed length of socket path
+    // Issue: Varaible length arrays are not possible in a static context
+    char socketPathNames[MAX_AMOUNT_OF_SOCKETS][SOCKET_TEMPLATE_LENGTH];
+    struct sockaddr_un socketConnections[MAX_AMOUNT_OF_SOCKETS];
 };
 
 // Parameters for listener threads
@@ -512,20 +531,34 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
     struct io_uring_sqe * sqe = NULL;
     struct io_uring_cqe * cqe = NULL;
     struct shmrbuf_writer_arg_t * rbuf_arg = NULL;
+    struct sock_arg_t * sock_arg = NULL;
+    int socketRecvs[MAX_AMOUNT_OF_SOCKETS] = {-1};
+    int writeSockets[MAX_AMOUNT_OF_SOCKETS] = {-1};
 
     switch (ipc_type)
     {
-    case DISK:
+    case DISK: {
         
         logfile_fd = ((struct disk_arg_t *) targs->ipc_arg)->logfile_fd;
         ring = &((struct disk_arg_t *) targs->ipc_arg)->ring;
         break;
+
+    }
     
-    case SHM:
+    case SHM: {
 
         rbuf_arg = (struct shmrbuf_writer_arg_t *) targs->ipc_arg;
-
         break;
+
+    }
+
+    case SOCK: {
+
+        // Define how targs->ipc_arg is supposed to be interpreted, since ipc_arg is a void-pointer
+        sock_arg = (struct sock_arg_t *) targs->ipc_arg;
+        break;
+
+    }
 
     default:
         break;
@@ -660,14 +693,14 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
 
             payload_buf[i] = payload_buf[i] + 1;
 
-        }   
+        } 
 
         if(invalid_count)
         {
 
             switch (ipc_type)
             {
-            case DISK:
+            case DISK: {
 
                 sqe = io_uring_get_sqe(ring);
 
@@ -692,8 +725,9 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
                 }
                 
                 break;
+            }
 
-            case SHM:
+            case SHM: {
 
                 if((retval_ipc = shmrbuf_writev(rbuf_arg, log_iovs, invalid_count, segment_id)) < 0)
                 {
@@ -718,7 +752,84 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
                     msg_drop += invalid_count - retval_ipc;
                     invalid_count = retval_ipc;
                 }
-            
+            break;
+            }
+
+            case SOCK: {
+
+                // Determine all available unix domain sockets
+                for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+                    if (socketRecvs[i] == 1){
+                        continue;
+                    }
+                    if (access(sock_arg->socketPathNames[i], F_OK) == 0){
+                        socketRecvs[i] = 0;
+                    }else{
+                        socketRecvs[i] = -1;
+                    }
+                }
+
+                // Establish all connections first
+                for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+                    
+                    // Skip spots without sockets or already established sockets
+                    if (socketRecvs[i] != 0){
+                        continue;
+                    }
+
+                    // Establish a writer socket
+                    writeSockets[i] = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+                    if (writeSockets[i] == -1) {
+                        perror("socket");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    // Connect with the socket
+                    retval_ipc = connect(writeSockets[i], (const struct sockaddr *) &sock_arg->socketConnections[i], sizeof(sock_arg->socketConnections[i]));
+                    if (retval_ipc == -1){
+                        perror("connect");
+                        exit(EXIT_FAILURE);
+                    }
+                    socketRecvs[i] = 1;
+                }
+                // All available sockets will now receive all data
+
+                // Send data
+                for (int j = 0; j < invalid_count; j++){
+
+                    // Send the message to each socket individually
+                    for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+                    
+                        // Skip spots without sockets
+                        if (socketRecvs[i] != 1){
+                            continue;
+                        }
+
+                    
+                        char messageToBeSent[1024];
+                        memcpy(messageToBeSent, log_iovs[j].iov_base, LOG_BUF_SIZE_IP4);
+                        retval_ipc = write(writeSockets[i], messageToBeSent, strlen(messageToBeSent));
+                        if (retval_ipc == -1) {
+                            perror("write");
+                            exit(EXIT_FAILURE);
+                        }
+                    }
+
+                    /*
+                    char messageToBeSent[1024];
+                    memcpy(messageToBeSent, log_iovs[i].iov_base, LOG_BUF_SIZE_IP4);
+                    retval_ipc = write(writeSockets[i], messageToBeSent, strlen(messageToBeSent));
+                    if (retval_ipc == -1) {
+                        perror("write");
+                        exit(EXIT_FAILURE);
+                    }
+                    */
+
+                }
+
+                break;
+            }
+
             default:
                 break;
             }
@@ -751,7 +862,6 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
             pkt_out += retval_snd;
         }
      
-        
     }  
 
     cleanup_listen_and_reply(&msg_hdrs,
@@ -864,7 +974,7 @@ int ipc_cleanup(struct sock_targ_t * sock_targs, uint8_t thread_count, enum ipc_
 
     switch (ipc_type)
     {
-    case DISK:
+    case DISK: {
 
         if(sock_targs[0].ipc_arg != NULL)
         {
@@ -882,8 +992,9 @@ int ipc_cleanup(struct sock_targ_t * sock_targs, uint8_t thread_count, enum ipc_
         }
 
         break;
+    }
     
-    case SHM:
+    case SHM: {
 
         if(sock_targs[0].ipc_arg != NULL)
         {
@@ -897,6 +1008,25 @@ int ipc_cleanup(struct sock_targ_t * sock_targs, uint8_t thread_count, enum ipc_
         }
 
         break;
+    }
+
+    case SOCK: {
+        
+        // Check wether or not the struct has been initialised
+        if (sock_targs[0].ipc_arg != NULL){
+            // For each potential socket; close and unlink it
+            for (i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+                unlink(((struct sock_arg_t *) sock_targs[0].ipc_arg)->socketPathNames[i]);
+            }
+            // Clear structure
+            for (i = 0; i < thread_count; i++){
+                sock_targs[i].ipc_arg = NULL;
+            }
+            retval = IO_IPC_SUCCESS;
+        }
+    
+        break;
+    }
 
     default:
         return IO_IPC_ARG_ERR;
@@ -908,14 +1038,13 @@ int ipc_cleanup(struct sock_targ_t * sock_targs, uint8_t thread_count, enum ipc_
 
 void memory_cleanup_main(pthread_t ** threads, struct sock_targ_t ** sock_targs)
 {
-
     free(*sock_targs);
     free(*threads);
     *sock_targs = NULL;
     *threads = NULL;
 }
 
-int main(int argc, char ** argv) { 
+int main(int argc, char ** argv) {
 
     int retval, logfile_fd;
     uint8_t i;
@@ -954,7 +1083,7 @@ int main(int argc, char ** argv) {
 
     switch (ipc_type)
     {
-    case DISK:
+    case DISK: {
 
         if((logfile_fd = open(args.logfile,OPEN_MODE,OPEN_PERM)) < 0)
         {
@@ -989,8 +1118,9 @@ int main(int argc, char ** argv) {
         }
 
         break;
+    }
 
-    case SHM:
+    case SHM: {
 
         if((shmrbuf_arg = (struct shmrbuf_writer_arg_t *) calloc(sizeof(struct shmrbuf_writer_arg_t),1)) == NULL)
         {
@@ -1027,14 +1157,64 @@ int main(int argc, char ** argv) {
         }
 
         break;
+    }
     
-    
+    case SOCK: {
+
+        // Check if path to unix domain socket is compliant with the SOCKET_TEMPLATE_LENGTH
+        if ((strlen(SOCKET_NAME_TEMPLATE) +
+            ((int) floor (log10 (abs (MAX_AMOUNT_OF_SOCKETS))) + 1))
+                >= SOCKET_TEMPLATE_LENGTH){
+            perror("filepath to socket is too long for default maximum path length");
+            exit(EXIT_FAILURE);
+        }
+
+        // Establish all common attributes for each of these connections
+        struct sock_arg_t * socket_arg;
+        char idOfReader[(int) floor (log10 (abs (MAX_AMOUNT_OF_SOCKETS))) + 1];
+
+        if((socket_arg = (struct sock_arg_t *) calloc(sizeof(struct sock_arg_t),1)) == NULL)
+        {
+            perror("calloc failed");
+            memory_cleanup_main(&threads, &sock_targs);
+            exit(EXIT_FAILURE);
+        }
+
+        // Initialize all necessary args
+        for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+
+            // Provide them with the template name
+            strcpy(socket_arg->socketPathNames[i], SOCKET_NAME_TEMPLATE);
+            sprintf(idOfReader, "%d", i);
+            strcat(socket_arg->socketPathNames[i], idOfReader);
+
+            // Ensure that socket is closed from leftover application of this program
+            // unlink(socket_arg->socketPathNames[i]);
+
+            /**
+             * Set some standard settings:
+             * Clear all default fields
+             * Define that the socket is a Unix Domain Socket
+             * Provide correct path to socket
+             */
+            socket_arg->socketConnections[i].sun_family = AF_UNIX;
+            strncpy(socket_arg->socketConnections[i].sun_path, socket_arg->socketPathNames[i], sizeof(socket_arg->socketConnections[i].sun_path) - 1);
+        }
+
+        for(i = 0; i < thread_count; i++)
+        {
+            sock_targs[i].ipc_arg = socket_arg;
+        }
+
+        break;
+    }
+
     default:
         fprintf(stderr,"Invalid ipc type value %d\n",ipc_type);
         memory_cleanup_main(&threads, &sock_targs);
         exit(EXIT_FAILURE);
     }
-
+    
     if(update_datetime(global_datetime_buf) == RETURN_FAIL)
     {
         fprintf(stderr,"Initializing the global datetime buffer failed\n");
@@ -1052,31 +1232,39 @@ int main(int argc, char ** argv) {
         exit(EXIT_FAILURE);
     }
 
+    // You are the main process. Create child processes
     for(i = 1; i < thread_count; i++)
     {
 
+        // Create a thread that will listen for messages on a specific socket
+        // That thread will then either answer or log depending on the received message
+        // It will use the specified IPC to log occurrences of unwanted messages
         if(pthread_create(&threads[i], NULL, run_socket, (void*)&sock_targs[i]))
         {
             perror("Could not create listener thread");
         }
     }
+    
+    // After having setup the other threads, become a listener thread yourself
+    run_socket((void *)&sock_targs[0]);
 
-   run_socket((void *)&sock_targs[0]);
-
-   for(i = 0; i < thread_count; i++)
-   {
+    // Wait for all threads to return
+    // I believe i could be 1 here instead of 0
+    // Thread ID 0 has not been distributed since the main program acts in its stead
+    for(i = 0; i < thread_count; i++)
+    {
         if(pthread_join(threads[i],NULL))
         {
             perror("Pthread join failed");
         }
-   }
+    }
 
     unsigned long long int total_in_count = 0 ,total_out_count = 0, total_log_count = 0, total_drop_count = 0;
 
     printf("\n");
 
-   for(i = 0; i < thread_count; i++)
-   {
+    for(i = 0; i < thread_count; i++)
+    {
         if(sock_targs[i].return_code != RETURN_SUC)
         {
             fprintf(stderr,"Thread %d terminated with an error : error code %d\n", i, sock_targs[i].return_code);
@@ -1104,7 +1292,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr,"Error in ipc cleanup : error code %d\n",retval);
     }
 
-   memory_cleanup_main(&threads, &sock_targs);
+    memory_cleanup_main(&threads, &sock_targs);
    
     
    return EXIT_SUCCESS; 
