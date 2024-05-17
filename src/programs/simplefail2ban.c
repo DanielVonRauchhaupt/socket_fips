@@ -45,7 +45,7 @@
 #define IP4_REGEX "((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.){3}(25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)"
 #define IP6_REGEX "([a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4})|([a-f0-9:]{0,35}::[a-f0-9:]{0,35})"
 #define LINEBUF_SIZE 128
-#define NTHREADS 2
+#define NTHREADS 1
 #define QUEUE_SIZE 100 // Number of entries read at once
 
 // Socket default configuration

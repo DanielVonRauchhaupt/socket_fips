@@ -38,7 +38,7 @@
 #define LOG_SHORT false
 //#define IPC_TYPE DISK
 #define IPC_TYPE SOCK
-#define NTHREADS 2
+#define NTHREADS 1
 
 // Shared memory default configuration
 #define SHM_NLINES 100000
@@ -804,7 +804,6 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
                         if (socketRecvs[i] != 1){
                             continue;
                         }
-
                     
                         char messageToBeSent[1024];
                         memcpy(messageToBeSent, log_iovs[j].iov_base, LOG_BUF_SIZE_IP4);
