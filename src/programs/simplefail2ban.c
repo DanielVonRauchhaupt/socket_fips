@@ -45,7 +45,7 @@
 #define IP4_REGEX "((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.){3}(25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)"
 #define IP6_REGEX "([a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4})|([a-f0-9:]{0,35}::[a-f0-9:]{0,35})"
 #define LINEBUF_SIZE 128
-#define NTHREADS 1
+#define NTHREADS 4
 #define QUEUE_SIZE 100 // Number of entries read at once
 
 // Socket default configuration
@@ -84,6 +84,7 @@ struct sock_arg_t
 static volatile sig_atomic_t server_running = true;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t select_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct ip_hashtable_t * htable;
 static struct ip_llist_t * banned_list; 
 static hs_database_t * database;
@@ -751,7 +752,7 @@ void * ban_thread_routine(void * args)
 			return &targs->retval;
     	}	
 	}
-    
+
 	// Event loop
 	while (server_running)
 	{
@@ -825,6 +826,7 @@ void * ban_thread_routine(void * args)
 			break;
 
 		case SOCK: {
+
 			// No messages received yet
 			recv_retval = 0;
 			
@@ -856,7 +858,7 @@ void * ban_thread_routine(void * args)
 			// All current clients have now been added/updated
 
 			// Wait for I/O on socket; Skip read socket
-			
+			//pthread_mutex_lock(&select_lock);
 			activity = select(max_sd + 1, &readfds, NULL, NULL, NULL);
 			if (activity < 0){
 				if (errno==EINTR){
@@ -918,7 +920,6 @@ void * ban_thread_routine(void * args)
 					}
 				}
 			}
-			
 			break;
 		}
 
@@ -927,7 +928,6 @@ void * ban_thread_routine(void * args)
 		}
 
 		if(recv_retval){
-
 
 			rcv_count += recv_retval;
 
@@ -1052,6 +1052,8 @@ void * ban_thread_routine(void * args)
 		}
 
 	}
+	printf("Thread %d closing\n", targs->thread_id);
+	fflush(stdout);
 	if(matching){hs_free_scratch(scratch);}
 	free(logstr_buf);
 	targs->rcv_count = rcv_count;
@@ -1113,17 +1115,15 @@ bool main_cleanup(struct ban_targs_t ** targs, pthread_t ** tids)
 			// Check wether or not the struct has been initialised
 			if (targs[0]->ipc_args != NULL){
 
-				// For each potential socket; close and unlink it
-				for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-					unlink(((struct sock_arg_t *) targs[0]->ipc_args)->socketPathName);
-				}
+				// Unlink socket
+				unlink(((struct sock_arg_t *) targs[0]->ipc_args)->socketPathName);
+
 
 				// Clear structure
 				for (int i = 0; i < thread_count; i++){
 					targs[i]->ipc_args = NULL;
 				}
 			}
-
 			break;
 		}
 
@@ -1381,7 +1381,6 @@ int main(int argc, char **argv)
             	break;
         	}
 		}
-		printf("Using this address: %s\n", currSockAddress);
 		strcpy(sock_arg->socketPathName, currSockAddress);
 
 		// Create the unix domain socket
@@ -1458,7 +1457,7 @@ int main(int argc, char **argv)
 			thread_args[i].wakeup_interval = TIMEOUT;
 
 			if(i > 0)
-			{
+			{	
 				if(pthread_create(&thread_ids[i],NULL,ban_thread_routine,&thread_args[i]))
 				{
 					perror("pthread create failed");
@@ -1477,7 +1476,6 @@ int main(int argc, char **argv)
 				perror("pthread join failed");
 			}
 		}
-
 	}
 
 	uint64_t total_rcv_count = 0, total_ban_count = 0, total_steal_count = 0;

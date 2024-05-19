@@ -38,14 +38,14 @@
 #define LOG_SHORT false
 //#define IPC_TYPE DISK
 #define IPC_TYPE SOCK
-#define NTHREADS 1
+#define NTHREADS 4
 
 // Shared memory default configuration
 #define SHM_NLINES 100000
 #define NREADERS 1
 
 // Socket default configuration
-#define MAX_AMOUNT_OF_SOCKETS 2
+#define MAX_AMOUNT_OF_SOCKETS 32
 #define SOCKET_NAME_TEMPLATE "/tmp/unixDomainSock4SF2B_"
 // This has to be long enough to fit the number or the socket and a terminating \0
 #define SOCKET_TEMPLATE_LENGTH 128
