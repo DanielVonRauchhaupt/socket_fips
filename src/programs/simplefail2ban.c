@@ -37,15 +37,14 @@
 #define DEFAULT_BAN_TIME 60
 #define DEFAULT_BAN_THRESHOLD 1
 #define DEFAULT_THREAD_COUNT 4 // For multi-threading
-//#define DEFAULT_IPC_TYPE DISK
-#define DEFAULT_IPC_TYPE SOCK
+#define DEFAULT_IPC_TYPE DISK
 #define DEFAULT_IFACE "enp24s0f0np0"
 #define DEFAULT_LOG "udpsvr.log"
 #define DEFAULT_MATCH_REGEX "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} client (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[a-fA-F0-9:]+) exceeded request rate limit"
 #define IP4_REGEX "((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.){3}(25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)"
 #define IP6_REGEX "([a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4}:[a-f0-9]{0,4})|([a-f0-9:]{0,35}::[a-f0-9:]{0,35})"
 #define LINEBUF_SIZE 128
-#define NTHREADS 4
+#define NTHREADS 1
 #define QUEUE_SIZE 100 // Number of entries read at once
 
 // Socket default configuration
@@ -84,7 +83,6 @@ struct sock_arg_t
 static volatile sig_atomic_t server_running = true;
 static pthread_mutex_t stdout_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stderr_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t select_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct ip_hashtable_t * htable;
 static struct ip_llist_t * banned_list; 
 static hs_database_t * database;
@@ -158,6 +156,7 @@ static const struct argp_option opts[] = {
 
 	{ "file", 'f', "FILE", OPTION_ARG_OPTIONAL, "Set logifle as the chosen ipc type (optional: specify path to logfile)", 0},
 	{"shm", 's', "KEY", OPTION_ARG_OPTIONAL, "Set shared memory as the ipc type (optional: specify file for shared memory key)", 0},
+	{"socket", 'u', "SOCK", OPTION_ARG_OPTIONAL, "Specify unix domain socket as ipc type",0},
 	{"threads", 't', "N", OPTION_ARG_OPTIONAL, "Enable multi-threading (optional: set number of banning threads to use)",0},
 	{ "limit", 'l', "N", 0, "Set number of matches before a client is banned", 0},
 	{ "bantime", 'b', "N", 0, "Set number of seconds a client should be banned", 0},
@@ -219,6 +218,23 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 			shm_key = DEFAULT_LOG;
 		}
 		
+		break;
+
+	case 'u':
+
+		if(arguments->ipc_set)
+		{
+			fprintf(stderr,"Only one IPC type can be specified\n");
+			argp_usage(state);
+		}
+
+		arguments->ipc_set = true;
+		ipc_type = SOCK;
+
+		if(arg != NULL)
+		{
+			logfile = arg;
+		}
 
 		break;
 
@@ -826,11 +842,8 @@ void * ban_thread_routine(void * args)
 			break;
 
 		case SOCK: {
-
 			// No messages received yet
 			recv_retval = 0;
-			
-			// TODO: Define how simplefail2ban should receive messages via socket architecture
 
 			// Clear list of sockets to poll from
         	FD_ZERO(&readfds);
@@ -858,8 +871,9 @@ void * ban_thread_routine(void * args)
 			// All current clients have now been added/updated
 
 			// Wait for I/O on socket; Skip read socket
-			//pthread_mutex_lock(&select_lock);
-			activity = select(max_sd + 1, &readfds, NULL, NULL, NULL);
+			// We are using select with a timeout to periodically recheck for ctrl+c
+			struct timeval tv = {1, 0};
+			activity = select(max_sd + 1, &readfds, NULL, NULL, &tv);
 			if (activity < 0){
 				if (errno==EINTR){
 					// We want to close the program with ctrl+c
@@ -897,7 +911,7 @@ void * ban_thread_routine(void * args)
 					// Check if it was a close operation
 					returnValue = read(sd, iovecs[0].iov_base, 1024);
 					if (returnValue > 0){
-						recv_retval = 1;
+						recv_retval++;
 					}
 					if (returnValue == 0){
 						// Check who disconnected
@@ -920,7 +934,9 @@ void * ban_thread_routine(void * args)
 					}
 				}
 			}
+			
 			break;
+
 		}
 
 		default:
@@ -960,7 +976,7 @@ void * ban_thread_routine(void * args)
 					if (inet_pton(AF_INET, logstr, &context.ip_addr.ipv4) == 1) 
 					{
 						context.domain = AF_INET;
-					} 
+					}
 					else if (inet_pton(AF_INET6, logstr, &context.ip_addr.ipv6) == 1) 
 					{
 						context.domain = AF_INET6;
@@ -970,7 +986,6 @@ void * ban_thread_routine(void * args)
 						continue;
 					}
 				}
-				
 				
 				// Query htable for the number of times an ip address has been logged
 				switch (context.domain)
@@ -1052,7 +1067,6 @@ void * ban_thread_routine(void * args)
 		}
 
 	}
-	printf("Thread %d closing\n", targs->thread_id);
 	fflush(stdout);
 	if(matching){hs_free_scratch(scratch);}
 	free(logstr_buf);
@@ -1112,18 +1126,12 @@ bool main_cleanup(struct ban_targs_t ** targs, pthread_t ** tids)
 			break;
 		
 		case SOCK: {
-			// Check wether or not the struct has been initialised
-			if (targs[0]->ipc_args != NULL){
+			
+			// Unlink socket
+			unlink(((struct sock_arg_t *) targs[0]->ipc_args)->socketPathName);
 
-				// Unlink socket
-				unlink(((struct sock_arg_t *) targs[0]->ipc_args)->socketPathName);
+			free(targs[0]->ipc_args);
 
-
-				// Clear structure
-				for (int i = 0; i < thread_count; i++){
-					targs[i]->ipc_args = NULL;
-				}
-			}
 			break;
 		}
 
@@ -1345,6 +1353,7 @@ int main(int argc, char **argv)
 	}
 
 	case SOCK: {
+
 		int clientSocketEstablished[MAX_AMOUNT_OF_SOCKETS];
 		int readSocket;
 		int returnValue;
@@ -1364,20 +1373,19 @@ int main(int argc, char **argv)
 		}
 		
 		// We want to find the next available unused socket address
-		int currSock = 0;
-		int numberOfDigitsInMaxSockets = ((int) floor (log10 (abs (MAX_AMOUNT_OF_SOCKETS))) + 1);
-		char idOfReader[numberOfDigitsInMaxSockets + 1];
+		int numberOfDigitsInMaxSockets = ((int) floor (log10 (MAX_AMOUNT_OF_SOCKETS)) + 2);
+		char idOfReader[numberOfDigitsInMaxSockets];
 		char currSockAddress[strlen(SOCKET_NAME_TEMPLATE) + numberOfDigitsInMaxSockets + 1];
-		while (1) {
+		for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
 			strcpy(currSockAddress, SOCKET_NAME_TEMPLATE);
-			sprintf(idOfReader, "%d", currSock);
+			sprintf(idOfReader, "%d", i);
 			strcat(currSockAddress, idOfReader);
 			if (access(currSockAddress, F_OK) == 0){
 				// Already exists, already in use
-            	i++;
             	continue;
         	}else{
             	// We want to use this previously unused socket
+				printf("Using:  %s\n", currSockAddress);
             	break;
         	}
 		}

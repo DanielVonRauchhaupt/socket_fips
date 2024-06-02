@@ -40,6 +40,9 @@ target_link_libraries(udp_server
     PUBLIC shm_ringbuf
     PUBLIC uring
 )
+# For sanitizer; Might want to remove this later
+target_compile_options(udp_server PRIVATE -fsanitize=address)
+target_link_options(udp_server PRIVATE -fsanitize=address)
 
 # SimpleLogstash Programm
 add_executable(simplelogstash ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplelogstash.c)
@@ -109,7 +112,7 @@ target_link_libraries(simplefail2ban
     PUBLIC hs
     PUBLIC uring
     PUBLIC Threads::Threads
-    ) 
+    )
 
 # include_directories("/root/.local/include/")
 # include_directories("/mnt/scratch/signer/fips/ips-action/src/")

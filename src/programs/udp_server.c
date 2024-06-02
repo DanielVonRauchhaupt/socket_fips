@@ -36,9 +36,8 @@
 #define DEFAULT_PORT 8080
 #define DEFAULT_LOG "udpsvr.log"
 #define LOG_SHORT false
-//#define IPC_TYPE DISK
-#define IPC_TYPE SOCK
-#define NTHREADS 4
+#define IPC_TYPE DISK
+#define NTHREADS 1
 
 // Shared memory default configuration
 #define SHM_NLINES 100000
@@ -158,6 +157,7 @@ static struct argp_option options[] =
     {"threads", 't', "N", OPTION_ARG_OPTIONAL, "Specify the number of listener threads to use",0},
     {"logshort", 'l', NULL, 0, "Enable short logging (will only log a clients IP address)",0},
     {"shm", 's', "KEY", OPTION_ARG_OPTIONAL, "Specify shared memory as ipc type",0},
+    {"socket", 'u', "SOCK", OPTION_ARG_OPTIONAL, "Specify unix domain socket as ipc type",0},
     {"nlines", 'n', "NUM", 0, "Specify number of lines per segment for shared memory",0},
     {"nreaders", 'r', "N", 0, "Specify max number of readers for shared memory",0},
     {"overwrite", 'o', NULL, 0, "Enable overwrite for shared memory",0},
@@ -171,6 +171,7 @@ struct arguments
     bool ipc_set;
     char *logfile;
     char *shm_key;
+    char *socket;
     uint16_t shm_line_size;
     uint32_t shm_lines;
     uint8_t shm_reader_count;
@@ -260,6 +261,24 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
 
             arguments->ipc_set = true;
             ipc_type = SHM;
+
+            break;
+
+        case 'u':
+
+            if(arguments->ipc_set)
+            {
+                fprintf(stderr,"Only one ipc type allowed\n");
+                argp_usage(state);
+            }
+
+            arguments->ipc_set = true;
+            ipc_type = SOCK;
+
+            if(arg)
+            {
+                arguments->socket = arg;
+            }
 
             break;
 
@@ -630,7 +649,6 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
                 return RETURN_FAIL;
             }		
 		}
-
         pkt_in += retval_rcv;
 
         // If ipc_type is DISK, check if previous io_uring submission was successful
@@ -805,25 +823,12 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
                             continue;
                         }
                     
-                        char messageToBeSent[1024];
-                        memcpy(messageToBeSent, log_iovs[j].iov_base, LOG_BUF_SIZE_IP4);
-                        retval_ipc = write(writeSockets[i], messageToBeSent, strlen(messageToBeSent));
+                        retval_ipc = write(writeSockets[i], log_iovs[j].iov_base, log_iovs[j].iov_len);
                         if (retval_ipc == -1) {
                             perror("write");
                             exit(EXIT_FAILURE);
                         }
                     }
-
-                    /*
-                    char messageToBeSent[1024];
-                    memcpy(messageToBeSent, log_iovs[i].iov_base, LOG_BUF_SIZE_IP4);
-                    retval_ipc = write(writeSockets[i], messageToBeSent, strlen(messageToBeSent));
-                    if (retval_ipc == -1) {
-                        perror("write");
-                        exit(EXIT_FAILURE);
-                    }
-                    */
-
                 }
 
                 break;
@@ -1017,6 +1022,8 @@ int ipc_cleanup(struct sock_targ_t * sock_targs, uint8_t thread_count, enum ipc_
             for (i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
                 unlink(((struct sock_arg_t *) sock_targs[0].ipc_arg)->socketPathNames[i]);
             }
+            free(sock_targs[0].ipc_arg);
+
             // Clear structure
             for (i = 0; i < thread_count; i++){
                 sock_targs[i].ipc_arg = NULL;
@@ -1170,7 +1177,8 @@ int main(int argc, char ** argv) {
 
         // Establish all common attributes for each of these connections
         struct sock_arg_t * socket_arg;
-        char idOfReader[(int) floor (log10 (abs (MAX_AMOUNT_OF_SOCKETS))) + 1];
+        int numberOfDigitsInMaxSockets = ((int) floor (log10 (MAX_AMOUNT_OF_SOCKETS)) + 2);
+        char idOfReader[numberOfDigitsInMaxSockets];
 
         if((socket_arg = (struct sock_arg_t *) calloc(sizeof(struct sock_arg_t),1)) == NULL)
         {
@@ -1188,7 +1196,7 @@ int main(int argc, char ** argv) {
             strcat(socket_arg->socketPathNames[i], idOfReader);
 
             // Ensure that socket is closed from leftover application of this program
-            // unlink(socket_arg->socketPathNames[i]);
+            unlink(socket_arg->socketPathNames[i]);
 
             /**
              * Set some standard settings:
