@@ -29,6 +29,7 @@
 #include <ip_to_str.h>
 #include <io_ipc.h>
 #include <shm_ringbuf.h>
+#include <sock_comm.h>
 
 // Definitions
 
@@ -42,12 +43,6 @@
 // Shared memory default configuration
 #define SHM_NLINES 100000
 #define NREADERS 1
-
-// Socket default configuration
-#define MAX_AMOUNT_OF_SOCKETS 32
-#define SOCKET_NAME_TEMPLATE "/tmp/unixDomainSock4SF2B_"
-// This has to be long enough to fit the number or the socket and a terminating \0
-#define SOCKET_TEMPLATE_LENGTH 128
 
 // Open options for logfile
 #define OPEN_MODE O_WRONLY | O_CREAT | O_TRUNC | O_APPEND
@@ -117,13 +112,6 @@ struct disk_arg_t
 };
 
 // Socket writing parameters
-struct sock_arg_t
-{
-    // Temporarily fixed length of socket path
-    // Issue: Varaible length arrays are not possible in a static context
-    char socketPathNames[MAX_AMOUNT_OF_SOCKETS][SOCKET_TEMPLATE_LENGTH];
-    struct sockaddr_un socketConnections[MAX_AMOUNT_OF_SOCKETS];
-};
 
 // Parameters for listener threads
 struct sock_targ_t 
@@ -550,9 +538,8 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
     struct io_uring_sqe * sqe = NULL;
     struct io_uring_cqe * cqe = NULL;
     struct shmrbuf_writer_arg_t * rbuf_arg = NULL;
-    struct sock_arg_t * sock_arg = NULL;
-    int socketRecvs[MAX_AMOUNT_OF_SOCKETS] = {-1};
-    int writeSockets[MAX_AMOUNT_OF_SOCKETS] = {-1};
+    
+    struct sock_writer_arg_t * sock_arg = NULL;
 
     switch (ipc_type)
     {
@@ -574,7 +561,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
     case SOCK: {
 
         // Define how targs->ipc_arg is supposed to be interpreted, since ipc_arg is a void-pointer
-        sock_arg = (struct sock_arg_t *) targs->ipc_arg;
+        sock_arg = (struct sock_writer_arg_t *) targs->ipc_arg;
         break;
 
     }
@@ -775,60 +762,22 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
 
             case SOCK: {
 
-                // Determine all available unix domain sockets
-                for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-                    if (socketRecvs[i] == 1){
-                        continue;
-                    }
-                    if (access(sock_arg->socketPathNames[i], F_OK) == 0){
-                        socketRecvs[i] = 0;
-                    }else{
-                        socketRecvs[i] = -1;
-                    }
-                }
-
-                // Establish all connections first
-                for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-                    
-                    // Skip spots without sockets or already established sockets
-                    if (socketRecvs[i] != 0){
-                        continue;
-                    }
-
-                    // Establish a writer socket
-                    writeSockets[i] = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-                    if (writeSockets[i] == -1) {
-                        perror("socket");
-                        exit(EXIT_FAILURE);
-                    }
-
-                    // Connect with the socket
-                    retval_ipc = connect(writeSockets[i], (const struct sockaddr *) &sock_arg->socketConnections[i], sizeof(sock_arg->socketConnections[i]));
-                    if (retval_ipc == -1){
-                        perror("connect");
-                        exit(EXIT_FAILURE);
-                    }
-                    socketRecvs[i] = 1;
-                }
-                // All available sockets will now receive all data
-
-                // Send data
-                for (int j = 0; j < invalid_count; j++){
-
-                    // Send the message to each socket individually
-                    for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-                    
-                        // Skip spots without sockets
-                        if (socketRecvs[i] != 1){
-                            continue;
-                        }
-                    
-                        retval_ipc = write(writeSockets[i], log_iovs[j].iov_base, log_iovs[j].iov_len);
-                        if (retval_ipc == -1) {
-                            perror("write");
-                            exit(EXIT_FAILURE);
-                        }
-                    }
+                // Check if logs have been sent successfully
+                if ((retval_ipc = sock_writev(sock_arg, log_iovs, invalid_count, MAX_AMOUNT_OF_SOCKETS)) < 0){
+                    error_msg("Error in sock_writev : error code %d\n", retval_ipc);
+                    cleanup_listen_and_reply(&msg_hdrs,
+                                 &snd_rcv_iovs,
+                                 &log_iovs,
+                                 &ip_buf,
+                                 &payload_buf,
+                                 &logstr_buf,
+                                 targs,
+                                 pkt_in,
+                                 pkt_out,
+                                 msg_out,
+                                 msg_drop);
+                    targs->log_drop += invalid_count;
+                    return RETURN_FAIL;
                 }
 
                 break;
@@ -1015,20 +964,14 @@ int ipc_cleanup(struct sock_targ_t * sock_targs, uint8_t thread_count, enum ipc_
     }
 
     case SOCK: {
-        
-        // Check wether or not the struct has been initialised
+
         if (sock_targs[0].ipc_arg != NULL){
-            // For each potential socket; close and unlink it
-            for (i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-                unlink(((struct sock_arg_t *) sock_targs[0].ipc_arg)->socketPathNames[i]);
-            }
+            retval = sock_finalize((struct sock_writer_arg_t *) sock_targs[0].ipc_arg, SOCK_WRITER);
             free(sock_targs[0].ipc_arg);
 
-            // Clear structure
             for (i = 0; i < thread_count; i++){
                 sock_targs[i].ipc_arg = NULL;
             }
-            retval = IO_IPC_SUCCESS;
         }
     
         break;
@@ -1057,6 +1000,8 @@ int main(int argc, char ** argv) {
     pthread_t * threads;
     struct sock_targ_t * sock_targs;
     struct shmrbuf_writer_arg_t * shmrbuf_arg;
+    // Not to be confused with sock_targs
+    struct sock_writer_arg_t * sock_arg;
     struct util_targ_t util_targ = {.interval=(size_t)UTIL_TIMEOUT};
 
     struct arguments args = 
@@ -1167,50 +1112,31 @@ int main(int argc, char ** argv) {
     
     case SOCK: {
 
-        // Check if path to unix domain socket is compliant with the SOCKET_TEMPLATE_LENGTH
-        if ((strlen(SOCKET_NAME_TEMPLATE) +
-            ((int) floor (log10 (abs (MAX_AMOUNT_OF_SOCKETS))) + 1))
-                >= SOCKET_TEMPLATE_LENGTH){
-            perror("filepath to socket is too long for default maximum path length");
-            exit(EXIT_FAILURE);
-        }
-
-        // Establish all common attributes for each of these connections
-        struct sock_arg_t * socket_arg;
-        int numberOfDigitsInMaxSockets = ((int) floor (log10 (MAX_AMOUNT_OF_SOCKETS)) + 2);
-        char idOfReader[numberOfDigitsInMaxSockets];
-
-        if((socket_arg = (struct sock_arg_t *) calloc(sizeof(struct sock_arg_t),1)) == NULL)
+        if((sock_arg = (struct sock_writer_arg_t *) calloc(sizeof(struct sock_writer_arg_t), 1)) == NULL)
         {
             perror("calloc failed");
             memory_cleanup_main(&threads, &sock_targs);
             exit(EXIT_FAILURE);
         }
 
-        // Initialize all necessary args
-        for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-
-            // Provide them with the template name
-            strcpy(socket_arg->socketPathNames[i], SOCKET_NAME_TEMPLATE);
-            sprintf(idOfReader, "%d", i);
-            strcat(socket_arg->socketPathNames[i], idOfReader);
-
-            // Ensure that socket is closed from leftover application of this program
-            unlink(socket_arg->socketPathNames[i]);
-
-            /**
-             * Set some standard settings:
-             * Clear all default fields
-             * Define that the socket is a Unix Domain Socket
-             * Provide correct path to socket
-             */
-            socket_arg->socketConnections[i].sun_family = AF_UNIX;
-            strncpy(socket_arg->socketConnections[i].sun_path, socket_arg->socketPathNames[i], sizeof(socket_arg->socketConnections[i].sun_path) - 1);
+        if((retval = sock_init((struct sock_writer_arg_t *) sock_arg, SOCK_WRITER)) != IO_IPC_SUCCESS)
+        {
+            if(retval > 0)
+            {
+                perror("sock_init failed");
+            }
+            else 
+            {
+                fprintf(stderr,"sock_init failed : error code %d\n", retval);
+            }
+            free(sock_arg);
+            memory_cleanup_main(&threads, &sock_targs);
+            exit(EXIT_FAILURE);
         }
 
         for(i = 0; i < thread_count; i++)
         {
-            sock_targs[i].ipc_arg = socket_arg;
+            sock_targs[i].ipc_arg = sock_arg;
         }
 
         break;

@@ -38,6 +38,8 @@ target_link_libraries(udp_server
     PUBLIC ip_to_str
     PUBLIC Threads::Threads
     PUBLIC shm_ringbuf
+    # Trying to add new file to include. I hope this works
+    PUBLIC sock_comm
     PUBLIC uring
 )
 # For sanitizer; Might want to remove this later
@@ -109,6 +111,8 @@ target_link_libraries(simplefail2ban
     PUBLIC ip_llist
     PUBLIC ip_to_str
     PUBLIC shm_ringbuf
+    # Trying to add new file to include. I hope this works
+    PUBLIC sock_comm
     PUBLIC hs
     PUBLIC uring
     PUBLIC Threads::Threads

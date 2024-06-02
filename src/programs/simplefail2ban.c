@@ -54,7 +54,7 @@
 #define SOCKET_TEMPLATE_LENGTH 128
 
 // Socket writing parameters
-struct sock_arg_t
+struct sock_arg_reader
 {
 	// Temporarily fixed length of socket path
     // Issue: Varaible length arrays are not possible in a static context
@@ -683,7 +683,7 @@ void * ban_thread_routine(void * args)
 	uint16_t nsteal = 0;
 	uint16_t * nsteal_buf = (wload_stealing) ? &nsteal : NULL;
 
-	struct sock_arg_t * sock_arg = NULL;
+	struct sock_arg_reader * sock_arg = NULL;
 	fd_set readfds;
 	int max_sd;
 	int sd, activity, newSocket, returnValue;
@@ -750,7 +750,7 @@ void * ban_thread_routine(void * args)
 	}
 
 	else if(ipc_type == SOCK){
-		sock_arg = (struct sock_arg_t *) targs->ipc_args;
+		sock_arg = (struct sock_arg_reader *) targs->ipc_args;
 	}
 
 	if(block_signals(false))
@@ -1128,7 +1128,7 @@ bool main_cleanup(struct ban_targs_t ** targs, pthread_t ** tids)
 		case SOCK: {
 			
 			// Unlink socket
-			unlink(((struct sock_arg_t *) targs[0]->ipc_args)->socketPathName);
+			unlink(((struct sock_arg_reader *) targs[0]->ipc_args)->socketPathName);
 
 			free(targs[0]->ipc_args);
 
@@ -1358,11 +1358,11 @@ int main(int argc, char **argv)
 		int readSocket;
 		int returnValue;
 		struct sockaddr_un address;
-		struct sock_arg_t * sock_arg;
+		struct sock_arg_reader * sock_arg;
 
 		int opt = 1;
 
-		if((sock_arg = (struct sock_arg_t *) calloc(sizeof(struct sock_arg_t), 1)) == NULL)
+		if((sock_arg = (struct sock_arg_reader *) calloc(sizeof(struct sock_arg_reader), 1)) == NULL)
 		{
 			perror("calloc failed");
 		}

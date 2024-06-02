@@ -23,6 +23,7 @@
 
 // Local includes
 #include "shm_ringbuf.h"
+#include "sock_comm.h"
 
 // Error types
 #define IO_IPC_SUCCESS (0)
@@ -31,6 +32,7 @@
 #define IO_IPC_NULLPTR_ERR (-3) // A null pointer was provided for a non optional argument 
 #define IO_IPC_MUTEX_ERR (-4) // Unlocking or locking a mutex failed
 #define IO_IPC_SIZE_ERR (-5) // Operation can not be concluded, due to a capacity maximum
+#define IO_IPC_SOCK_ERR (-6) // Connection with socket could not be established
 
 #define PAGESIZE 4096
 
