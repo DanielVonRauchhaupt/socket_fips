@@ -966,7 +966,7 @@ int ipc_cleanup(struct sock_targ_t * sock_targs, uint8_t thread_count, enum ipc_
     case SOCK: {
 
         if (sock_targs[0].ipc_arg != NULL){
-            retval = sock_finalize((struct sock_writer_arg_t *) sock_targs[0].ipc_arg, SOCK_WRITER);
+            retval = sock_finalize((union sock_arg_t *) sock_targs[0].ipc_arg, SOCK_WRITER);
             free(sock_targs[0].ipc_arg);
 
             for (i = 0; i < thread_count; i++){
@@ -1119,7 +1119,7 @@ int main(int argc, char ** argv) {
             exit(EXIT_FAILURE);
         }
 
-        if((retval = sock_init((struct sock_writer_arg_t *) sock_arg, SOCK_WRITER)) != IO_IPC_SUCCESS)
+        if((retval = sock_init((union sock_arg_t *) sock_arg, SOCK_WRITER)) != IO_IPC_SUCCESS)
         {
             if(retval > 0)
             {

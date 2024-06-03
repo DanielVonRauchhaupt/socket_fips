@@ -22,7 +22,6 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <liburing.h>
-#include <math.h>
 #include <sys/un.h>
 
 // Local includes
@@ -52,19 +51,6 @@
 #define SOCKET_NAME_TEMPLATE "/tmp/unixDomainSock4SF2B_"
 // This has to be long enough to fit the number or the socket and a terminating \0
 #define SOCKET_TEMPLATE_LENGTH 128
-
-// Socket writing parameters
-struct sock_arg_reader
-{
-	// Temporarily fixed length of socket path
-    // Issue: Varaible length arrays are not possible in a static context
-    char socketPathName[SOCKET_TEMPLATE_LENGTH];
-
-    struct sockaddr_un address;
-	int sizeOfAddressStruct;
-    int readSocket;
-	int clientSockets[MAX_AMOUNT_OF_SOCKETS];
-};
 
 // Hyperscan
 #define MATCH_REGEX_ID 0
@@ -683,10 +669,7 @@ void * ban_thread_routine(void * args)
 	uint16_t nsteal = 0;
 	uint16_t * nsteal_buf = (wload_stealing) ? &nsteal : NULL;
 
-	struct sock_arg_reader * sock_arg = NULL;
-	fd_set readfds;
-	int max_sd;
-	int sd, activity, newSocket, returnValue;
+	struct sock_reader_arg_t * sock_arg = NULL;
 
 	int nr_cpus = libbpf_num_possible_cpus();
 	__u64 values[nr_cpus];
@@ -750,7 +733,7 @@ void * ban_thread_routine(void * args)
 	}
 
 	else if(ipc_type == SOCK){
-		sock_arg = (struct sock_arg_reader *) targs->ipc_args;
+		sock_arg = (struct sock_reader_arg_t *) targs->ipc_args;
 	}
 
 	if(block_signals(false))
@@ -842,97 +825,32 @@ void * ban_thread_routine(void * args)
 			break;
 
 		case SOCK: {
-			// No messages received yet
-			recv_retval = 0;
 
-			// Clear list of sockets to poll from
-        	FD_ZERO(&readfds);
-
-        	// Adding read socket to list
-        	FD_SET(sock_arg->readSocket, &readfds);
-
-			// Read socket is currently the only socket; therefore the one with the highest socket descriptor
-        	max_sd = sock_arg->readSocket;
-			// Add clients
-			for (i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-				// To make upcoming code more readable
-				sd = sock_arg->clientSockets[i];
-
-				// If sd is valid -> Add to list
-				if (sd > 0){
-					FD_SET(sd, &readfds);
-				}
-
-				// Dertemine highest file descriptor number
-				if (sd > max_sd){
-					max_sd = sd;
-				}
-			}
-			// All current clients have now been added/updated
-
-			// Wait for I/O on socket; Skip read socket
-			// We are using select with a timeout to periodically recheck for ctrl+c
-			struct timeval tv = {1, 0};
-			activity = select(max_sd + 1, &readfds, NULL, NULL, &tv);
-			if (activity < 0){
-				if (errno==EINTR){
-					// We want to close the program with ctrl+c
-					continue;
-				}
-				perror("Could not select a socket");
-			}
-
-			// New connection is ready to be accepted
-			if (FD_ISSET(sock_arg->readSocket, &readfds)){
-				newSocket = accept(sock_arg->readSocket, (struct sockaddr *)&sock_arg->address, (socklen_t*)&sock_arg->sizeOfAddressStruct);
-				if (newSocket < 0){
-					perror("Could not accept connection");
-					exit(EXIT_FAILURE);
-				}
-
-				// Add this connection to array of client sockets
-				for (i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-					// Connection must be empty
-					if (sock_arg->clientSockets[i] == 0){
-						sock_arg->clientSockets[i] = newSocket;
-						break;
-					}
-				}
-			}
-			
-			// It may be a different I/O operation
-			for (i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-				if (sock_arg->clientSockets[i] <= 0){
-					continue;
-				}
-				sd = sock_arg->clientSockets[i];
-
-				if (FD_ISSET(sd, &readfds)){
-					// Check if it was a close operation
-					returnValue = read(sd, iovecs[0].iov_base, 1024);
-					if (returnValue > 0){
-						recv_retval++;
-					}
-					if (returnValue == 0){
-						// Check who disconnected
-						getpeername(sd, (struct sockaddr*)&sock_arg->address, (socklen_t*)&sock_arg->sizeOfAddressStruct);
-
-						// Close the socket on receiver side
-						close(sd);
-						sock_arg->clientSockets[0] = 0;
-					}else{
-						uint16_t len = iovecs[0].iov_len;
-						char * str = (char*) iovecs[0].iov_base;
-						while(len-- > 0)
+			if((recv_retval = sock_readv(sock_arg, iovecs)) > 0){
+				for(i = 0; i < recv_retval; i++)
+				{
+					uint16_t len = iovecs[i].iov_len;
+					char * str = (char*) iovecs[i].iov_base;
+					while(len-- > 0)
+					{
+						if(str[len] == '\n') 
 						{
-							if(str[len] == '\n') 
-							{
-								str[len] = '\0';
-								break;
-							}
+							str[len] = '\0';
+							break;
 						}
 					}
 				}
+			}
+
+			else if (recv_retval < 0)
+			{
+				error_msg("sock_readv failed with error code %d\n", recv_retval);
+				targs->rcv_count = rcv_count;
+				targs->ban_count = ban_count;
+				targs->steal_count = steal_count;
+				free(logstr_buf);
+				targs->retval = EXIT_FAIL;
+				return &targs->retval;
 			}
 			
 			break;
@@ -1126,11 +1044,14 @@ bool main_cleanup(struct ban_targs_t ** targs, pthread_t ** tids)
 			break;
 		
 		case SOCK: {
-			
-			// Unlink socket
-			unlink(((struct sock_arg_reader *) targs[0]->ipc_args)->socketPathName);
 
-			free(targs[0]->ipc_args);
+			if((retval = sock_finalize((union sock_arg_t *)(*targs)[0].ipc_args, SHMRBUF_READER)) != IO_IPC_SUCCESS)
+			{
+				fprintf(stderr, "shmrbuf_finalize failed with error code: %d\n", retval);
+				error = true;
+			}
+
+			free((*targs)[0].ipc_args);
 
 			break;
 		}
@@ -1200,6 +1121,7 @@ int main(int argc, char **argv)
 	struct unban_targs_t unban_targs = {.unban_count = 0,.wakeup_interval=TIMEOUT};
 	struct file_io_t * file_io_args = NULL;
 	struct shmrbuf_reader_arg_t * rbuf_arg = NULL;
+	struct sock_reader_arg_t * sock_arg = NULL;
 	hs_platform_info_t * platform_info;
 	hs_compile_error_t * compile_error;
 	pthread_t * thread_ids = NULL;
@@ -1354,91 +1276,33 @@ int main(int argc, char **argv)
 
 	case SOCK: {
 
-		int clientSocketEstablished[MAX_AMOUNT_OF_SOCKETS];
-		int readSocket;
-		int returnValue;
-		struct sockaddr_un address;
-		struct sock_arg_reader * sock_arg;
+		if((sock_arg = (struct sock_reader_arg_t *) calloc(sizeof(struct sock_reader_arg_t), 1)) == NULL)
+        {
+            perror("calloc failed");
+            main_cleanup(&thread_args, &thread_ids);
+            exit(EXIT_FAILURE);
+        }
 
-		int opt = 1;
+        if((retval = sock_init((union sock_arg_t *) sock_arg, SOCK_READER)) != IO_IPC_SUCCESS)
+        {
+            if(retval > 0)
+            {
+                perror("sock_init failed");
+            }
+            else 
+            {
+                fprintf(stderr,"sock_init failed : error code %d\n", retval);
+            }
+			free(sock_arg);
+            main_cleanup(&thread_args, &thread_ids);
+			exit(EXIT_FAILURE);
+        }
 
-		if((sock_arg = (struct sock_arg_reader *) calloc(sizeof(struct sock_arg_reader), 1)) == NULL)
-		{
-			perror("calloc failed");
-		}
-
-		// Set default: No socket is connected
-		for (i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-			clientSocketEstablished[i] = 0;
-		}
+        for(i = 0; i < thread_count; i++)
+        {
+            thread_args[i].ipc_args = sock_arg;
+        }
 		
-		// We want to find the next available unused socket address
-		int numberOfDigitsInMaxSockets = ((int) floor (log10 (MAX_AMOUNT_OF_SOCKETS)) + 2);
-		char idOfReader[numberOfDigitsInMaxSockets];
-		char currSockAddress[strlen(SOCKET_NAME_TEMPLATE) + numberOfDigitsInMaxSockets + 1];
-		for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-			strcpy(currSockAddress, SOCKET_NAME_TEMPLATE);
-			sprintf(idOfReader, "%d", i);
-			strcat(currSockAddress, idOfReader);
-			if (access(currSockAddress, F_OK) == 0){
-				// Already exists, already in use
-            	continue;
-        	}else{
-            	// We want to use this previously unused socket
-				printf("Using:  %s\n", currSockAddress);
-            	break;
-        	}
-		}
-		strcpy(sock_arg->socketPathName, currSockAddress);
-
-		// Create the unix domain socket
-		readSocket = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-		if (readSocket == -1){
-			perror("Could not create local socket");
-			exit(EXIT_FAILURE);
-		}
-
-		// Clearing all fields
-    	memset(&address, 0, sizeof(address));
-
-		// Allowing multiple connections
-		returnValue = setsockopt(readSocket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt));
-		if (returnValue < 0){
-			perror("Could not configure read socket settings");
-			exit(EXIT_FAILURE);
-		}
-
-		// Setting fields of struct to appropriate Values
-		address.sun_family = AF_UNIX;
-		strncpy(address.sun_path, currSockAddress, sizeof(address.sun_path) - 1);
-
-		// Binding local socket to unix domain socket
-		returnValue = bind(readSocket, (const struct sockaddr *) &address, sizeof(address));
-		if (returnValue == -1){
-			perror("Could not bind to local socket");
-			exit(EXIT_FAILURE);
-		}
-
-		// Set socket to listen only
-		returnValue = listen(readSocket, 32);
-		if (returnValue < 0){
-			perror("Could not listen for clients");
-			exit(EXIT_FAILURE);
-		}
-
-		// Setting sock_arg struct
-		sock_arg->sizeOfAddressStruct = sizeof(address);
-		sock_arg->address = address;
-		sock_arg->readSocket = readSocket;
-		for (i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-			sock_arg->clientSockets[i] = clientSocketEstablished[i];
-		}
-
-		for(i = 0; i < thread_count; i++)
-		{
-			thread_args[i].ipc_args = (void*) sock_arg;
-		}
-
 		break;
 	}
 

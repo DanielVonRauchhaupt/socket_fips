@@ -1,46 +1,124 @@
 #include "include/sock_comm.h"
 #include "io_ipc.h"
-#include <math.h>
 
-int sock_init(struct sock_writer_arg_t *sock_arg, int role){
-    // Check if path to unix domain socket is compliant with the SOCKET_TEMPLATE_LENGTH
-    if ((strlen(SOCKET_NAME_TEMPLATE) +
-        ((int) floor (log10 (abs (MAX_AMOUNT_OF_SOCKETS))) + 1))
-            >= SOCKET_TEMPLATE_LENGTH){
-        perror("filepath to socket is too long for default maximum path length");
-        exit(EXIT_FAILURE);
-    }
+int sock_init(union sock_arg_t *sock_arg, int role){
 
-    // Establish all common attributes for each of these connections
-    int numberOfDigitsInMaxSockets = ((int) floor (log10 (MAX_AMOUNT_OF_SOCKETS)) + 2);
-    char idOfReader[numberOfDigitsInMaxSockets];
+    if (role == SOCK_WRITER){
 
-    // Initialize all necessary args
-    for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+        // Check if path to unix domain socket is compliant with the SOCKET_TEMPLATE_LENGTH
+        if ((strlen(SOCKET_NAME_TEMPLATE) +
+            ((int) floor (log10 (abs (MAX_AMOUNT_OF_SOCKETS))) + 1))
+                >= SOCKET_TEMPLATE_LENGTH){
+            return IO_IPC_SOCK_SET;
+        }
 
-        // Provide them with the template name
-        strcpy(sock_arg->socketPathNames[i], SOCKET_NAME_TEMPLATE);
-        sprintf(idOfReader, "%d", i);
-        strcat(sock_arg->socketPathNames[i], idOfReader);
+        // Establish all common attributes for each of these connections
+        int numberOfDigitsInMaxSockets = ((int) floor (log10 (MAX_AMOUNT_OF_SOCKETS)) + 2);
+        char idOfReader[numberOfDigitsInMaxSockets];
 
-        // Ensure that socket is closed from leftover application of this program
-        //unlink(sock_arg->socketPathNames[i]);
+        // Initialize all necessary args
+        for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
 
-        /**
-            * Set some standard settings:
-            * Clear all default fields
-            * Define that the socket is a Unix Domain Socket
-            * Provide correct path to socket
-        */
-        sock_arg->socketConnections[i].sun_family = AF_UNIX;
-        strncpy(sock_arg->socketConnections[i].sun_path, sock_arg->socketPathNames[i], sizeof(sock_arg->socketConnections[i].sun_path) - 1);
+            // Provide them with the template name
+            strcpy(sock_arg->wargs.socketPathNames[i], SOCKET_NAME_TEMPLATE);
+            sprintf(idOfReader, "%d", i);
+            strcat(sock_arg->wargs.socketPathNames[i], idOfReader);
 
-        // No connections have been established yet
-        sock_arg->writeSockets[i] = -1;
-        sock_arg->socketRecvs[i] = -1;
+            // Ensure that socket is closed from leftover application of this program
+            unlink(sock_arg->wargs.socketPathNames[i]);
+
+            /*
+             * Set some standard settings:
+             * Clear all default fields
+             * Define that the socket is a Unix Domain Socket
+             * Provide correct path to socket
+             */
+            sock_arg->wargs.socketConnections[i].sun_family = AF_UNIX;
+            strncpy(sock_arg->wargs.socketConnections[i].sun_path, sock_arg->wargs.socketPathNames[i], sizeof(sock_arg->wargs.socketConnections[i].sun_path) - 1);
+
+            // No connections have been established yet
+            sock_arg->wargs.writeSockets[i] = -1;
+            sock_arg->wargs.socketRecvs[i] = -1;
+        }
+
+        return IO_IPC_SUCCESS;
+    
+    }else{
+
+        int clientSocketEstablished[MAX_AMOUNT_OF_SOCKETS];
+		int readSocket;
+		int returnValue;
+		struct sockaddr_un address;
+
+		int opt = 1;
+
+		// Set default: No socket is connected
+		for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+			clientSocketEstablished[i] = 0;
+		}
+		
+		// We want to find the next available unused socket address
+		int numberOfDigitsInMaxSockets = ((int) floor (log10 (MAX_AMOUNT_OF_SOCKETS)) + 2);
+		char idOfReader[numberOfDigitsInMaxSockets];
+		char currSockAddress[strlen(SOCKET_NAME_TEMPLATE) + numberOfDigitsInMaxSockets + 1];
+		for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+			strcpy(currSockAddress, SOCKET_NAME_TEMPLATE);
+			sprintf(idOfReader, "%d", i);
+			strcat(currSockAddress, idOfReader);
+			if (access(currSockAddress, F_OK) == 0){
+				// Already exists, already in use
+            	continue;
+        	}else{
+            	// We want to use this previously unused socket
+				printf("Using:  %s\n", currSockAddress);
+                fflush(stdout);
+            	break;
+        	}
+		}
+		strcpy(sock_arg->rargs.socketPathName, currSockAddress);
+
+		// Create the unix domain socket
+		readSocket = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+		if (readSocket == -1){
+			return IO_IPC_SOCK_CON;
+		}
+
+		// Clearing all fields
+    	memset(&address, 0, sizeof(address));
+
+		// Allowing multiple connections
+		returnValue = setsockopt(readSocket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt));
+		if (returnValue < 0){
+			return IO_IPC_SOCK_SET;
+		}
+
+		// Setting fields of struct to appropriate Values
+		address.sun_family = AF_UNIX;
+		strncpy(address.sun_path, currSockAddress, sizeof(address.sun_path) - 1);
+
+		// Binding local socket to unix domain socket
+		returnValue = bind(readSocket, (const struct sockaddr *) &address, sizeof(address));
+		if (returnValue == -1){
+			return IO_IPC_SOCK_CON;
+		}
+
+		// Set socket to listen only
+		returnValue = listen(readSocket, 32);
+		if (returnValue < 0){
+			return IO_IPC_SOCK_CON;
+		}
+
+		// Setting sock_arg struct
+		sock_arg->rargs.sizeOfAddressStruct = sizeof(address);
+		sock_arg->rargs.address = address;
+		sock_arg->rargs.readSocket = readSocket;
+		for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+			sock_arg->rargs.clientSockets[i] = clientSocketEstablished[i];
+		}
     }
 
     return IO_IPC_SUCCESS;
+
 }
 
 int sock_writev(struct sock_writer_arg_t *sock_arg, struct iovec *log_iovs, uint16_t invalid_count, uint16_t numOfSocks){
@@ -70,13 +148,13 @@ int sock_writev(struct sock_writer_arg_t *sock_arg, struct iovec *log_iovs, uint
         // Establish a writer socket
         sock_arg->writeSockets[i] = socket(AF_UNIX, SOCK_SEQPACKET, 0);
         if (sock_arg->writeSockets[i] == -1) {
-            return IO_IPC_SOCK_ERR;
+            return IO_IPC_SOCK_CON;
         }
 
         // Connect with the new unix domain socket
         retval_ipc = connect(sock_arg->writeSockets[i], (const struct sockaddr *) &sock_arg->socketConnections[i], sizeof(sock_arg->socketConnections[i]));
         if (retval_ipc == -1){
-            return IO_IPC_SOCK_ERR;
+            return IO_IPC_SOCK_CON;
         }
 
         // Set flag to remember that this socket is being sent to
@@ -100,7 +178,7 @@ int sock_writev(struct sock_writer_arg_t *sock_arg, struct iovec *log_iovs, uint
             // Send iovec buffer filled with log messages
             retval_ipc = write(sock_arg->writeSockets[i], log_iovs[j].iov_base, log_iovs[j].iov_len);
             if (retval_ipc == -1) {
-                return IO_IPC_SOCK_ERR;
+                return IO_IPC_SOCK_CON;
             }
         }
     }
@@ -109,13 +187,119 @@ int sock_writev(struct sock_writer_arg_t *sock_arg, struct iovec *log_iovs, uint
     return invalid_count;
 }
 
-int sock_finalize(struct sock_writer_arg_t *sock_args, int role){
+int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
+    
+    int sd, max_sd, newSocket, activity, returnValue;
+    fd_set readfds;
+    // No messages received yet
+    int recv_retval = 0;
+
+    // Clear list of sockets to poll from
+    FD_ZERO(&readfds);
+
+    // Adding read socket to list
+    FD_SET(sock_arg->readSocket, &readfds);
+
+    // Read socket is currently the only socket; therefore the one with the highest socket descriptor
+    max_sd = sock_arg->readSocket;
+    // Add clients
     for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-        unlink(sock_args->socketPathNames[i]);
+        // To make upcoming code more readable
+        sd = sock_arg->clientSockets[i];
+
+        // If sd is valid -> Add to list
+        if (sd > 0){
+            FD_SET(sd, &readfds);
+        }
+
+        // Dertemine highest file descriptor number
+        if (sd > max_sd){
+            max_sd = sd;
+        }
     }
-    return IO_IPC_SUCCESS;
+    // All current clients have now been added/updated
+
+    // Wait for I/O on socket; Skip read socket
+    // We are using select with a timeout to periodically recheck for ctrl+c
+    struct timeval tv = {1, 0};
+    activity = select(max_sd + 1, &readfds, NULL, NULL, &tv);
+    if (activity < 0){
+        if (errno==EINTR){
+            // We want to close the program with ctrl+c
+            return IO_IPC_SUCCESS;
+        }
+        return IO_IPC_SOCK_CON;
+    }
+
+    // New connection is ready to be accepted
+    if (FD_ISSET(sock_arg->readSocket, &readfds)){
+        newSocket = accept(sock_arg->readSocket, (struct sockaddr *)&sock_arg->address, (socklen_t*)&sock_arg->sizeOfAddressStruct);
+        if (newSocket < 0){
+            return IO_IPC_SOCK_CON;
+        }
+
+        // Add this connection to array of client sockets
+        for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+            // Connection must be empty
+            if (sock_arg->clientSockets[i] == 0){
+                sock_arg->clientSockets[i] = newSocket;
+                break;
+            }
+        }
+    }
+
+    // It may be a different I/O operation
+    for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+        if (sock_arg->clientSockets[i] <= 0){
+            continue;
+        }
+        sd = sock_arg->clientSockets[i];
+
+        if (FD_ISSET(sd, &readfds)){
+            // Check if it was a close operation
+
+            returnValue = recv(sd, iovecs[0].iov_base, 1024, 0);
+            if (returnValue > 0){
+                recv_retval++;
+            }
+            if (returnValue == 0){
+                // Check who disconnected
+                getpeername(sd, (struct sockaddr*)&sock_arg->address, (socklen_t*)&sock_arg->sizeOfAddressStruct);
+
+                // Close the socket on receiver side
+                close(sd);
+                sock_arg->clientSockets[0] = 0;
+            }
+        }
+    }
+
+    return recv_retval;
 }
 
-int sock_cleanup(){
-    return 0;
+
+int sock_finalize(union sock_arg_t *sock_args, int role){
+
+    return sock_cleanup(sock_args, role);
+}
+
+int sock_cleanup(union sock_arg_t *sock_args, int role){
+   
+    if (role == SOCK_WRITER){
+
+        for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
+            close(sock_args->wargs.writeSockets[i]);
+            unlink(sock_args->wargs.socketPathNames[i]);
+        }
+
+        return IO_IPC_SUCCESS;
+
+    }else{
+
+        // Unlink socket
+        close(sock_args->rargs.readSocket);
+		unlink(sock_args->rargs.socketPathName);
+
+        return IO_IPC_SUCCESS;
+        
+    }
 }
