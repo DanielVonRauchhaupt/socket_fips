@@ -5,10 +5,10 @@ For details, please refer to that thesis.
 
 
 # Relevant directories
-`experiments/` – Measurement data and jupyter notebooks for data visualization
-`external/` – External libraries used for building
-`latex_vonRauchhaupt/` – Latex files for thesis and presentation slides
-`src/` Source files for implementation, scripts, and configuration of the project
+- `experiments/` – Measurement data and jupyter notebooks for data visualization
+- `external/` – External libraries used for building
+- `latex_vonRauchhaupt/` – Latex files for thesis and presentation slides
+- `src/` Source files for implementation, scripts, and configuration of the project
 
 This project was built on the foundation provided by Paul Raatschen.
 Currently remnants of his bachelor thesis can be found in these directories.
@@ -32,10 +32,10 @@ The binaries can be found in ‘build/’.
 
 # Usage Guide
 The main functional applications in this project are: `udp_server`, `simplefail2ban` and `fail2ban`.
-The configuration files for fail2ban are located in `src/fail2ban-config`.
+The configuration files for `fail2ban` are located in `src/fail2ban-config`.
 The contents of `jail.local` need to be copied into `/etc/fail2ban/jail.local`.
 `udp-testsvr.conf` needs to be copied to `/etc/fail2ban/filter.d/`.
-Afterwards, restart fail2ban.
+Afterwards, restart `fail2ban`.
 
 The application `udp_sever` is a UDP-based server that sends one byte replies to incoming packets.
 It simulates a service using the `simplefail2ban` and `fail2ban` applications.
@@ -43,34 +43,37 @@ It logs certain requests, differentiating between valid and invalid traffic base
 Reporting clients to the IPS `simplefail2ban` is possible via either file, shared memory or socket based logging.
 Following options can be used when running `udp_server`:
 -  `-f, --file[=LOGFILE]`	Specifies logfile as ipc type for logging (optional: specify path to logfile)
--  `-l, --logshort`		Enable short logging (will only log a clients IP address)
+-  `-l, --logshort`		    Enable short logging (will only log a clients IP address)
 -  `-n, --nlines=NUM`		Specifies the number of lines per segment for the    shared memory ring buffer
 -  `-o, --overwrite`		Enables overwrite option for shared memory
 -  `-p, --port=PORT`		Specifies the port for the server to listen at
 -  `-r, --nreaders=N`		Specifies the maximum number of readers for shared memory
 -  `-s, --shm[=KEY]`		Specifies shared memory as ipc type for logging
--  `-u, --sock`			Specifies socket as ipc type for logging
+-  `-u, --sock`			    Specifies socket as ipc type for logging
 -  `-t, --threads[=N]`		Specifies the number of threads used to receive packets
--  `-?, --help`			Prints available options
+-  `-?, --help`			    Prints available options
 
 In its current implementation, setting a custom path for any sockets created by the application is not possible via the options provided here.
 Instead, modify the default variables found in `src/lib/include/sock_comm.h`.
 
 
 The application `simplefail2ban` is a minimal intrusion prevention system.
-It is modelled after, and can be considered a lightweight version of, fail2ban.
+It is modelled after, and can be considered a lightweight version of, `fail2ban`.
 It needs to be parameterized with the interface, that the eBPF program for packet filtering is supposed
-to run on: `./simplefail2ban <INTERFACE>`
+to run on:
+
+`./simplefail2ban <INTERFACE>`
+
 It can additionally be run with the following options
 -  `-b, --bantime=N`		Specifies the number of seconds a client should be banned
 -  `-f, --file[=FILE]`		Specifies logifle as the chosen ipc type for receiving log messages (optional: specify path to logfile)
--  `-l, --limit=N`		Specifies the necessary number of matches before a client is banned
+-  `-l, --limit=N`		    Specifies the necessary number of matches before a client is banned
 -  `-m, --match[=REGEX]`	Activates regex matching on logstrings (optional: specify match regex to use)
 -  `-s, --shm[=KEY]`		Specifies shared memory as the ipc type for receiving log messages (optional: specify file for shared memory key)
 -  `-t, --threads[=N]`		Enables multi-threading for monitoring log messages (optional: set number of banning threads to use)
--  `-v, --verbose`		Enables debug output for eBPF functions
--  `-w, --steal`		Enables workload stealing for shared memory reading
--  `-?, --help`			Prints available options
+-  `-v, --verbose`		    Enables debug output for eBPF functions
+-  `-w, --steal`		    Enables workload stealing for shared memory reading
+-  `-?, --help`			    Prints available options
 
 The application using `simplefail2ban` needs to started first.
 All applications can be orderly terminated with `control+c`.
@@ -78,14 +81,22 @@ All applications can be orderly terminated with `control+c`.
 
 # Experimental Setup
 The provided experiments were conducted using two machines.
-Machine 1 is the device under test (DUT) running fail2ban and simplefail2ban. Machine 2 is the traffic generator (simulating an attacker).
+Machine 1 is the device under test (DUT) running `fail2ban` and `simplefail2ban`. Machine 2 is the traffic generator (simulating an attacker).
 
 The traffic generator used on machine 2 for the experiments was [TRex](https://trex-tgn.cisco.com/).
 An installation guide can be found [here](https://trex-tgn.cisco.com/trex/doc/trex_manual.html#_download_and_installation).
 
-Once TRex has been successfully installed, the server can be started with: `./t-rex 64 -i -c <number of cores>`
-The console used to specify the traffic generated by TRex can be called with `./trex-console`
-There, traffic can be started with the scripts found in `src/scripts/traffic_gen/` with the command: `start -f <path to script>.py -d <duration (seconds)> -t --ppsi <invalid traffic (pps)> --ppsv <valid traffic (pps)>`
+Once TRex has been successfully installed, the server can be started with:
+
+`./t-rex 64 -i -c <number of cores>`
+
+The console used to specify the traffic generated by TRex can be called with:
+
+`./trex-console`
+
+There, traffic can be started with the scripts found in `src/scripts/traffic_gen/` with the command: 
+
+`start -f <path to script>.py -d <duration (seconds)> -t --ppsi <invalid traffic (pps)> --ppsv <valid traffic (pps)>`
 
 The traffic can be stopped by writing `stop` to the console, or killing the TRex server process with `control+c`.
 
@@ -104,7 +115,10 @@ In this thesis, only `simplefail2ban` will be required for the experiments.
 
 # Measurement
 The measurements were conducted with the program `ebpf_cmdline` in `src/ebpf-helpers`.
-To start a measurement call: `./ebpf_cmdline --stats --write`
+To start a measurement call:
+
+`./ebpf_cmdline --stats --write`
+
 The measurement can be terminated with `control+c` and the results will be written to a .csv file within the current directory.
 
 Unfortunately, the source code for `ebpf_cmdline` has been lost.
