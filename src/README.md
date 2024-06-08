@@ -1,10 +1,9 @@
 # Implementation
-
 This directory contains all source files for the implementation, as well as 
 scripts and configuration files used in the evaluation of the implementation.
 
-# Directories
 
+# Directories
 - `ebpf-helpers` contains binaries, for interacting with the eBPF program and related maps used by `simplefail2ban`
 They are adapted versions of the programs found in `src/cmdline_prog`, in the repository for the master thesis of Florian Mikolajczak.
 - `fail2ban-config` contains the jail and filter for `udp_server`, which were used in the evaluation of fail2ban.
@@ -14,3 +13,5 @@ They are adapted versions of the programs found in `src/cmdline_prog`, in the re
 - `utilities` contains the source file for the `poll_rbuf` utility, that can be used to inspect the shared memory ring buffer.
 Additionally, two benchmarks for the hashfunction and binary IP to string conversion are included.
 
+The files developed for the bachelor thesis of Daniel von Rauchhaupt are `src/lib/include/sock_comm.h` and `src/lib/sock_comm.c`.
+The applications `udp_server` and `simeplfail2ban` were also modified to support the new socket architecture.

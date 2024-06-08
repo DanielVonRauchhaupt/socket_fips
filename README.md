@@ -136,3 +136,8 @@ The error can be prevented by unspecifiying the the `BPF_F_NO_PREALLOC` flag in 
 Unorderly detachment of readers or the writer from the shared memory ring buffer results in a corrupted header as the attachment files are not cleared.
 When this occurs, all processes should be detached from the buffer, so that it can be reinitialized.
 If all attached programs detach unorderly, the shared memory segment has to be destroyed with: `icprm -m <id>`, before the buffer can be reinitialized.
+
+
+# Acknowledgments
+This repository reuses code from both Paul Raatschen and Florian Mikolajczak.
+The bachelor thesis (and this repository) was made with guidance of Prof. Dr. Bettina Schnor and Max Schrötter.
