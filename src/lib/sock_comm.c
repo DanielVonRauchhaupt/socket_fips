@@ -1,7 +1,7 @@
 #include "include/sock_comm.h"
 #include "io_ipc.h"
 
-int sock_init(union sock_arg_t *sock_arg, int role){
+int sock_init(union sock_arg_t *sock_args, int role){
 
     if (role == SOCK_WRITER){
 
@@ -20,12 +20,12 @@ int sock_init(union sock_arg_t *sock_arg, int role){
         for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
 
             // Provide them with the template name
-            strcpy(sock_arg->wargs.socketPathNames[i], SOCKET_NAME_TEMPLATE);
+            strcpy(sock_args->wargs.socketPathNames[i], SOCKET_NAME_TEMPLATE);
             sprintf(idOfReader, "%d", i);
-            strcat(sock_arg->wargs.socketPathNames[i], idOfReader);
+            strcat(sock_args->wargs.socketPathNames[i], idOfReader);
 
             // Ensure that socket is closed from leftover application of this program
-            unlink(sock_arg->wargs.socketPathNames[i]);
+            unlink(sock_args->wargs.socketPathNames[i]);
 
             /*
              * Set some standard settings:
@@ -33,12 +33,12 @@ int sock_init(union sock_arg_t *sock_arg, int role){
              * Define that the socket is a Unix Domain Socket
              * Provide correct path to socket
              */
-            sock_arg->wargs.socketConnections[i].sun_family = AF_UNIX;
-            strncpy(sock_arg->wargs.socketConnections[i].sun_path, sock_arg->wargs.socketPathNames[i], sizeof(sock_arg->wargs.socketConnections[i].sun_path) - 1);
+            sock_args->wargs.socketConnections[i].sun_family = AF_UNIX;
+            strncpy(sock_args->wargs.socketConnections[i].sun_path, sock_args->wargs.socketPathNames[i], sizeof(sock_args->wargs.socketConnections[i].sun_path) - 1);
 
             // No connections have been established yet
-            sock_arg->wargs.writeSockets[i] = -1;
-            sock_arg->wargs.socketRecvs[i] = -1;
+            sock_args->wargs.writeSockets[i] = -1;
+            sock_args->wargs.socketRecvs[i] = -1;
         }
 
         return IO_IPC_SUCCESS;
@@ -75,7 +75,7 @@ int sock_init(union sock_arg_t *sock_arg, int role){
             	break;
         	}
 		}
-		strcpy(sock_arg->rargs.socketPathName, currSockAddress);
+		strcpy(sock_args->rargs.socketPathName, currSockAddress);
 
 		// Create the unix domain socket
 		readSocket = socket(AF_UNIX, SOCK_SEQPACKET, 0);
@@ -108,12 +108,12 @@ int sock_init(union sock_arg_t *sock_arg, int role){
 			return IO_IPC_SOCK_CON;
 		}
 
-		// Setting sock_arg struct
-		sock_arg->rargs.sizeOfAddressStruct = sizeof(address);
-		sock_arg->rargs.address = address;
-		sock_arg->rargs.readSocket = readSocket;
+		// Setting sock_args struct
+		sock_args->rargs.sizeOfAddressStruct = sizeof(address);
+		sock_args->rargs.address = address;
+		sock_args->rargs.readSocket = readSocket;
 		for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-			sock_arg->rargs.clientSockets[i] = clientSocketEstablished[i];
+			sock_args->rargs.clientSockets[i] = clientSocketEstablished[i];
 		}
     }
 
@@ -121,44 +121,44 @@ int sock_init(union sock_arg_t *sock_arg, int role){
 
 }
 
-int sock_writev(struct sock_writer_arg_t *sock_arg, struct iovec *log_iovs, uint16_t invalid_count, uint16_t numOfSocks){
+int sock_writev(struct sock_writer_arg_t *sock_args, struct iovec *log_iovs, uint16_t invalid_count, uint16_t maxNumOfSocks){
     // To check for errors
     int retval_ipc;
 
     // Check if there are new sockets to send to
-    for (int i = 0; i < numOfSocks; i++){
-        if (sock_arg->socketRecvs[i] == 1){
+    for (int i = 0; i < maxNumOfSocks; i++){
+        if (sock_args->socketRecvs[i] == 1){
             continue;
         }
-        if (access(sock_arg->socketPathNames[i], F_OK) == 0){
-            sock_arg->socketRecvs[i] = 0;
+        if (access(sock_args->socketPathNames[i], F_OK) == 0){
+            sock_args->socketRecvs[i] = 0;
         }else{
-            sock_arg->socketRecvs[i] = -1;
+            sock_args->socketRecvs[i] = -1;
         }
     }
 
     // Establish all connections first
-    for (int i = 0; i < numOfSocks; i++){
+    for (int i = 0; i < maxNumOfSocks; i++){
         
         // Skip spots without sockets or already established sockets
-        if (sock_arg->socketRecvs[i] != 0){
+        if (sock_args->socketRecvs[i] != 0){
             continue;
         }
 
         // Establish a writer socket
-        sock_arg->writeSockets[i] = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-        if (sock_arg->writeSockets[i] == -1) {
+        sock_args->writeSockets[i] = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+        if (sock_args->writeSockets[i] == -1) {
             return IO_IPC_SOCK_CON;
         }
 
         // Connect with the new unix domain socket
-        retval_ipc = connect(sock_arg->writeSockets[i], (const struct sockaddr *) &sock_arg->socketConnections[i], sizeof(sock_arg->socketConnections[i]));
+        retval_ipc = connect(sock_args->writeSockets[i], (const struct sockaddr *) &sock_args->socketConnections[i], sizeof(sock_args->socketConnections[i]));
         if (retval_ipc == -1){
             return IO_IPC_SOCK_CON;
         }
 
         // Set flag to remember that this socket is being sent to
-        sock_arg->socketRecvs[i] = 1;
+        sock_args->socketRecvs[i] = 1;
     }
     // All available sockets will now receive all data
 
@@ -167,16 +167,16 @@ int sock_writev(struct sock_writer_arg_t *sock_arg, struct iovec *log_iovs, uint
     for (int j = 0; j < invalid_count; j++){
 
         // Send the message to each socket individually
-        for (int i = 0; i < numOfSocks; i++){
+        for (int i = 0; i < maxNumOfSocks; i++){
         
             // Skip spots without sockets
-            if (sock_arg->socketRecvs[i] != 1){
+            if (sock_args->socketRecvs[i] != 1){
                 // This can not be break since we can not guarantee that sockets will close in the order they were opened
                 continue;
             }
         
             // Send iovec buffer filled with log messages
-            retval_ipc = write(sock_arg->writeSockets[i], log_iovs[j].iov_base, log_iovs[j].iov_len);
+            retval_ipc = write(sock_args->writeSockets[i], log_iovs[j].iov_base, log_iovs[j].iov_len);
             if (retval_ipc == -1) {
                 return IO_IPC_SOCK_CON;
             }
@@ -187,7 +187,7 @@ int sock_writev(struct sock_writer_arg_t *sock_arg, struct iovec *log_iovs, uint
     return invalid_count;
 }
 
-int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
+int sock_readv(struct sock_reader_arg_t *sock_args, struct iovec *iovecs){
     
     int sd, max_sd, newSocket, activity, returnValue;
     fd_set readfds;
@@ -199,14 +199,14 @@ int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
     FD_ZERO(&readfds);
 
     // Adding read socket to list
-    FD_SET(sock_arg->readSocket, &readfds);
+    FD_SET(sock_args->readSocket, &readfds);
 
     // Read socket is currently the only socket; therefore the one with the highest socket descriptor
-    max_sd = sock_arg->readSocket;
+    max_sd = sock_args->readSocket;
     // Add clients
     for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
         // To make upcoming code more readable
-        sd = sock_arg->clientSockets[i];
+        sd = sock_args->clientSockets[i];
 
         // If sd is valid -> Add to list
         if (sd > 0){
@@ -233,8 +233,8 @@ int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
     }
 
     // New connection is ready to be accepted
-    if (FD_ISSET(sock_arg->readSocket, &readfds)){
-        newSocket = accept(sock_arg->readSocket, (struct sockaddr *)&sock_arg->address, (socklen_t*)&sock_arg->sizeOfAddressStruct);
+    if (FD_ISSET(sock_args->readSocket, &readfds)){
+        newSocket = accept(sock_args->readSocket, (struct sockaddr *)&sock_args->address, (socklen_t*)&sock_args->sizeOfAddressStruct);
         if (newSocket < 0){
             return IO_IPC_SOCK_CON;
         }
@@ -242,8 +242,8 @@ int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
         // Add this connection to array of client sockets
         for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
             // Connection must be empty
-            if (sock_arg->clientSockets[i] == 0){
-                sock_arg->clientSockets[i] = newSocket;
+            if (sock_args->clientSockets[i] == 0){
+                sock_args->clientSockets[i] = newSocket;
                 break;
             }
         }
@@ -251,10 +251,10 @@ int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
 
     // It may be a different I/O operation
     for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
-        if (sock_arg->clientSockets[i] <= 0){
+        if (sock_args->clientSockets[i] <= 0){
             continue;
         }
-        sd = sock_arg->clientSockets[i];
+        sd = sock_args->clientSockets[i];
 
         if (FD_ISSET(sd, &readfds)){
             // Check if it was a close operation
@@ -265,11 +265,11 @@ int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
             }
             if (returnValue == 0){
                 // Check who disconnected
-                getpeername(sd, (struct sockaddr*)&sock_arg->address, (socklen_t*)&sock_arg->sizeOfAddressStruct);
+                getpeername(sd, (struct sockaddr*)&sock_args->address, (socklen_t*)&sock_args->sizeOfAddressStruct);
 
                 // Close the socket on receiver side
                 close(sd);
-                sock_arg->clientSockets[0] = 0;
+                sock_args->clientSockets[0] = 0;
             }
         }
     }
@@ -279,6 +279,7 @@ int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
 
 
 int sock_finalize(union sock_arg_t *sock_args, int role){
+    // There is not a lot to do here, sockets are less complex than shared memory
     return sock_cleanup(sock_args, role);
 }
 
@@ -286,6 +287,7 @@ int sock_cleanup(union sock_arg_t *sock_args, int role){
    
     if (role == SOCK_WRITER){
 
+        // Close and unlink all sockets
         for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
             close(sock_args->wargs.writeSockets[i]);
             unlink(sock_args->wargs.socketPathNames[i]);
