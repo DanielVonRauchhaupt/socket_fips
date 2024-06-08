@@ -1,0 +1,1 @@
+Adjust thesis.cfg for title, author, abstract, acknowledgments, etc.

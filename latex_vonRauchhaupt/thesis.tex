@@ -1,0 +1,59 @@
+\documentclass[
+  BCOR=10mm, % Binding correction ([default=0])
+  DIV=12, % Number of divisions for the page spread construction ([default=9])
+  twoside, % two sided ([default='oneside'])
+  headsepline, % separate head-line from content optically (horizontal row) (KOMA-Doc, Ch.'Kopf- und Fusszeilen')
+  listof=totoc, % include list of tables/figures to list of content
+  bibliography=totoc, % include list of literature to list of content
+  index=totoc, % include index to list of content
+  abstract=true, % Put an coresponding header to the abstract ([default='abstractoff'])
+  numbers=noenddot, % suppress ending dot in numberations (required? -> 'pointednumbers')
+]{cs-thesis}
+
+\hyphenation{
+  Infini-Band
+  Soft-ware
+  Soft-ware-Stack
+  Open-Fa-brics
+}
+
+\addbibresource{literature.bib}
+
+
+
+%%%%%%%%%%%%%%%%%%%%
+%%% THE DOCUMENT %%%
+%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+    \include{intro} % Title, abstract, ToC, etc. 
+    
+    % prepare main document
+    \ofoot[\pagemark]{\pagemark} % show page numbering on chapter starts
+    \nocite{*} % show all references in bibliography, no matter if used or not
+    \cleardoublepage
+    \pagenumbering{arabic}
+    \pagestyle{chapterstyle}
+    
+    \acresetall % reset acronym counter
+    \include{chapter1}
+    
+    \acresetall % reset acronym counter
+    \include{chapter2}
+    
+    \acresetall % reset acronym counter
+    \include{chapter3}
+    
+    \acresetall % reset acronym counter
+    \include{chapter4}
+    
+    \acresetall % reset acronym counter
+    \include{chapter5}
+    
+    \acresetall % reset acronym counter
+    \include{chapter6}
+    
+    \include{outro} % Appendix etc.
+
+\end{document}

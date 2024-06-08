@@ -191,6 +191,7 @@ int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
     
     int sd, max_sd, newSocket, activity, returnValue;
     fd_set readfds;
+
     // No messages received yet
     int recv_retval = 0;
 
@@ -221,10 +222,10 @@ int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
 
     // Wait for I/O on socket; Skip read socket
     // We are using select with a timeout to periodically recheck for ctrl+c
-    struct timeval tv = {1, 0};
+    struct timeval tv = {0, 200000};
     activity = select(max_sd + 1, &readfds, NULL, NULL, &tv);
-    if (activity < 0){
-        if (errno==EINTR){
+    if (activity <= 0){
+        if (errno == EINTR || activity == 0){
             // We want to close the program with ctrl+c
             return IO_IPC_SUCCESS;
         }
@@ -258,7 +259,7 @@ int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
         if (FD_ISSET(sd, &readfds)){
             // Check if it was a close operation
 
-            returnValue = recv(sd, iovecs[0].iov_base, 1024, 0);
+            returnValue = read(sd, iovecs[0].iov_base, 1024);
             if (returnValue > 0){
                 recv_retval++;
             }
@@ -278,7 +279,6 @@ int sock_readv(struct sock_reader_arg_t *sock_arg, struct iovec *iovecs){
 
 
 int sock_finalize(union sock_arg_t *sock_args, int role){
-
     return sock_cleanup(sock_args, role);
 }
 
