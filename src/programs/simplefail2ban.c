@@ -369,7 +369,6 @@ void sig_handler(int signal)
 {
     UNUSED(signal);
     server_running = false;
-	need_to_terminate = 1;
 }
 
 int8_t block_signals(bool keep)

@@ -20,10 +20,6 @@
 #define SOCKET_TEMPLATE_LENGTH 128
 #define SOCKET_NAME_TEMPLATE "/tmp/unixDomainSock4SF2B_"
 
-// To correctly force threads to terminate
-extern volatile sig_atomic_t need_to_terminate;
-
-
 /**
  * @brief Union to specify if thread calling a function is either writer or reader
  *

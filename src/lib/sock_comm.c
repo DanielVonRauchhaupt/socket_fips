@@ -1,7 +1,8 @@
 #include "include/sock_comm.h"
 #include "io_ipc.h"
-
-volatile sig_atomic_t need_to_terminate = 0;
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
 
 int sock_init(union sock_arg_t *sock_args, int role){
 
@@ -27,7 +28,7 @@ int sock_init(union sock_arg_t *sock_args, int role){
             strcat(sock_args->wargs.socketPathNames[i], idOfReader);
 
             // Ensure that socket is closed from leftover application of this program
-            unlink(sock_args->wargs.socketPathNames[i]);
+            //unlink(sock_args->wargs.socketPathNames[i]);
 
             /*
              * Set some standard settings:
@@ -113,6 +114,7 @@ int sock_init(union sock_arg_t *sock_args, int role){
 		// Setting sock_args struct
 		sock_args->rargs.sizeOfAddressStruct = sizeof(address);
 		sock_args->rargs.address = address;
+        fcntl(readSocket, F_SETFL, fcntl(readSocket, F_GETFL, 0) | O_NONBLOCK);
 		sock_args->rargs.readSocket = readSocket;
 		for (int i = 0; i < MAX_AMOUNT_OF_SOCKETS; i++){
 			sock_args->rargs.clientSockets[i] = clientSocketEstablished[i];
@@ -189,7 +191,7 @@ int sock_writev(struct sock_writer_arg_t *sock_args, struct iovec *log_iovs, uin
     return invalid_count;
 }
 
-int sock_readv(struct sock_reader_arg_t *sock_args, struct iovec *iovecs){
+int sock_readv(struct sock_reader_arg_t *sock_args, struct iovec *iovecs) {
     
     int sd, max_sd, newSocket, activity, returnValue;
     fd_set readfds;
@@ -227,16 +229,21 @@ int sock_readv(struct sock_reader_arg_t *sock_args, struct iovec *iovecs){
     struct timeval tv = {1,0};
     activity = select(max_sd + 1, &readfds, NULL, NULL, &tv);
     if (activity <= 0){
-        if (errno == EINTR || activity == 0 || need_to_terminate == 1){
+        if (errno == EINTR || activity == 0){
             // We want to close the program with ctrl+c
             return IO_IPC_SUCCESS;
         }
+
         return IO_IPC_SOCK_CON;
     }
 
     // New connection is ready to be accepted
     if (FD_ISSET(sock_args->readSocket, &readfds)){
+        // fcntl(sock_args->readSocket, F_SETFL, fcntl(sock_args->readSocket, F_GETFL, 0) | O_NONBLOCK);
         newSocket = accept(sock_args->readSocket, (struct sockaddr *)&sock_args->address, (socklen_t*)&sock_args->sizeOfAddressStruct);
+        if (errno == EAGAIN){
+            return IO_IPC_SUCCESS;
+        }
         if (newSocket < 0){
             return IO_IPC_SOCK_CON;
         }
@@ -260,7 +267,6 @@ int sock_readv(struct sock_reader_arg_t *sock_args, struct iovec *iovecs){
 
         if (FD_ISSET(sd, &readfds)){
             // Check if it was a close operation
-
             returnValue = read(sd, iovecs[0].iov_base, 1024);
             if (returnValue > 0){
                 recv_retval++;
