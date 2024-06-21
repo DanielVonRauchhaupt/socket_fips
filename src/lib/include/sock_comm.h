@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <sys/select.h>
+#include <signal.h>
 
 #include <io_ipc.h>
 
@@ -18,6 +19,9 @@
 // This has to be long enough to fit the number or the socket and a terminating \0
 #define SOCKET_TEMPLATE_LENGTH 128
 #define SOCKET_NAME_TEMPLATE "/tmp/unixDomainSock4SF2B_"
+
+// To correctly force threads to terminate
+extern volatile sig_atomic_t need_to_terminate;
 
 
 /**

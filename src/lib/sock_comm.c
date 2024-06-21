@@ -1,6 +1,8 @@
 #include "include/sock_comm.h"
 #include "io_ipc.h"
 
+volatile sig_atomic_t need_to_terminate = 0;
+
 int sock_init(union sock_arg_t *sock_args, int role){
 
     if (role == SOCK_WRITER){
@@ -222,10 +224,10 @@ int sock_readv(struct sock_reader_arg_t *sock_args, struct iovec *iovecs){
 
     // Wait for I/O on socket; Skip read socket
     // We are using select with a timeout to periodically recheck for ctrl+c
-    struct timeval tv = {0, 200000};
+    struct timeval tv = {1,0};
     activity = select(max_sd + 1, &readfds, NULL, NULL, &tv);
     if (activity <= 0){
-        if (errno == EINTR || activity == 0){
+        if (errno == EINTR || activity == 0 || need_to_terminate == 1){
             // We want to close the program with ctrl+c
             return IO_IPC_SUCCESS;
         }
