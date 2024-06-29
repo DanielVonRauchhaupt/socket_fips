@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <sys/uio.h>
 
 int sock_init(union sock_arg_t *sock_args, int role){
 

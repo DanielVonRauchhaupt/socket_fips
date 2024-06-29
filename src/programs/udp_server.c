@@ -668,7 +668,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
         
         for(i = 0; i < retval_rcv; i++)
         {
-
+            
             if(payload_buf[i] == INVALID_PAYLOAD)
             {
                 char * logstr = &logstr_buf[logstr_index];
@@ -681,7 +681,7 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
                 {
                     logstr_len = logstr_long(logstr, &((struct sockaddr_in6 *)msg_hdrs[i].msg_hdr.msg_name)->sin6_addr);
                 }
-
+                
                 if(logstr_len > 0)
                 {
                     log_iovs[invalid_count].iov_base = (void *) logstr;
@@ -733,7 +733,6 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
             }
 
             case SHM: {
-
                 if((retval_ipc = shmrbuf_writev(rbuf_arg, log_iovs, invalid_count, segment_id)) < 0)
                 {
                     error_msg("Error in shmrbuf_writev : error code %d\n", retval_ipc);
@@ -791,9 +790,9 @@ int listen_and_reply(int sockfd, struct sock_targ_t * targs)
             invalid_count = 0;
 
         }
-
         if((retval_snd = sendmmsg(sockfd, msg_hdrs, retval_rcv, 0)) == -1)
         {
+            printf("%d\n", errno);
             if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR && errno != ECONNREFUSED) {
                 error_msg("Error in sendmmsg : %s\n", strerror_r(errno,targs->strerror_buf,sizeof(targs->strerror_buf)));
                 cleanup_listen_and_reply(&msg_hdrs,
