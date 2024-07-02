@@ -59,6 +59,19 @@ target_link_libraries(simplelogstash
     PUBLIC uring
 )
 
+# SimpleLogstash_4socks Programm
+add_executable(simplelogstash_4socks ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplelogstash_4socks.c)
+
+target_include_directories(simplelogstash_4socks
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/include
+)
+
+target_link_libraries(simplelogstash_4socks 
+    PUBLIC Threads::Threads
+    PUBLIC sock_comm
+    PUBLIC uring
+)
+
 #nsyslog
 add_executable(nsyslog ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/nsyslog.c)
 

@@ -47,11 +47,7 @@
 #define NTHREADS 1
 #define QUEUE_SIZE 100 // Number of entries read at once
 
-// Socket default configuration
-#define MAX_AMOUNT_OF_SOCKETS 32
-#define SOCKET_NAME_TEMPLATE "/tmp/unixDomainSock4SF2B_"
-// This has to be long enough to fit the number or the socket and a terminating \0
-#define SOCKET_TEMPLATE_LENGTH 128
+// See sock_comm.h for socket default configuration
 
 // Hyperscan
 #define MATCH_REGEX_ID 0
