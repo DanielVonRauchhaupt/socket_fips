@@ -58,7 +58,7 @@ struct {
 
 struct {
   __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
-  __uint(max_entries,100000);
+  __uint(max_entries,1000000);
   __type(key,__uint128_t);
   __type(value,__u64);
   __uint(pinning,LIBBPF_PIN_BY_NAME);
