@@ -2,34 +2,210 @@
 % chapter5.tex
 %
 
-\chapter{Experiments}
-\label{cha:experiments}
+\chapter{Experiments}\label{cha:experiments}
+Paul Raatschen has performed a study\cite{raatschen:ipc} concluding that the original Fail2ban process can be improved upon.
+It was determined that especially with many clients, Fail2ban struggled to keep up with high incoming traffic rates.
+To remedy this issue, a more performant program, Simplefail2ban, was implemented and measured.
+An increase in performance was evident.
+Simplefail2ban supported two modes of IPC (TODO: Abbreviation).
+The disk mode was akin to traditional file logging, while the shared memory approach would use a shared memory section to exchange data between processes.
+A direct comparison between the already outlined socket approach and previously supported IPC (TODO: Abbreviation) types necessitates the measurements in this chapter.
+
+The following chapter details the conducted measurements, outlining specifics according to Jain's
+``The Art of Computer Systems Performance Analysis: Techniques For Experimental Design, Measurement, Simulation, and Modeling, NY\@: Wiley''\cite{jain:measurement} chapter 2.2.
 
 \section{Test environment}
-Justo eget magna fermentum iaculis eu. Tristique et egestas quis ipsum suspendisse ultrices gravida dictum. Luctus accumsan tortor posuere ac ut consequat semper viverra. Duis ut diam quam nulla porttitor massa id neque aliquam. Tellus mauris a diam maecenas sed enim. Et leo duis ut diam quam nulla porttitor massa. Id aliquet lectus proin nibh nisl condimentum id venenatis a. Eros in cursus turpis massa tincidunt. Sed pulvinar proin gravida hendrerit lectus. Gravida arcu ac tortor dignissim. Est ullamcorper eget nulla facilisi etiam. Netus et malesuada fames ac.
+Two machines, both identical in hardware and software, were used in these experiments.
+The first machine, the device under test (DUT) (TODO: Abbreviation), ran Simplefail2ban and a test application responsible for receiving incoming traffic and reporting clients.
+The second machine generated and sent traffic, consisting of both valid and invalid traffic, to the DUT (TODO: Abbreviation) using TRex.
 
-\section{Conducted experiments}
-Conducted experiments
+\begin{table}[b!]
+    \renewcommand{\arraystretch}{1.5}
+    \caption[Testbed specs]{Table of Hardware and Software parameters of the testbed. Both machines are identical.
+    The first machine serves as the DUT, the second machine generates traffic to be sent to the DUT (TODO: Abbreviation, also for the table below) via TRex.}\label{tab:specs}
+    \centering
+    \small
+    \begin{tabular}{ll}
+        \toprule
+        \multicolumn{2}{l}{\textbf{Hardware}} \\ \midrule
+        CPU     & 16 $\times$ Intel(R) Xeon(R) Silver 4314 CPU @ 2.40GHz \\
+        NIC     & Mellanox Technologies MT2892 Family [ConnectX-6 Dx] \\
+        RAM     & 128 GB \\ \bottomrule
+
+        \multicolumn{2}{l}{\textbf{Software}} \\ \midrule
+        OS          & Debian GNU/Linux 11 \\
+        Kernel      & 5.10.0-28-amd64 x86\_64 \\
+        NIC Driver  & mlx5\_core; Version 5.8-2.0.3 \\
+        TRex        & 2.99 (Stateless) \\ \bottomrule
+    \end{tabular}
+\end{table}
+
+\section{Experimental design}
+In his thesis\cite{raatschen:ipc} Paul Raatschen showed that the shared memory mode of Simplefail2ban outperforms the traditional Fail2ban.
+However, it remains unclear if the implementation of this IPC type is more performant than other alternatives.
+Specifically, the possibility of using Unix domain sockets as a mode of inter-process communication was not explored.
+The following experiments enable a direct comparison between the two IPC types.
+
+\noindent
+In general, the experiments consist of two participants and a one-sided data exchange.
+The device under test (DUT) (TODO: Abbreviation), or more specifically the application udp\_server, receives a stream of both wanted and unwanted data.
+Identifying desired traffic is done by analyzing the message payload.
+This is a crude and unrealistic approach to filtering malicious communication requests.
+Such a simplification allows the application udp\_server to quickly generate log messages.
+Since the goal of this study is to determine the most efficient IPC type for Simplefail2ban, this abstraction does not diminish the findings of this thesis.
+
+\noindent
+To compare the differing IPC (TODO: Abbreviation) types, a set of performance metrics needs to be established:
+
+\bigskip
+\noindent
+\textbf{Performance metrics}
+\begin{itemize}
+    \item Total number of unwanted requests dropped (number of packets)
+    \item Total number of unwanted requests dropped, relative to the total amount of unwanted requests send (percentage)
+    \item Number of log messages processed by Simplefail2ban, relative to the number of log messages sent by the test server (percentage)
+    \item Central Processing Unit (CPU) utilization of Simplefail2ban (seconds of CPU time)
+\end{itemize}
+Higher is better for the first three metrics.
+The last metric should be minimized for the DUT (TODO: Abbreviation) so its services are continually provided to valid clients.
+
+\bigskip
+\noindent
+The fixed parameters for each of the experiments are the following\@:
+
+\bigskip
+\noindent
+\textbf{Fixed parameters}
+\begin{itemize}
+    \item Hardware and Software parameters of the testbed (TODO: Abbreviation) in this table\@:
+    \begin{itemize}
+        \item CPU\@: 16 cores, no hyper-threading enabled
+        \item Network Interface Card (NIC)\@: Maximum transfer unit, 1500 bytes
+        \item TRex\@: One interface, 30 threads
+    \end{itemize}
+    \item Number of entries in eBPF maps for IPv4 \& IPv6\@: 1,000,000
+    \item Number of receiving threads used by udp\_server\@: 16
+    \item Duration of measurement\@: 300 Seconds
+    \item Amount of valid traffic sent \@: 50,000 PPS
+    \item Number of clients sending valid traffic\@: 254
+    \item \textbf{Simplefail2ban} parameters\@:
+    \begin{itemize}
+        \item Number of hash table bins used\@: 6,000,011
+        \item Ban threshold for clients\@: 3
+        \item Ban time for clients\@: 30 seconds
+        \item Enabling the Regex Matching feature of Simplefail2ban (the current implementation does not ban clients correctly when disabled)
+        \item For \textbf{shared memory} specifically\@:
+        \begin{itemize}
+            \item Number of banning threads used\@: 16
+            \item Line count for the shared memory buffer segments\@: 1,000,000
+            \item Segment count for the shared memory buffer\@: 16
+            \item Overwrite feature enabled
+            \item Workload stealing feature disabled
+        \end{itemize}
+        \item For \textbf{sockets} specifically\@:
+        \begin{itemize}
+            \item Number of banning threads used\@: 16
+            \item Number of sockets\@: Same as number of reader processes
+            \item Using default path to sockets created by the application\@: tmp/
+            \item Using default socket receive and send buffer size configured on the system\@: 212992 Bytes
+        \end{itemize}
+        \item For \textbf{disk} specifically\@:
+        \begin{itemize}
+            \item Number of banning threads used\@: 1 (disk mode only supports one banning threads)
+            \item Buffer size for uring\_getlines\@: 2048
+        \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+\bigskip
+\noindent
+The factors, or variable parameters, during these experiments were the following\@:
+
+\bigskip
+\noindent
+\textbf{Factors and their levels}
+\begin{itemize}
+    \item Effects of differing amount of invalid traffic sent: 100k, 1m, 10m, 20m, 30m PPS
+    \item Effects of differing number of clients sending invalid data: 65,534 and 131,068
+    \begin{itemize}
+        \item Range used for 65,534 clients: 10.4.0.1 to 10.4.255.254 resulting in clients stemming from 256 subnets (using offset\_fixup of 5 for IPv6 in TRex script).
+        \item Range used for 131,068 clients: 10.4.0.1 to 10.5.255.252 resulting in clients stemming from 512 subnets (using offset\_fixup of 5 for IPv6 in TRex script).
+        \item When using the IPv4/IPv6 IP stack, the range for 65,534 client is being used twice to generate both a IPv4 and IPv6 stream.
+    \end{itemize}
+    \item IP stack: IPv4, IPv6 and IPv4/IPv6 mixed
+    \item Differing IPC type\@: DISK, SHM, SOCK
+    \item For shared memory specifically:
+    \begin{itemize}
+        \item No 2nd Reader/ Enabling 2nd Reader
+    \end{itemize}
+    \item For sockets specifically:
+    \begin{itemize}
+        \item No 2nd Reader/ Enabling 2nd Reader
+    \end{itemize}
+\end{itemize}
+
+\bigskip
+\noindent
+To generate the traffic being sent to the DUT, TRex scripts are used.
+These scripts provide the option to modify the sent traffic according to the factors outlined above. TODO: Add path in repo for these scripts
+During these measurements, adapted versions of Paul Raatschens\cite{raatschen:ipc} scripts were used.
+To measure most performance metrics, an adaptation of the xdp\_ddos01\_blacklist\_cmdline program was used.
+This application originally stems from Florian Mikolajczak master's thesis\cite{mikolajczak:ebpf} and routinely polls the number of dropped and passed packets from a specific eBPF map.
+It was modified by Paul Raatschen to output values as a csv file.
+The polled eBPF map is ultimately used by Simplefail2ban to ban clients.
+CPU time was measured via the command top.
 
 \section{Replicative experiments}
+Software version changes warrant remeasurement of the shared memory and disk IPC (TODO: Abbreviation) mode for Simplefail2ban.
+These will also be used to evaluate the newly implemented socket mode.
 
-\subsection{Experiment 1: Replication fo Simplefail2ban Logfile}
-Experiment 1: Replication fo Simplefail2ban Logfile
+\subsection{Experiment 1a: Replication of Simplefail2ban Logfile}
+It has already been shown that the disk mode of Simplefail2ban is outperformed by the shared memory mode.
+Pure IPv4, IPv6 and a mixed IPv4/IPv6 IP stack will be used.
+File logging is expected to perform worse than the other IPC (TODO: Abbreviation) modes discussed in this thesis.
+In total, 15 unique measurements were conducted for this experiment.
 
-\subsection{Experiment 2: Replication fo Simplefail2ban Shared Memory}
-Experiment 2: Replication fo Simplefail2ban Shared Memory
-
-\subsection{Experiment 3: Replication fo Simplefail2ban Shared Memory with 2nd Reader}
-Experiment 2: Replication fo Simplefail2ban Shared Memory with 2nd Reader
+\subsection{Experiment 1b: Replication of Simplefail2ban Shared Memory}
+The newly implemented socket approach is intended to be a valid alternative to the shared memory mode of Simplefail2ban.
+To enable a direct comparison, measurements for the shared memory mode need to be done under high loads, since with lower loads both the socket and shared memory mode are suspected to be performant enough.
+All levels of invalid traffic rates are measured individually.
+Again, either a pure IPv4, IPv6 or mixed IPv4/IPv6 IP stack is utilized.
+The most performant features will be used, meaning overwrite is enabled and workload stealing is disabled.
+No 2nd reader process is being employed here.
+In total, 15 unique measurements were conducted for this experiment
 
 \section{Measuring the socket API}
-Measuring the socket API
+In the following section thorough variations of factors and their levels are used to conclude if the socket mode is reliable.
+Also, heavy workloads are employed to determine how the socket mode performs in worst case scenarios.
+This will enable a direct comparison between socket and shared memory mode.
+The data flow in the DUT can be seen in \ref{fig:socket:measurement}.
 
-\subsection{Experiment 4: Simplefail2ban Sockets}
-Experiment 4: Simplefail2ban Sockets
+\begin{figure}[h!]
+    \centerline{\includegraphics[width=1.2\textwidth]{images/MeasurementArchitecture.pdf}}
+    \caption[DUT during socket measurements]{
+        The graphic displays the data flow (left to right) on the DUT when enabling sockets as the IPC type.
+        A packet can either be passed (XDP\_PASS) or to the kernel or dropped (XDP\_DROP) before ever reaching it.}
+	\label{fig:socket:measurement}
+\end{figure}
 
-\subsection{Experiment 5: Simplefail2ban Sockets with 2nd Reader}
-Experiment 5: Simplefail2ban Sockets with 2nd Reader
 
-\subsection{Experiment 6: Simplefail2ban Sockets with variable number of read and write applications}
-Experiment 6: Simplefail2ban Sockets with variable number of read and write applications
+\subsection{Experiment 2: Simplefail2ban Sockets}
+To establish a baseline for the performance of the socket mode all factors are set to all possible levels in every combination.
+The only exception being the possibility of using a 2nd reader process, which will have its own section later.
+In total, 15 unique measurements were conducted for this experiment.
+
+\subsection{Experiment 3a: Replication of Simplefail2ban Shared Memory with 2nd Reader}
+In order to later compare the socket mode and its option to have a 2nd reader, a baseline measurement needs to be established.
+This experiment will be performed with 131,068 clients sending invalid data only and no pure IPv4 or IPv6 IP stack.
+Again, the overwrite feature is enabled while workload stealing is disabled.
+In total, 5 unique measurements were conducted for this experiment.
+
+\subsection{Experiment 3b: Simplefail2ban Sockets with 2nd Reader}
+This experiment closely mirrors the experiment 3a.
+A total of 131,068 clients will send invalid data to the DUT with no pure IPv4 or IPv6 IP stack.
+The shared memory mode inherently supports the possibility of adding a 2nd reader to the shared memory section to read log messages.
+There is no such inherent support in the socket mode.
+Instead in its current implementation, another read process can be started which will then be assigned its own socket.
+This socket will then also receive all log messages.
+Consequently, the shared memory mode will likely see a larger performance gain, since no additional effort is required to send messages to the 2nd reader. 
+In total, 5 unique measurements were conducted for this experiment.
