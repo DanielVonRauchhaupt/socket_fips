@@ -3,7 +3,9 @@ This directory contains all data obtained in measurements, as part of this thesi
 Additionally, jupyter notebooks for creating the data visualization and graphics are included.
 
 
-# Directories
--  `final-measurements` contains the data for the measurements presented in the thesis
--  `old-data` contains measurements conducted prior to the completion of the implementation
--  `replication`contains the data for a replication measurements conducted to analyse the variance in the performance of the implementation 
+# Navigation
+The directory `IPv4`, `IPv6` and `IPv4v6` contain all measurements using that specific IP stack.
+Each contain seperate directories for the respective IPC type used.
+Visualization of each experiment can be found here in the directory `results`
+
+Since the 2nd reader experiments were only conducted using IPv4v6, there are no subdirectories except the `results` in `2ndReader`
