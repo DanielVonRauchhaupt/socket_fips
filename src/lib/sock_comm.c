@@ -184,7 +184,7 @@ int sock_writev(struct sock_writer_arg_t *sock_args, struct iovec *log_iovs, uin
             retval_ipc = write(sock_args->writeSockets[i], log_iovs[j].iov_base, log_iovs[j].iov_len);
             if (retval_ipc == -1) {
                 // Uncomment this next line to enable reusage of old sockets
-                // sock_args->socketRecvs[i] = -1
+                // sock_args->socketRecvs[i] = -1;
                 return IO_IPC_SOCK_CON;
             }
         }
