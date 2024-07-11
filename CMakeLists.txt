@@ -43,8 +43,8 @@ target_link_libraries(udp_server
     PUBLIC uring
 )
 # For sanitizer; Might want to remove this later
-target_compile_options(udp_server PRIVATE -fsanitize=address)
-target_link_options(udp_server PRIVATE -fsanitize=address)
+#target_compile_options(udp_server PRIVATE -fsanitize=address)
+#target_link_options(udp_server PRIVATE -fsanitize=address)
 
 # SimpleLogstash Programm
 add_executable(simplelogstash ${CMAKE_CURRENT_SOURCE_DIR}/src/programs/simplelogstash.c)
