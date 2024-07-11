@@ -112,7 +112,6 @@ However, the program is only a slightly adapted version of the `xdp_ddos01_black
 
 
 # Known bugs
-The are two major known bugs for the implementation. 
 
 When the `BPF_F_NO_PREALLOC` flag is specified in the `ip_the blacklist.bpf.c` eBPF program, memory allocation for new map entries may fail when large amounts of addresses are added in a short time frame.
 This causes `simplefail2ban` to display an error message for both the write to the eBPF map, as well as the subsequently failing removal from eBPF map and the hash table by the banning thread. 
@@ -123,6 +122,11 @@ Unorderly detachment of readers or the writer from the shared memory ring buffer
 When this occurs, all processes should be detached from the buffer, so that it can be reinitialized.
 If all attached programs detach unorderly, the shared memory segment has to be destroyed with: `icprm -m <id>`, before the buffer can be reinitialized.
 
+Using the socket IPC, attaching multiple readers at once can result in each of them trying to claim the same unix domain socket as their own.
+This is caused by the fact that determining which socket is still available is not synchronized between readers, resulting in a race condition.
+
+When utilizing the socket IPC, terminating one writer process using the function `sock_finalize` will result in all unix domain sockets being closed.
+While insignificant in the scope of this thesis, which only ever uses one writer process at a time, this behavior was still not intended.
 
 # Acknowledgments
 This repository reuses code from both Paul Raatschen and Florian Mikolajczak.

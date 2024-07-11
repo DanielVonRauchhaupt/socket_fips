@@ -21,7 +21,7 @@
 #define SOCKET_NAME_TEMPLATE "/tmp/unixDomainSock4SF2B_"
 
 /**
- * @brief Union to specify if thread calling a function is either writer or reader
+ * @brief Enum to specify if thread calling a function is either writer or reader
  *
  *
  */
