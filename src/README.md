@@ -15,3 +15,4 @@ Additionally, two benchmarks for the hashfunction and binary IP to string conver
 
 The files developed for the bachelor thesis of Daniel von Rauchhaupt are `src/lib/include/sock_comm.h` and `src/lib/sock_comm.c`.
 The applications `udp_server` and `simeplfail2ban` were also modified to support the new socket architecture.
+The scripts used to generate traffic with TRex are located in `scripts/traffic_gen_vonRauchhaupt` and contain descriptive names which include the used communication protocol, IP stack and number of clients participating in the simulated DoS attack.

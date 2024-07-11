@@ -4,7 +4,7 @@ Additionally, jupyter notebooks for creating the data visualization and graphics
 
 
 # Directories
--  `measurements-vonRauchhaupt` contains all measurements conducted for the bachelor thesis of Daniel von Rauchhaupt
+-  `final-measurements_vonRauchhaupt` contains all measurements conducted for the bachelor thesis of Daniel von Rauchhaupt
 
 Remnants from Paul Raatschens bachelor thesis
 -  `final-measurements` contains the data for the measurements presented in the thesis
