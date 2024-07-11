@@ -41,6 +41,7 @@ The choice fell on unix domain sockets, due to the already existing read and wri
 Additionally, the utilization of sockets provided a great deal of flexibility during usage of the IPC which will be discussed in the next section.
 
 \section{Design and abstractions}
+\label{sec:Design_and_abstractions}
 During the design process of the socket architecture it was decided that supporting attachment of multiple readers was essential, as already discussed in section \ref{sec:Reasoning for Unix Domain Sockets}.
 Each reader should receive all log messages sent by any writers.
 These restrictions led to the design illustrated in \ref{fig:socket:architecture}. TODO: Update this graphic + Dataflow

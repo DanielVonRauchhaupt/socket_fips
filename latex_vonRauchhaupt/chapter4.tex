@@ -4,9 +4,94 @@
 
 \chapter{Implementation}
 \label{cha:implementation}
+In this chapter, the implementation of the previously discussed design (Reference\@: \ref{sec:Design_and_abstractions}) for the unix domain socket architecture is presented.
+This includes an explanation of the write and read API.
+All error codes are numeric and defined the file \texttt{io\_ipc.h}
+
+\section{Auxiliary functions and structures}
+When utilizing the socket IPC type, some shared resources seen in \ref{alg:variables:shared} need to be set up.
+None of these are modified during runtime.
+
+\begin{algorithm}[h!]
+    \lstinputlisting[language=c, firstline=18, lastline=22]{code/sock_comm.h}
+    \caption[Socket: Shared variables]{Parameters shared between readers and writers.}
+    \label{alg:variables:shared}
+\end{algorithm}
+
+To ensure that no writer gets stuck continually checking for new sockets, the global variable \texttt{MAX\_AMOUNT\_OF\_SOCKETS} is defined.
+This also acts as an upper limit in regards to the amount of reader processes that can attach to the unix domain socket IPC.
+The unix domain sockets were bound to the filesystem, resulting in a common path to the location of all sockets needing to be supplied to both readers and writers.
+However, this \texttt{SOCKET\_NAME\_TEMPLATE} is not the full path to each socket.
+During runtime, each reader process trying to attach will append this name template with their own reader ID.
+The reader ID is determined by claiming the first ID not already in use.
+Since the length of the reader ID being appended to the \texttt{SOCKET\_NAME\_TEMPLATE} can vary, a maximum length for this template is defined in \texttt{SOCKET\_TEMPLATE\_LENGTH}.
+
+Separating functions utilized by both readers and writers results in an unwieldy API.
+Shared usage of functions by both sides is achieved by supplying function calls with the role of the calling process, either \texttt{SOCK\_WRITER} or \texttt{SOCK\_READER}.
+
+\begin{algorithm}[h!]
+    \lstinputlisting[language=c, firstline=88, lastline=89]{code/sock_comm.h}
+    \caption[Socket: Socket initialization]{Initialization function for both reader and writer processes.}
+    \label{alg:sock:init}
+\end{algorithm}
+
+Therefore the function initializing communication between processes, \texttt{sock\_init} displayed in \ref{alg:sock:init} only requires a structure of parameters and the role of the calling process.
+Defining a union containing both writer and reader structures as seen in \ref{alg:sock:union} allows the user of the API to provide either one as a parameter for the same function.
+The actual purpose of \texttt{sock\_init} is to enable connection between writer and readers.
+Writers are provided with a list of possible locations of unix domain sockets belonging to reader processes.
+Meanwhile, readers are assigned a path, in which they create a unix domain socket.
+All sockets are set to be of the type SOCK\_SEQPACKET.
+
+\begin{algorithm}[h!]
+    \lstinputlisting[language=c, firstline=75, lastline=78]{code/sock_comm.h}
+    \caption[Socket: Union for flexible function calling]{Union containing either the parameters of a writer or reader process.}
+    \label{alg:sock:union}
+\end{algorithm}
+
+While other IPC types such as shared memory required an orderly detachment of writers and readers, this is not necessary for the socket approach.
+Instead, when terminating a reader process, only closure of the corresponding unix domain socket is necessary.
+Stopping a writer process currently results in deconstructing the entire unix domain socket architecture.
+This results in the functions \texttt{socket\_finalize} and \texttt{socket\_cleanup}, as shown in \ref{alg:sock:finalize} and \ref{alg:sock:cleanup} respectively, being identical in behavior.
+In fact, \texttt{socket\_finalize} simply calls \texttt{socket\_cleanup} and was only provided in the socket API to make a seamless replacement of other finalize-style functions when switching IPC types possible.
+
+\begin{algorithm}[h!]
+    \lstinputlisting[language=c, firstline=125, lastline=125]{code/sock_comm.h}
+    \caption[Socket: Socket finalization]{Initializes cleanup of socket IPC.}
+    \label{alg:sock:finalize}
+\end{algorithm}
+
+\begin{algorithm}[h!]
+    \lstinputlisting[language=c, firstline=135, lastline=135]{code/sock_comm.h}
+    \caption[Socket: Socket cleanup]{Cleanup of socket IPC.}
+    \label{alg:sock:cleanup}
+\end{algorithm}
 
 \section{Write API}
-Write API
+The write API consists out of a single, versatile function \texttt{sock\_writev}.
+See \ref{alg_sock} for its definition.
+
+It requires four arguments:
+\begin{itemize}
+    \item A pointer to an instance of the structure \texttt{sock\_writer\_arg\_t} which will be introduced shortly.
+    \item A pointer to an array of \texttt{iovec} structures.
+            Each \texttt{iovec} structure defines a separate memory region of variable size, acting as a buffer.
+            An entire array of such structures can be represents a vector of memory regions\cite{man:iovec}.
+    \item The integer \texttt{invalid\_count} represents the number of log messages located in the iovec array.
+    \item Finally, the maximum number of receiving sockets is given via the parameter \texttt{maxNumOfSocks}.
+\end{itemize}
+
+\begin{algorithm}[h!]
+    \lstinputlisting[language=c, firstline=101, lastline=103]{code/sock_comm.h}
+    \caption[Socket: Write API]{Write API for the unix domain socket architecture}
+    \label{alg:sock}
+\end{algorithm}
+
+When calling \texttt{sock\_writev} the first thing being performed is a check for available unix domain sockets.
+This can be considered analogous to checking for new reader because of the strict one-to-one mapping between sockets and readers.
+If new sockets were identified, a connection with that socket is established and saved for future calls of this function.
+Then, all sockets with an existing connection are sent the data located in the iovec structures using the function \texttt{write}.
+On success, the function returns the number of sent messages via the socket IPC.
+
 
 \section{Read API}
 Read API
