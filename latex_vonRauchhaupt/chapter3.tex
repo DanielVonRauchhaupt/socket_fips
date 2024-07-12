@@ -37,7 +37,7 @@ Initially, the decision by Paul Raatschen to use shared memory as the IPC method
 Yet, no other IPC method was implemented.
 To ensure that the shared memory approach is the most viable, an alternative needed to be chosen to be measured against.
 
-The choice fell on unix domain sockets, due to the already existing read and write API and its mandatory support in the Posix standard on all UNIX systems. TODO: Cite this: https://www.open-std.org/jtc1/sc22/open/n4217.pdf
+The choice fell on unix domain sockets, due to the already existing read and write API and its support in the Posix standard on all UNIX systems since at least 2007\cite{posix}.
 Additionally, the utilization of sockets provided a great deal of flexibility during usage of the IPC which will be discussed in the next section.
 
 \section{Design and abstractions}

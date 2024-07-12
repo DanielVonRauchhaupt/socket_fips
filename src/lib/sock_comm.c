@@ -220,7 +220,7 @@ int sock_readv(struct sock_reader_arg_t *sock_args, struct iovec *iovecs) {
             FD_SET(sd, &readfds);
         }
 
-        // Dertemine highest file descriptor number
+        // Determine highest file descriptor number
         if (sd > max_sd){
             max_sd = sd;
         }

@@ -38,10 +38,10 @@ enum sock_role_t{
  *
  *
  */
+// Temporarily fixed length of socket path
+// Issue: Variable length arrays are not possible in a static context
 struct sock_writer_arg_t
 {
-    // Temporarily fixed length of socket path
-    // Issue: Variable length arrays are not possible in a static context
     char socketPathNames[MAX_AMOUNT_OF_SOCKETS][SOCKET_TEMPLATE_LENGTH];
     struct sockaddr_un socketConnections[SOCKET_TEMPLATE_LENGTH];
     int socketRecvs[MAX_AMOUNT_OF_SOCKETS];
@@ -55,11 +55,11 @@ struct sock_writer_arg_t
  *
  *
  */
+// Temporarily fixed length of socket path
+// Issue: Variable length arrays are not possible in a static context    
 struct sock_reader_arg_t
 {
-	// Temporarily fixed length of socket path
-    // Issue: Variable length arrays are not possible in a static context
-    char socketPathName[SOCKET_TEMPLATE_LENGTH];
+	char socketPathName[SOCKET_TEMPLATE_LENGTH];
     struct sockaddr_un address;
 	int sizeOfAddressStruct;
     int readSocket;
