@@ -163,7 +163,7 @@ These will also be used to evaluate the newly implemented socket mode.
 It has already been shown that the disk mode of Simplefail2ban is outperformed by the shared memory mode.
 Pure IPv4, IPv6 and a mixed IPv4/IPv6 IP stack will be used.
 File logging is expected to perform worse than the other IPC (TODO: Abbreviation) modes discussed in this thesis.
-In total, 15 unique measurements were conducted for this experiment.
+In total, 25 unique measurements were conducted for this experiment.
 
 \subsection{Experiment 1b: Replication of Simplefail2ban Shared Memory}
 The newly implemented socket approach is intended to be a valid alternative to the shared memory mode of Simplefail2ban.
@@ -171,8 +171,8 @@ To enable a direct comparison, measurements for the shared memory mode need to b
 All levels of invalid traffic rates are measured individually.
 Again, either a pure IPv4, IPv6 or mixed IPv4/IPv6 IP stack is utilized.
 The most performant features will be used, meaning overwrite is enabled and workload stealing is disabled.
-No 2nd reader process is being employed here.
-In total, 15 unique measurements were conducted for this experiment
+No second reader process is being employed here.
+In total, 25 unique measurements were conducted for this experiment
 
 \section{Measuring the socket API}
 In the following section thorough variations of factors and their levels are used to conclude if the socket mode is reliable.
@@ -191,11 +191,11 @@ The data flow in the DUT can be seen in \ref{fig:socket:measurement}.
 
 \subsection{Experiment 2: Simplefail2ban Sockets}
 To establish a baseline for the performance of the socket mode all factors are set to all possible levels in every combination.
-The only exception being the possibility of using a 2nd reader process, which will have its own section later.
-In total, 15 unique measurements were conducted for this experiment.
+The only exception being the possibility of using a second reader process, which will have its own section later.
+In total, 25 unique measurements were conducted for this experiment.
 
 \subsection{Experiment 3a: Replication of Simplefail2ban Shared Memory with 2nd Reader}
-In order to later compare the socket mode and its option to have a 2nd reader, a baseline measurement needs to be established.
+In order to later compare the socket mode and its option to have a second reader, a baseline measurement needs to be established.
 This experiment will be performed with 131,068 clients sending invalid data only and no pure IPv4 or IPv6 IP stack.
 Again, the overwrite feature is enabled while workload stealing is disabled.
 In total, 5 unique measurements were conducted for this experiment.
@@ -203,9 +203,115 @@ In total, 5 unique measurements were conducted for this experiment.
 \subsection{Experiment 3b: Simplefail2ban Sockets with 2nd Reader}
 This experiment closely mirrors the experiment 3a.
 A total of 131,068 clients will send invalid data to the DUT with no pure IPv4 or IPv6 IP stack.
-The shared memory mode inherently supports the possibility of adding a 2nd reader to the shared memory section to read log messages.
+The shared memory mode inherently supports the possibility of adding a second reader to the shared memory section to read log messages.
 There is no such inherent support in the socket mode.
 Instead in its current implementation, another read process can be started which will then be assigned its own socket.
 This socket will then also receive all log messages.
-Consequently, the shared memory mode will likely see a larger performance gain, since no additional effort is required to send messages to the 2nd reader. 
+Consequently, the shared memory mode will likely see a larger performance gain, since no additional effort is required to send messages to the second reader. 
 In total, 5 unique measurements were conducted for this experiment.
+
+\section{Evaluation of Experiments}
+The aforementioned experiments can be logically grouped in two categories\@: Baseline measurements and utilization of a second reader.
+Baseline measurements consist out of the experiments 1a, 1b and 2. TODO: Refer via link
+Meanwhile, the second reader experiments consist out of 3a and 3b. TODO: Refer via link
+With 85 performed experiments, a thorough yet not unreasonably long evaluation of each measurements is impossible.
+Instead, only especially expressive data will be covered in this section, with any notable or diverging observations being explicitly mentioned.
+For any readers interested in the data omitted from this thesis, or the repeat measurements performed to detect variations between each measurement, please refer to the repository provided in the sources\cite{git:repoOfThesis}.
+
+\minisec{Meaning of data variables}
+In the following section each graph will be accompanied with an additional table.
+This table contains data that is not explicitly expressed otherwise.
+For each IPC type (File, Shm, Sock) the total number of packets dropped by the eBPF program is denominated via \texttt{Packets dropped}.
+Similarly, the number of packets passed to the kernel is displayed via \texttt{Packets passed}.
+The \texttt{relative drop} represents the percentage of packets dropped relative to the theoretical maximal of dropped packets.
+Calculating the relative drop is done with the following formula:
+\noindent
+total dropped packets $/ ($experiment duration $*$ invalid traffic rate $-$ number of ban cycles $*$ ban limit $*$ number of malicious clients$)$
+\noindent
+\texttt{Log messages} represents the number or messages sent via the chosen IPC type.
+
+\subsection{Baseline measurements}
+For this section, data of 75 experiments have been analyzed.
+
+A trend displayed in \ref{fig:data:ipv4:100k:65534} remains prevalent with lower rates of invalid traffic and especially when only 65534 clients send invalid data:
+Differences in performance are difficult to spot when graphed.
+However, the table in \ref{fig:data:ipv4:100k:65534} does provide more information.
+All IPC types perform similarly well.
+However, two anomalies stand out.
+The \texttt{relative drop} of the shared memory IPC type is over 100\%.
+This happened a total of 21 times over separate measurements, but only when measuring traffic rates of 100k PPS.
+Why or how this is happening is unclear.
+It is suspected that the banning and unbanning threads of Simplefail2ban have race conditions when trying to reban clients.
+The other notable thing is a stark difference in CPU time, with a definitive spike when using the socket IPC type.
+Actual differences in performance are not visible.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4_100k_65534_1.png}}
+	\end{tabular}
+	\begin{tabular}{llllll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets dropped [$10^6$]} & \textbf{Packets passed [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 27,84 & 17,16 & 99,29900071 & 16,81 & 04.95 \\
+        Shm & 28,03 & 16,97 & 100,0000036 & 16,97 & 05.94 \\
+        Sock & 28,02 & 16,98 & 99,93706566 & 16,96 & 57.90 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, IPv4, 100k \ac{PPS}, 65534 malicious clients]{Total packets sent: 45m. Best case drop rate: 93,4466\%}
+	\label{fig:data:ipv4:100k:65534}
+\end{figure}
+
+This trend somewhat continues in \ref{fig:data:ipv4:10m:65534}.
+Again, the graph plotting the number of dropped and passed packets is not definitive.
+Instead, a clear difference in performance is once again visible in CPU time.
+The \texttt{relative drop} reveals that the shared memory IPC is performing best.
+This is also supported by the lower number of packets passed to the kernel.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4_10m_65534_1.png}}
+	\end{tabular}
+	\begin{tabular}{llllll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets dropped [$10^8$]} & \textbf{Packets passed [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 29,40 & 75,07 & 98,05973977 & 17,51 & 09.69 \\
+        Shm & 29,75 & 37,49 & 99,21848407 & 20,02 & 16.86 \\
+        Sock & 29,50 & 61,81 & 98,39458207 & 17,13 & 76.00 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, IPv4, 10m \ac{PPS}, 65534 malicious clients]{Total packets sent: 3015m. Best case drop rate: 99,934466\%}
+	\label{fig:data:ipv4:10m:65534}
+\end{figure}
+
+
+
+Even with 30m invalid PPS, as seen in \ref{fig:data:ipv4:30m:65534}, all IPC types successfully defend against the DoS attack.
+The fact that the file IPC type outperforms the socket IPC type in terms of \texttt{relative drop} rate is especially noteworthy.
+File mode also outperforms shared memory and socket mode on CPU usage, which was not expected.
+With the high rate of incoming traffic during a ban cycle, the application udp\_server had to wait on the IPC to be able to submit more log messages to Simplefail2ban.
+This resulted the system being unable to submit a substantial number of packets to udp\_server.
+While not explicitly documented in this thesis, these number are available in the repository\cite{git:repoOfThesis} of this thesis.
+The difference in log messages created by udp\_server and number of passed packets correlates exactly with this observation.
+Measuring the number of packets unable to be submitted to udp\_server was done by checking the file \texttt{/proc/net/udp6} on the DUT.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4_10m_65534_1.png}}
+	\end{tabular}
+	\begin{tabular}{llllll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets dropped [$10^8$]} & \textbf{Packets passed [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 87,75 & 159,82 & 97,52375345 & 17,48 & 16.55 \\
+        Shm & 88,30 & 87,23 & 98,13105047 & 21,39 & 39.08 \\
+        Sock & 87,45 & 139,42 & 97,18179422 & 16,92 & 138.85 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, IPv4, 10m \ac{PPS}, 65534 malicious clients]{Total packets sent: 9015m. Best case drop rate: 99,97815533\%}
+	\label{fig:data:ipv4:30m:65534}
+\end{figure}
