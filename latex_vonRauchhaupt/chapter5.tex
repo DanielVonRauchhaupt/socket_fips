@@ -198,6 +198,7 @@ In total, 25 unique measurements were conducted for this experiment.
 In order to later compare the socket mode and its option to have a second reader, a baseline measurement needs to be established.
 This experiment will be performed with 131,068 clients sending invalid data only and no pure IPv4 or IPv6 IP stack.
 Again, the overwrite feature is enabled while workload stealing is disabled.
+The second reader process logs all messages it receives in a log file.
 In total, 5 unique measurements were conducted for this experiment.
 
 \subsection{Experiment 3b: Simplefail2ban Sockets with 2nd Reader}
@@ -208,6 +209,7 @@ There is no such inherent support in the socket mode.
 Instead in its current implementation, another read process can be started which will then be assigned its own socket.
 This socket will then also receive all log messages.
 Consequently, the shared memory mode will likely see a larger performance gain, since no additional effort is required to send messages to the second reader. 
+The second reader process logs all messages it receives in a log file.
 In total, 5 unique measurements were conducted for this experiment.
 
 \newpage
@@ -227,24 +229,32 @@ For each IPC type (File, Shm, Sock) the total number of packets dropped by the e
 Similarly, the number of packets passed to the kernel is displayed via \texttt{XDP\_PASS}.
 The \texttt{relative drop} represents the percentage of packets dropped relative to the theoretical maximal of dropped packets.
 Calculating the relative drop is done with the following formula:
-\noindent
-total dropped packets $/ ($experiment duration $*$ invalid traffic rate $-$ number of ban cycles $*$ ban limit $*$ number of malicious clients$)$
-\noindent
-\texttt{Log messages} represents the number or messages sent via the chosen IPC type.
+total dropped packets $/ ($experiment duration $*$ invalid traffic rate $-$ number of ban cycles $*$ ban limit $*$ number of malicious clients$)$.
+\texttt{Log messages} represents the number or messages sent via the chosen IPC type, while \texttt{Packets received by udp\_server} lists the number of packets reaching the application udp\_server.
 
 \subsection{Baseline measurements}
 For this section, data of 75 experiments have been analyzed.
 
+\minisec{Using 65534 clients to send invalid data}
 A trend displayed in \ref{fig:data:ipv4:100k:65534} remains prevalent with lower rates of invalid traffic and especially when only 65534 clients send invalid data:
 Differences in performance are difficult to spot when graphed.
 The table in \ref{fig:data:ipv4:100k:65534} does provide more information.
 All IPC types perform similarly well in defending the DoS attack.
-However, two anomalies stand out.
+
+However, one anomalies stands out.
 The \texttt{relative drop} of the shared memory IPC type is over 100\%.
 This happened a total of 21 times over separate measurements, but only when measuring traffic rates of 100k PPS.
-Why or how this is happening is unclear.
-It is suspected that the banning and unbanning threads of Simplefail2ban have intrinsic race conditions when trying to reban clients.
-The other notable thing is a stark difference in CPU time, with a definitive spike when using the socket IPC type.
+It is suspected that TRex is unable to provide a reliable stream of packets, but only when starting each measurement call.
+Once a steady stream of packets at desired rates has been established, it does remain stable.
+Therefore, the number of packets that should theoretically be received deviates from the actual incoming traffic rates, resulting in slight inaccuracies when calculating the \texttt{relative drop}.
+While not apparent at 100k PPS due to slight rounding, later measurements support this theory of missing traffic when totalling \texttt{XDP\_DROP} and \texttt{XDP\_PASS} up.
+This issue unfortunately all data presented in this thesis.
+
+Another notable thing is a stark difference in CPU time, with a definitive spike when using the socket IPC type.
+All IPC types have sent the same number of log messages indicating that at lower traffic rates all clients can be banned with the first message they send surpassing the ban limit, regardless of IPC type.
+This claim is supported by the fact that the log messages coincide with the formula:
+number of ban cycles $*$ ban limit $*$ number of malicious clients;
+Which is the theoretical minimum number of messages needed to successfully ban all clients during the duration of the measurement. 
 Otherwise, the results are as expected with the file IPC type performing worst.
 
 \begin{figure}[!h]
@@ -253,26 +263,33 @@ Otherwise, the results are as expected with the file IPC type performing worst.
 	\begin{tabular}{c}
     	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4_100k_65534_1.png}}
 	\end{tabular}
-    \tabcolsep=0.11cm
-	\begin{tabular}{llllll}
+	\begin{tabular}{llll}
 		\toprule
-		\textbf{IPC type} & \textbf{XDP\_DROP [$10^6$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
-		File & 27,84 & 17,16 & 99,29900071 & 16,81 & 04.95 \\
-        Shm & 28,03 & 16,97 & 100,0000036 & 16,97 & 05.94 \\
-        Sock & 28,02 & 16,98 & 99,93706566 & 16,96 & 57.90 \\
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^6$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		File & 27,84 & 17,16 & 99,29900071 \\
+        Shm & 28,03 & 16,97 & 100,0000036 \\
+        Sock & 28,02 & 16,98 & 99,93706566 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 16,81 & 19,66 & 04.95 \\
+        Shm & 16,97 & 19,66 & 05.94 \\
+        Sock & 16,96 & 19,66 & 57.90 \\
 	\bottomrule
 	\end{tabular}
 	\caption[Simplefail2ban, IPv4, 100k \ac{PPS}, 65534 malicious clients]{Total packets sent: 45m. Best case drop rate: 93,4466\%}
 	\label{fig:data:ipv4:100k:65534}
 \end{figure}
 
-This trend somewhat continues in \ref{fig:data:ipv4:10m:65534}.
+In \ref{fig:data:ipv4:10m:65534} the trend of shared memory clearly outperforming other IPC types is evident.
 Again, the graph plotting the number of dropped and passed packets is not definitive.
 Instead, a clear difference in performance is once again mainly visible in CPU time.
-The \texttt{relative drop} reveals that the shared memory IPC is performing best, being also supported by the lower number of packets passed to the kernel.
+The \texttt{relative drop} also reveals that the shared memory IPC is performing best, with lower number of packets being passed to the kernel.
 An overall drop in performance measured via \texttt{relative drop} along all IPC types was expected.
 A generous best case scenario consists out of assuming that all 65534 clients are banned in the same timespan at all incoming traffic rates.
-But even then, the inherit latency (how ever miniscule it might be) of the IPS means that an increase in invalid traffic flow directly correlates in more packets reaching the kernel during each ban cycle.
+But even then, the inherit latency (even if miniscule) of the IPS means that an increase in invalid traffic flow directly correlates in more packets reaching the kernel during each ban cycle.
 Therefore, the \texttt{relative drop} rate must inversely correlate with the invalid traffic rate.
 
 \begin{figure}[!h]
@@ -281,13 +298,20 @@ Therefore, the \texttt{relative drop} rate must inversely correlate with the inv
 	\begin{tabular}{c}
     	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4_10m_65534_1.png}}
 	\end{tabular}
-    \tabcolsep=0.11cm
-	\begin{tabular}{llllll}
+	\begin{tabular}{llll}
 		\toprule
-		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
-		File & 29,40 & 75,07 & 98,05973977 & 17,51 & 09.69 \\
-        Shm & 29,75 & 37,49 & 99,21848407 & 20,02 & 16.86 \\
-        Sock & 29,50 & 61,81 & 98,39458207 & 17,13 & 76.00 \\
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		File & 29,40 & 75,07 & 98,05973977 \\
+        Shm & 29,75 & 37,49 & 99,21848407 \\
+        Sock & 29,50 & 61,81 & 98,39458207 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 17,51 & 35,10 & 09.69 \\
+        Shm & 20,02 & 51,93 & 16.86 \\
+        Sock & 17,13 & 25,52 & 76.00 \\
 	\bottomrule
 	\end{tabular}
 	\caption[Simplefail2ban, IPv4, 10m \ac{PPS}, 65534 malicious clients]{Total packets sent: 3015m. Best case drop rate: 99,934466\%}
@@ -297,16 +321,18 @@ Therefore, the \texttt{relative drop} rate must inversely correlate with the inv
 Even with 30m invalid PPS, as seen in \ref{fig:data:ipv4:30m:65534}, all IPC types successfully defend against the DoS attack.
 The fact that the file IPC type outperforms the socket IPC type in terms of \texttt{relative drop} rate is especially noteworthy.
 File mode also outperforms shared memory and socket mode on CPU usage, which was not expected.
-With the high rate of incoming traffic during a ban cycle, the application udp\_server had to wait on the IPC to be able to submit more log messages to Simplefail2ban.
-This resulted the system being unable to submit a substantial number of packets to udp\_server.
-While not explicitly documented in this thesis, these number are available in the repository\cite{git:repoOfThesis} of this thesis.
-The difference in log messages created by udp\_server and number of passed packets correlates exactly with this observation.
+With the high rate of incoming traffic during a ban cycle, the application udp\_server has to wait on the IPC to be able to submit more log messages to Simplefail2ban.
+This resulted in the system being unable to submit a substantial number of packets to udp\_server.
+While not explicitly documented in this thesis, these number are available in the repository\cite{git:repoOfThesis}.
+The difference in packets received by udp\_server and number of passed packets correlates exactly with this observation.
 Measuring the number of packets unable to be submitted to udp\_server was done by checking the file \texttt{/proc/net/udp6} on the DUT.
 
-A mutual feature that these three measurements have is the inverse correlation between \texttt{relative drop} rate and number of sent \texttt{log messages}.
-Better performing IPC types are also able to send more log messages despite the fact that they block invalid traffic at an increased rate.
+A mutual feature that these three measurements have in common is the direct correlation between \texttt{relative drop} rate and number of \texttt{packets received by udp\_server}.
+Better performing IPC types generally receive more packets despite the fact that they block invalid traffic at an increased rate.
 This is explainable through the inability of the system to supply new packets to udp\_server while it is still waiting on the IPC architecture to deliver data to the IPS.
 IPC types with lower latency and higher bandwidth can log more messages during the short influx of packets each ban cycle.
+Hence, udp\_server can receive more packets from the system.
+These attributes also result in higher \texttt{relative drop} rates.
 
 \begin{figure}[!h]
 	\centering
@@ -314,15 +340,360 @@ IPC types with lower latency and higher bandwidth can log more messages during t
 	\begin{tabular}{c}
     	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4_30m_65534_1.png}}
 	\end{tabular}
-    \tabcolsep=0.11cm
-	\begin{tabular}{llllll}
+	\begin{tabular}{llll}
 		\toprule
-		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} & \textbf{Log messages [$10^6$]} & \textbf{CPU [seconds]} \\ \midrule 
-		File & 87,75 & 159,82 & 97,52375345 & 17,48 & 16.55 \\
-        Shm & 88,30 & 87,23 & 98,13105047 & 21,39 & 39.08 \\
-        Sock & 87,45 & 139,42 & 97,18179422 & 16,92 & 138.85 \\
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]}\\ \midrule 
+		File & 87,75 & 159,82 & 97,52375345 \\
+        Shm & 88,30 & 87,23 & 98,13105047 \\
+        Sock & 87,45 & 139,42 & 97,18179422 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 17,48 & 40,72 & 16.55 \\
+        Shm & 21,39 & 69,92 & 39.08 \\
+        Sock & 16,92 & 31,62 & 138.85 \\
 	\bottomrule
 	\end{tabular}
 	\caption[Simplefail2ban, IPv4, 30m \ac{PPS}, 65534 malicious clients]{Total packets sent: 9015m. Best case drop rate: 99,97815533\%}
 	\label{fig:data:ipv4:30m:65534}
+\end{figure}
+
+Figure \ref{fig:data:ipv6:30m:65534} displays IPC types under 30m invalid PPS from 65534 different clients using IPv6 addresses in contrast to the previously used IPv4 addresses.
+Usage of different IP stacks had little impact on the overall results of this thesis, which is why lower traffic rates for IPv6 are omitted.
+
+As expected, the file IPC type performed worst, with shared memory performing best.
+However, contradicting expectations, the socket and shared memory IPC types performed better when dealing with IPv6 instead of IPv4 addresses.
+This is surprising since no changes in general behavior are expected in either udp\_server or Simplefail2ban with one exception: The Regex matching feature.
+In theory, using IPv6 instead of IPv4, this should lose performance since IPv6 addresses are longer than IPv4.
+This idea is supported by the increase in CPU time across all IPC types compared to figure \ref{fig:data:ipv4:30m:65534} using IPv4.
+However, an overall increase in performance can be measured in almost all experiments using IPv6 instead of IPv4.
+What exactly causes this abnormality is unknown.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv6_30m_65534_1.png}}
+	\end{tabular}
+	\begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		File & 87,41 & 211,05 & 97,14091697 \\
+        Shm & 88,63 & 85,55 & 98,50239609 \\
+        Sock & 87,77 & 170,03 & 97,54838057 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 17,20 & 38,73 & 22.51 \\
+        Shm & 21,79 & 72,38 & 46.03 \\
+        Sock & 16,92 & 30,04 & 149.69 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, IPv6, 30m \ac{PPS}, 65534 malicious clients]{Total packets sent: 9015m. Best case drop rate: 99,97815533\%}
+	\label{fig:data:ipv6:30m:65534}
+\end{figure}
+
+\minisec{Using 131068 clients to send invalid data}
+When using 131068 clients to send invalid data, changes in performance become visible when plotted.
+Figure \ref{fig:data:ipv4:100k:131068} displays only 100k invalid PPS, yet the file IPC type struggles to quickly ban all clients.
+In contrast, both socket and shared memory seem to perform quite similar across all statistics except for CPU time.
+Here, the socket IPC type occupies the CPU almost ten times longer than shared memory.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4_100k_131068_1.png}}
+	\end{tabular}
+	\begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^6$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		File & 25,99 & 19,01 & 99,69409958 \\
+        Shm & 26,46 & 18,54 & 101,5083842 \\
+        Sock & 26,44 & 18,56 & 101,4395334 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 18,16 & 35,39 & 08.34 \\
+        Shm & 18,54 & 35,39 & 10.14 \\
+        Sock & 18,53 & 35,39 & 100.40 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, IPv4, 100k \ac{PPS}, 131068 malicious clients]{Total packets sent: 45m. Best case drop rate: 86,8932\%}
+	\label{fig:data:ipv4:100k:131068}
+\end{figure}
+
+When increasing invalid traffic rate to 1m PPS, no significant changes to previous behavior can be observed.
+At invalid traffic rates of 10m PPS, displayed in figure \ref{fig:data:ipv4:10m:131068}, drastic changes are noticeable.
+Firstly, shared memory does outperform both the socket and file IPC type in \texttt{relative drop} rate.
+Also, the latency of each IPC type is clearly visible in the provided graph.
+The shared memory IPC type both starts and ends its ban cycles before the socket and file IPC type.
+Unexpectedly, the socket IPC type still outperforms the file IPC type at a minimum.
+A general delay of each ban cycle is visible too.
+The second to last ban cycle, which should start at 240 seconds, starts late at about 250 seconds.
+This delay is present in all IPC types and is likely caused by the unbanning thread of Simplefail2ban having to handle 131068 clients.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4_10m_131068_1.png}}
+	\end{tabular}
+	\begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		File & 28,77 & 136,15 & 96,03486581 \\
+        Shm & 29,54 & 58,36 & 98,60515631 \\
+        Sock & 29,16 & 95,52 & 97,33669129 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 19,31 & 63,90 & 19.39 \\
+        Shm & 25,40 & 107,54 & 29.47 \\
+        Sock & 19,02 & 47,67 & 133.54 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, IPv4, 10m \ac{PPS}, 131068 malicious clients]{Total packets sent: 3015m. Best case drop rate: 99,868932\%}
+	\label{fig:data:ipv4:10m:131068}
+\end{figure}
+
+At 30m invalid PPS, seen in figure \ref{fig:data:ipv4:30m:131068}, the file IPC type starts and finishes its band cycles later than other IPC types.
+While the shared memory and socket IPC type start almost simultaneously, sockets require longer to finish a full ban cycle.
+Differences in CPU time are prominent, with the socket IPC performing worst and file IPC performing best.
+A general trend found in all measurements presented so far is the low throughput of the socket IPC type.
+Here, it is especially pronounced with the shared memory IPC type managing to transmit almost double the amount of \texttt{log messages}.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4_30m_131068_2.png}}
+	\end{tabular}
+	\begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		File & 85,02 & 238,30 & 94,51036756 \\
+        Shm & 87,57 & 104,14 & 97,33826458 \\
+        Sock & 86,12 & 180,89 & 95,73084169 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 18,04 & 74,39 & 38.99 \\
+        Shm & 25,32 & 115,04 & 71.92 \\
+        Sock & 18,33 & 59,26 & 323.02 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, IPv4, 30m \ac{PPS}, 131068 malicious clients]{Total packets sent: 9015m. Best case drop rate: 99,95631067\%}
+	\label{fig:data:ipv4:30m:131068}
+\end{figure}
+
+Switching to IPv6 at a rate of 30m invalid PPS does not yield any fundamentally different results: \ref{fig:data:ipv6:30m:131068}.
+Again, performance of all IPC types improves slightly, still with no known cause.
+Shared memory performs best, with the file IPC type performing worst.
+The direct correlation between \texttt{relative drop} rate and \texttt{packets received by udp\_server} is also still present.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv6_30m_131068_1.png}}
+	\end{tabular}
+	\begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		File & 85,73 & 228,07 & 95,29278185 \\
+        Shm & 87,60 & 109,08 & 97,37706621 \\
+        Sock & 86,21 & 177,33 & 95,82614459 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 17,90 & 69,14 & 38.41 \\
+        Shm & 25,08 & 111,45 & 74.71 \\
+        Sock & 18,67 & 61,84 & 317.37 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, IPv6, 30m \ac{PPS}, 131068 malicious clients]{Total packets sent: 9015m. Best case drop rate: 99,95631067\%}
+	\label{fig:data:ipv6:30m:131068}
+\end{figure}
+
+When using a mixed IP stack, two streams of invalid data were configured in TRex: One being IPv4, the other being IPv6.
+Both streams were producing exactly 50\% of the invalid traffic and consisted out of 65534 clients each.
+Naturally no client sent both IPv4 and IPv6 packets.
+The most expressive measurement is displayed in \ref{fig:data:ipv4v6:30m:131068} with 30m invalid PPS.
+Expectations were that the \texttt{relative drop} rate for all IPC types would land firmly between the equivalent measurements using IPv4 and IPv6.
+However, this is not the case.
+As a matter of fact, the figure \ref{fig:data:ipv4v6:30m:131068} does not display this property.
+Here, the shared memory and socket IPC types outperform the measurement utilizing pure IPv6 displayed in \ref{fig:data:ipv6:30m:131068}.
+Though, most measurements still outperform their pure IPv4 counterpart.
+But performance regarding their pure IPv6 counterpart is not definitive, the variance between measurements is to severe.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4v6_30m_131068_2.png}}
+	\end{tabular}
+	\begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		File & 85,12 & 286,15 & 94,61335186 \\
+        Shm & 88,02 & 105,83 & 97,84149307 \\
+        Sock & 86,30 & 212,81 & 95,93428297 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		File & 17,69 & 70,65 & 47.15 \\
+        Shm & 25,13 & 111,62 & 94.64 \\
+        Sock & 18,00 & 59,85 & 353.34 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban, IPv4v6, 30m \ac{PPS}, 131068 malicious clients]{Total packets sent: 9015m. Best case drop rate: 99,95631067\%}
+	\label{fig:data:ipv4v6:30m:131068}
+\end{figure}
+
+\subsection{2nd reader measurements}
+Initially, data of 10 experiments has been analyzed for this section.
+At 100k invalid PPS, performance of both the shared memory and socket IPC types was almost identical.
+The only exception is the CPU time in which the socket IPC performed up to six times worse than shared memory.
+The results become interesting when increasing invalid traffic rate to 1m PPS, a seen in figure \ref{fig:data:ipv4v6:1m:131068:2nd}.
+The graph displays a clear delay between the ban cycles of the shared memory and socket IPC types.
+Still, both modes are able to supply both the IPS Simplefail2ban and a slower reader process with data while defending against the DoS attack.
+Again, CPU time of the socket IPC type is significantly higher than its shared memory counterpart.
+The \texttt{relative drop} rate is also worse by about 2 percent, with fewer messages logged.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4v6_1m_2ndReader_1.png}}
+	\end{tabular}
+	\begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^7$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		Shm & 29,53 & 19,75 & 99,72283593 \\
+        Sock & 28,91 & 25,94 & 97,6334018 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		Shm & 19,48 & 44,91 & 17.76 \\
+        Sock & 18,29 & 41,47 & 80.82 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban with 2nd Reader, IPv4v6, 1m \ac{PPS}, 131068 malicious clients]{Total packets sent: 315m. Best case drop rate: 98,68932\%}
+	\label{fig:data:ipv4v6:1m:131068:2nd}
+\end{figure}
+
+Figure \ref{fig:data:ipv4v6:20m:131068:2nd} shows data measured with 20m invalid PPS.
+The socket IPC type struggles to supply both the IPS and the second reader with \texttt{log messages}, having logged less data than the shared memory IPC type.
+The graph also displays this inability to keep up with incoming traffic.
+While shared memory was able to fully ban all malicious client in just one 30 second ban cycle, the socket mode unable to.
+Given enough time, the socket IPC type is able to recover and successfully defend against the DoS attack.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4v6_20m_2ndReader_1.png}}
+	\end{tabular}
+	\begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		Shm & 59,15 & 79,92 & 98,64873119 \\
+        Sock & 52,45 & 624,81 & 87,47139407 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		Shm & 24,61 & 101,26 & 49.90 \\
+        Sock & 11,32 & 65,01 & 251.49 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban with 2nd Reader, IPv4v6, 20m \ac{PPS}, 131068 malicious clients]{Total packets sent: 6015m. Best case drop rate: 99,934466\%}
+	\label{fig:data:ipv4v6:20m:131068:2nd}
+\end{figure}
+
+That changes in figure \ref{fig:data:ipv4v6:30m:131068:2nd}.
+Now, the socket IPC type is unable to defend against the DoS attack and the system is overwhelmed.
+The \texttt{relative drop} falls to approximately 54 percent, the number of messages passed to the kernel rise significantly and the application udp\_server is not able to handle the influx of incoming data.
+Fewer log messages are sent to all readers and the CPU time falls, likely due to the system not having any resources left, remarkably.
+Meanwhile, the shared memory IPC type performs just as well as in figure \ref{fig:data:ipv4v6:30m:131068}, when no second reader was attached to the IPC architecture.
+
+A difference of this scale was not initially expected.
+However, increased performance of the shared memory IPC type was attributed to the overwrite feature.
+Enabling this feature meant that slower reader processes were ignored if they slowed down any writers.
+The socket IPC type can not abandon slower readers, it has to wait for each reader to receive all data.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4v6_30m_2ndReader_1.png}}
+	\end{tabular}
+	\begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		Shm & 87,83 & 118,74 & 97,63360872 \\
+        Sock & 48,80 & 2385,53 & 54,22323337 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		Shm & 24,70 & 108,17 & 94.60 \\
+        Sock & 3,10 & 30,04 & 31.91 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban with 2nd Reader, IPv4v6, 30m \ac{PPS}, 131068 malicious clients]{Total packets sent: 9015m. Best case drop rate: 99,95631067\%}
+	\label{fig:data:ipv4v6:30m:131068:2nd}
+\end{figure}
+
+To confirm this hypothesis, another experiment was conducted.
+The shared memory IPC type is used without having the overwrite feature enabled.
+Expectations were, that having to wait for all reader processes to receive data would result in a performance decrease.
+This measurement is displayed in figure \ref{fig:data:ipv4v6:30m:131068:2nd:NoOverwrite}.
+
+No such decrease in performance was measured whatsoever.
+The only logical conclusion is, that the shared memory IPC type manages to supply multiple readers with faster data transfer than is required for even 30m incoming invalid PPS.
+The overwrite feature was not needed and had no real impact on performance.
+Increased latency when using the socket IPC type likely culminated to such a degree that supplying multiple readers with data was not feasible.
+
+\begin{figure}[!h]
+	\centering
+	\scriptsize
+	\begin{tabular}{c}
+    	\centerline{\includegraphics[width=1.2\textwidth]{images/IPv4v6_30m_2ndReaderNoOverwrite_1.png}}
+	\end{tabular}
+	\begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{XDP\_DROP [$10^8$]} & \textbf{XDP\_PASS [$10^6$]} & \textbf{Relative drop [\%]} \\ \midrule 
+		Shm & 87,99 & 125,56 & 97,81321365 \\
+        Sock & 48,80 & 2385,53 & 54,22323337 \\
+	\bottomrule
+	\end{tabular}
+    \begin{tabular}{llll}
+		\toprule
+		\textbf{IPC type} & \textbf{Packets received by udp\_server [$10^6$]} & \textbf{Log messages [$10^5$]} & \textbf{CPU [seconds]} \\ \midrule 
+		Shm & 24,95 & 108,43 & 99.47 \\
+        Sock & 3,10 & 30,04 & 31.91 \\
+	\bottomrule
+	\end{tabular}
+	\caption[Simplefail2ban with 2nd Reader, IPv4v6, 30m \ac{PPS}, 131068 malicious clients]{Total packets sent: 9015m. Best case drop rate: 99,95631067\%}
+	\label{fig:data:ipv4v6:30m:131068:2nd:NoOverwrite}
 \end{figure}
