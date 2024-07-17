@@ -4,13 +4,43 @@
 
 \chapter{Introduction}
 \label{cha:introduction}
+Development in internet infrastructure has led to higher interconnectedness over the course of the last century.
+Interacting with companies and governmental facilities is primarily done online.
+Deploying servers, providing specific services to the public, has become common place in daily life.
+With a continually growing importance of these servers, exploiting them becomes attractive for malicious actors.
+Identifying threats and security breaches is required to provide consistent uptime of servers.
+While traditional firewalls provide a starting point in defense against exploitation, they are not impenetrable.
+Common attacks, such as a \ac{DoS} attack, are able to circumvent these measures by imitating genuine clients.
+Draining system resources by sending illegitimate communication requests is simultaneously easy to do, and hard to protect against.
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Erat nam at lectus urna. Vitae purus faucibus ornare suspendisse sed nisi lacus. Turpis egestas integer eget aliquet nibh praesent tristique magna. Et netus et malesuada fames ac turpis egestas. Nunc vel risus commodo viverra maecenas accumsan lacus. Nisi scelerisque eu ultrices vitae auctor eu augue. Odio morbi quis commodo odio aenean sed adipiscing. Ultricies lacus sed turpis tincidunt id aliquet. Sit amet mattis vulputate enim nulla aliquet porttitor lacus luctus. Tellus rutrum tellus pellentesque eu tincidunt tortor.
+Additional monitoring of incoming traffic is done by \ac{IDSs}.
+Interpreting a clients intent is done by analyzing by system logs, as well as system and network resources.
+To actually combat incoming attacks, a \ac{IPS} is required which actively defends system resources.
+A common industry standard for such an \ac{IPS} is Fail2ban\cite{git:fail2ban}.
+It scans a variety of information available on the host system, predominantly using log files as its source, technically making it a \ac{HIPS}.
+Clients deemed a threat to the host system are prohibited to interact with the host.
+Fail2ban achieves this by modifying the systems firewall.
 
-Felis eget velit aliquet sagittis id consectetur purus ut faucibus. Dolor magna eget est lorem ipsum dolor sit. Sagittis aliquam malesuada bibendum arcu vitae elementum curabitur. Id interdum velit laoreet id donec ultrices tincidunt arcu. Ipsum nunc aliquet bibendum enim facilisis. Posuere morbi leo urna molestie at elementum eu facilisis. Convallis convallis tellus id interdum velit laoreet id donec ultrices. Platea dictumst quisque sagittis purus sit. Nec ultrices dui sapien eget mi proin sed libero enim. Amet justo donec enim diam vulputate ut pharetra sit amet. Sed blandit libero volutpat sed cras ornare arcu dui. Congue nisi vitae suscipit tellus mauris a diam maecenas. Ac felis donec et odio.
+However, previous work has shown that Fail2ban does not scale well when having to process a large number of log files instantaneously\cite{mikolajczak:ebpf}.
+For networks with high bandwidth, a sudden influx in log messages can indicate an ongoing attack on the system.
+Fail2ban being unable to efficiently perform its duties in these heavy-load scenarios is unacceptable.
+This inconsistent performance makes the system especially vulnerable against \ac{DoS} attacks.
+It was determined that the intrinsic file-based logging approach of Fail2ban does not provide the necessary bandwidth or low latency required to repel \ac{DoS} attacks successfully.
 
-Eget lorem dolor sed viverra ipsum nunc aliquet. Diam volutpat commodo sed egestas egestas fringilla phasellus. Enim nunc faucibus a pellentesque sit amet. Blandit cursus risus at ultrices mi tempus imperdiet. Ornare arcu dui vivamus arcu felis bibendum ut tristique. Accumsan in nisl nisi scelerisque eu ultrices. Et tortor at risus viverra adipiscing. Convallis convallis tellus id interdum. Blandit massa enim nec dui nunc. Vitae tortor condimentum lacinia quis vel eros donec ac odio.
+To remedy this issue a light-weight alternative to Fail2ban was developed: Simplefail2ban\cite{raatschen:ipc}.
+While inheriting the basic functionality of Fail2ban, this application provides to option to replace slow file-based logging with alternative \ac{IPC}.
+During development, a shared memory \ac{IPC} type was implemented.
+This allowed Simplefail2ban to outperform Fail2ban effortlessly\cite{raatschen:ipc}, but if better alternatives exists remains unclear.
 
-Justo eget magna fermentum iaculis eu. Tristique et egestas quis ipsum suspendisse ultrices gravida dictum. Luctus accumsan tortor posuere ac ut consequat semper viverra. Duis ut diam quam nulla porttitor massa id neque aliquam. Tellus mauris a diam maecenas sed enim. Et leo duis ut diam quam nulla porttitor massa. Id aliquet lectus proin nibh nisl condimentum id venenatis a. Eros in cursus turpis massa tincidunt. Sed pulvinar proin gravida hendrerit lectus. Gravida arcu ac tortor dignissim. Est ullamcorper eget nulla facilisi etiam. Netus et malesuada fames ac.
+The main goal of this thesis it to design and implement an \ac{IPC} mode based on unix domain sockets.
+This includes an easily usable \ac{API} and the option to attach multiple reader processes to the \ac{IPC} architecture.
+In order to evaluate the performance of this socket \ac{IPC}, a comparison with the already implemented shared memory and file \ac{IPC} types is conducted.
 
-Facilisis leo vel fringilla est ullamcorper. Ultrices dui sapien eget mi. Non odio euismod lacinia at quis risus sed vulputate. Id ornare arcu odio ut. Enim ut sem viverra aliquet eget sit amet tellus cras. Sagittis orci a scelerisque purus semper eget. Nibh praesent tristique magna sit amet purus gravida quis. Adipiscing elit duis tristique sollicitudin nibh. Ultrices gravida dictum fusce ut placerat orci nulla pellentesque. Justo nec ultrices dui sapien eget mi. Nibh tellus molestie nunc non blandit massa enim nec dui. Netus et malesuada fames ac turpis egestas sed.
+The structure of this thesis will be as follows:
+First, background information regarding both Fail2ban and Simplefail2ban is introduced.
+An explanation of the basic concepts used for the \ac{IPC} is also included.
+Following that, a chapter is dedicated to explaining the design of the unix socket \ac{IPC} architecture.
+A separate chapter will explain the intricacies of the implementation of said \ac{IPC} type.
+In addition, the design of all experiments will be introduced.
+To determine the performance of the socket \ac{IPC}, an extensive evaluation of the conducted measurements is included in this thesis.
+Finally, a summary of the findings of this thesis and a verdict on performance of both the shared memory and socket \ac{IPC} type for Simplefail2ban is included.

@@ -10,7 +10,7 @@ Lastly, any external tools used extensively in this thesis will also be discusse
 
 \section{Host-based intrusion detection and prevention}
 Intrusion detection and prevention systems are tasked with monitoring the system and ensuring that no threat is present.
-The restriction to only utilize data available on the host system, differentiates a host-based intrusion detection system from other forms of \ac{IDS}.
+The restriction to only utilize data available on the host system, differentiates a \ac{HIDS} from other forms of \ac{IDS}.
 In general, this includes collecting and analyzing data, identifying outliers and responding to any potential threats or unusual behavior to minimize potential harm to the system.
 According to James P. Andersons study "Computer security threat monitoring and surveillance"\cite{anderson:compSec} a threat is any deliberate attempt to either
 \begin{itemize}
@@ -33,7 +33,7 @@ The motivation for such a system is outlined by Dorothy E. Denning\cite{denning:
 
 For the purposes of this paper, defending against a Denial of Service, the assumption that any system is exploitable will suffice.
 
-Host-based intrusion detection systems generally collect data from multiple sources, freely provided by the host.
+A \ac{HIDS} generally collect data from multiple sources, freely provided by the host.
 Such auditing of data needs to be tamper-proof and non-bypassable.
 Low-level system calls, often containing such data, are preferred.
 The anomaly based approach allows an intrusion detection system to create profiles representing legitimate behavior of clients, users and applications.
@@ -147,6 +147,7 @@ This one-to-one mapping ensures no further synchronization between multiple writ
 Sending and receiving data can now be performed by each thread individually according to the base principals of ring buffers outlined above.
 
 \subsection{Unix Domain Sockets}
+\label{cha:UnixDomainSockets}
 In order to explain what a unix domain socket is, one must understand regular internet sockets.
 On a Linux system, a socket is a file descriptor referring to an endpoint for communication\cite{man:sockets}.
 While a variety of socket types exist, the actual socket (or file descriptor representing a socket) does not change.

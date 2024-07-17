@@ -42,7 +42,7 @@ Shared usage of functions by both sides is achieved by supplying function calls 
 Therefore the function initializing communication between processes, \texttt{sock\_init} displayed in \ref{alg:sock:init} only requires a structure of parameters and the role of the calling process.
 Defining a union containing both writer and reader structures, as seen in \ref{alg:sock:union}, allows the user of the \ac{API} to provide either one as a parameter for the same function.
 The actual purpose of \texttt{sock\_init} is to enable connection between writer and readers by initiating the associated structure passed in the parameter \texttt{sock\_args}.
-An explanation of both the \texttt{sock\_writer\_arg\_t} and \texttt{sock\_reader\_arg\_t} will follow in the next sections \ref{cha: Write API} and \ref{cha: Read API}.
+An explanation of both the \texttt{sock\_writer\_arg\_t} and \texttt{sock\_reader\_arg\_t} will follow in the next sections \ref{cha:WriteAPI} and \ref{cha:ReadAPI}.
 Writers are provided with a list of possible locations of unix domain sockets belonging to reader processes.
 Meanwhile, readers are assigned a path, in which they create a unix domain socket.
 This path has to conform with \texttt{SOCKET\_NAME\_TEMPLATE} as outlined above.
@@ -73,6 +73,7 @@ In fact, \texttt{socket\_finalize} simply calls \texttt{socket\_cleanup} and was
 \end{algorithm}
 
 \section{Write \ac{API}}
+\label{cha:WriteAPI}
 The write \ac{API} consists out of a single, versatile function\@: \texttt{sock\_writev}.
 See \ref{alg:sock:write} for its definition.
 
@@ -118,6 +119,7 @@ Then, all sockets with an existing connection are sent the data located in the i
 On success, the function returns the number of sent messages via the socket \ac{IPC}.
 
 \section{Read \ac{API}}
+\label{cha:ReadAPI}
 The function \texttt{sock\_readv} is responsible for reading data out of the unix domain socket infrastructure.
 As seen in \ref{alg:sock:read}, the function takes two arguments.
 
