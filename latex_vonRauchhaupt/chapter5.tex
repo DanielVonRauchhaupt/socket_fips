@@ -155,17 +155,17 @@ It was modified by Paul Raatschen to output values as a \ac{csv} file.
 The polled \ac{eBPF} map is ultimately used by Simplefail2ban to ban clients.
 \ac{CPU} time was measured via the command top.
 
-\section{Replicative experiments}
+\section{Established Simplefail2ban \ac{IPC} types}
 Software version changes warrant remeasurement of the shared memory and file \ac{IPC} mode for Simplefail2ban.
 These will also be used to evaluate the newly implemented socket mode.
 
-\subsection{Experiment 1a: Replication of Simplefail2ban Logfile}
+\subsection{Experiment 1a: Simplefail2ban Logfile}
 It has already been shown that the file \ac{IPC} type of Simplefail2ban is outperformed by the shared memory mode.
 Pure IPv4, IPv6 and a mixed IPv4/IPv6 \ac{IP} stack will be used.
 File logging is expected to perform worse than the other \ac{IPC} types discussed in this thesis.
 In total, 25 unique measurements were conducted for this experiment.
 
-\subsection{Experiment 1b: Replication of Simplefail2ban Shared Memory}
+\subsection{Experiment 1b: Simplefail2ban Shared Memory}
 The newly implemented socket approach is intended to be a valid alternative to the shared memory mode of Simplefail2ban.
 To enable a direct comparison, measurements for the shared memory mode need to be done under high loads, since with lower loads both the socket and shared memory mode are suspected to be performant enough.
 All levels of invalid traffic rates are measured individually.

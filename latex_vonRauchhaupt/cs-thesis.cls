@@ -118,7 +118,7 @@ backend=biber      % biber or bibtex
 \date{\thesisPlace, \thesisDate}
 
 % publishers
-\publishers{\thesisLogo\\\thesisUni\\\thesisDepart\\\thesisProf \vskip 20\p@ \rule{9.9cm}{0.5pt} \vskip 20\p@ Supervisor(s):\\\ifthenelse{\equal{\thesisAssayer}{~}}{\thesisAdvisorOne\\\thesisAdvisorTwo}{\thesisAssayer\\\thesisAdvisorOne}}
+\publishers{\thesisLogo\\\thesisUni\\\thesisDepart\\\thesisProf \vskip 20\p@ \rule{9.9cm}{0.5pt} \vskip 20\p@ Supervisors:\\\ifthenelse{\equal{\thesisAssayer}{~}}{\thesisAdvisorOne\\\thesisAdvisorTwo}{\thesisAssayer\\\thesisAdvisorOne}}
 \lowertitleback{\textbf{\thesisAuthorsurname,~\thesisAuthorname}\\\texttt{\thesisAuthoremail}\\\thesisTitle\\\thesisSubject,~\thesisDepart\\\thesisUni,~\thesisMonth}
 
 % dedication

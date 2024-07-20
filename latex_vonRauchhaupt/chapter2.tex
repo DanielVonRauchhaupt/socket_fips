@@ -4,20 +4,21 @@
 
 \chapter{Background \& Motivation}
 \label{cha:background}
-The following section establishes a definition for Host-based intrusion detection/prevention systems and introduces the example Fail2ban.
+This section establishes a definition for Host-based intrusion detection/prevention systems and introduces the example Fail2ban.
 An introduction to an alternative solution, Simplefail2ban, and its necessity will also be discussed.
-Lastly, any external tools used extensively in this thesis will also be discussed. 
+Lastly, any external tools used in this thesis will also be discussed. 
 
 \section{Host-based intrusion detection and prevention}
 Intrusion detection and prevention systems are tasked with monitoring the system and ensuring that no threat is present.
+While the former is only tasked with detecting on-going attacks, the latter actively defends system resources from exploits.
 The restriction to only utilize data available on the host system, differentiates a \ac{HIDS} from other forms of \ac{IDS}.
-In general, this includes collecting and analyzing data, identifying outliers and responding to any potential threats or unusual behavior to minimize potential harm to the system.
+In general, collecting and analyzing data, identifying outliers, evaluating the risk these outliers pose, and responding to any potential threats or unusual behavior to minimize potential harm to the system, is the main task of an \ac{IPS}.
 According to James P. Andersons study "Computer security threat monitoring and surveillance"\cite{anderson:compSec} a threat is any deliberate attempt to either
 \begin{itemize}
     \itemsep0em
-    \item access data.
-    \item manipulate data.
-    \item or render a system unreliable or unusable.
+    \item access data,
+    \item manipulate data, or
+    \item render a system unreliable or unusable.
 \end{itemize}
 
 With the ever-present risk of a system having a previously unknown vulnerability, proactive measures must be taken to prevent malicious actors' exploits.
@@ -31,27 +32,27 @@ The motivation for such a system is outlined by Dorothy E. Denning\cite{denning:
     \item Secure systems remain vulnerable to insiders misusing their privileges.
 \end{itemize}
 
-For the purposes of this paper, defending against a Denial of Service, the assumption that any system is exploitable will suffice.
+For the purposes of this paper, defending against a \ac{DoS} attack, the basic assumption that any system is exploitable will suffice.
 
-A \ac{HIDS} generally collect data from multiple sources, freely provided by the host.
+A \ac{HIDS} generally collects data from multiple sources, freely provided by the host.
 Such auditing of data needs to be tamper-proof and non-bypassable.
-Low-level system calls, often containing such data, are preferred.
+Low-level system calls, often containing such data, are preferable to achieve this goal.
 The anomaly based approach allows an intrusion detection system to create profiles representing legitimate behavior of clients, users and applications.
-Any deviation is interpreted as an attack on the system.
+Using statistical tests on normal behavior of clients, any deviations are detected and interpreted as an attack on the system.
 This retains the advantage of not explicitly defining attack patterns, creating a more robust system which can identify new threats on its own.\cite{HIDPS}
 
 \subsection{Fail2ban}
-Fail2ban is an open-source intrusion prevention system developed in Python and runs at the user space level.
-In contrast to a intrusion detection system, an \ac{IPS}, such as Fail2ban, takes deliberate measures once a threat has been identified to stop attacks on a system early.
+Fail2ban is an open-source intrusion prevention system, developed in Python, running in the user space level.
+In contrast to an intrusion detection system, an \ac{IPS}, such as Fail2ban, immediately takes deliberate measures once a threat has been identified to stop attacks on a system.
 By default, Fail2ban scans a variety of commonly used log files using \ac{Regex}, also called filters, to identify threats.
 It is therefore able to parse and monitor log data of a variety of different applications.
 A client will be identified as a threat if it repeatedly fails a certain task, for example establishing a \ac{TCP} connection.
-Such a client is then banned by modifying the system firewall to deny any incoming traffic from banned \ac{IP} addresses.\cite{git:fail2ban}
+Such a client is then banned by modifying the system firewall, addding its \ac{IP} address, to deny any further incoming traffic.\cite{git:fail2ban}
 
 In detail, Fail2ban creates so called jails.
 These jails are saved on persistent storage.
 Therefore, restarting Fail2ban or the machine running it will not result in a loss of current jail entries.
-A jail consists out of a log path, a certain filter, an action and a variety of customizable parameters.
+A jail consists of a log path, a certain filter, an action and a variety of customizable parameters.
 The filter requires at least one \ac{Regex} pattern.
 These patterns define what behavior Fail2ban should tolerate or not.
 An action, commonly a command or program, is to be executed once a client has been deemed a threat.
@@ -59,144 +60,141 @@ Further parameters define the time the action will be active (ban time) and how 
 In practice, if a client fails to adhere to what the filter of a jail defines as proper behavior, vital information of that client is deduced by the analyzed log messages.
 This includes the \ac{IP} address of the client.
 A ban will then be issued and a certain action, for example dropping all traffic with the source \ac{IP} of the banned client, would be performed.
-To issue such a ban, temporary changes to the Linux firewall, using iptables, are performed.
+To issue such a ban, temporary changes to the system firewall, using iptables, are performed.
 iptables allows user space programs, such as Fail2ban, to modify, add and remove rules for packet filtering.
 An incoming package has to pass each set of rules before reaching the destined application.
 Fail2ban creates a separate rule for each banned client via iptables.
-New incoming packets are checked against all rules defined by iptables, or until they infringe at least one rule.
-Especially when many clients need to be banned, this is a clear deficit.
-Each banned client corresponds to one additional rule future traffic has to be compared to.\cite{mikolajczak:ebpf}.
+New incoming packets are checked against all rules defined by iptables, or until they infringe upon at least one rule.
+Especially when many clients need to be banned this exerts an ever increasing load on the processing capabilities of the firewall, as each banned client corresponds to one additional rule future traffic has to be compared to.\cite{mikolajczak:ebpf}
 
 \subsection{Extended Berkeley Packet Filter}
-The \ac{eBPF} provides to opportunity to run user-generated code in a privileged setting, such as the kernel.
+The \ac{eBPF} provides the opportunity to run user-generated code in a privileged setting, such as the kernel.
 Such \ac{eBPF} programs are written in high-level programming languages, for example C.
 Compilers convert these programs to \ac{eBPF} bytecode in user space.
 Successfully deploying the code requires an \ac{eBPF} verifier to accept the program.
-This is done exclusively in kernel space as to not risk the security of the operating system.
-If the \ac{eBPF} program is accepted, the program will be converted to \ac{eBPF} native code.
+This is done exclusively in kernel space as to limit risk to the security of the operating system.
+If the \ac{eBPF} program is accepted, the program will be converted to \ac{eBPF} native machine code.
 There are several hooks to which an \ac{eBPF} program can be attached to.
 Depending on the chosen hook, the \ac{eBPF} program is deployed in or even before the network stack.
 Meaning, the \ac{eBPF} program receives incoming traffic while the operating system is still processing it in kernel space.\cite{mikolajczak:ebpf}
 
 In this thesis, the \ac{XDP} Driver hook is used for all \ac{eBPF} programs.
 Simply put, the \ac{eBPF} program and its user-generated code is run before the kernel has performed its usual processing steps for incoming traffic.
-Here, the program will receive each incoming packet and can decide to let it pass to the kernel unhindered, or drop it prematurely.
+This way, the program will receive each incoming packet and can decide to let it pass to the kernel unhindered, or drop it at an early processing stage.
 
 Since \ac{eBPF} programs are event-driven, they only handle one packet at a time.
 In order to communicate with other programs or even store information, \ac{eBPF} Maps are used.
 These maps are a key-value store and provide persistent storage.
-However, the size of \ac{eBPF} maps can not be changed during runtime and needs to be defined before creating them.\cite{mikolajczak:ebpf}
+However, the size of \ac{eBPF} maps needs to be defined before runtime, as it cannot be altered at a later stage.\cite{mikolajczak:ebpf}
 
-This provides a significant advantage over the iptables approach of filtering packets.
-With \ac{eBPF} programs it is possible to drop unwanted packets before they reach the computation heavy kernel network stack.
-And while \ac{eBPF} programs have a variety of useful applications, for this thesis they are only used to either accept packets and pass them to the kernel or drop them to lighten workload.
+Using \ac{eBPF} programs provides a significant advantage over the iptables approach of filtering packets.
+It is possible to drop unwanted packets before they reach the computation heavy kernel network stack, potentially saving resources on packets which ultimately would have been discarded anyway.
+And while \ac{eBPF} programs have a variety of useful other applications, for purposes of this thesis, they are only used to either accept packets and pass them to the kernel or drop them to lighten workload.
 
 \subsection{Simplefail2ban}
-During research conducted by Florian Mikolajczak, it has been proven that Fail2ban performs poorly when dealing with large amounts of incoming unwanted traffic.
-This issue remained even after an alternative, and competitive, method of filtering incoming traffic using \ac{eBPF} programs was implemented.
-To remedy this shortcoming, Simplefail2ban was developed by Paul Raatschen.
-It was suspected that Fail2ban was loosing performance by exclusively utilizing traditional file-based logging.
+Florian Mikolajczak has shown\cite{mikolajczak:ebpf} that Fail2ban performs poorly when dealing with large amounts of incoming unwanted traffic.
+This issue remains even after an alternative, and competitive, method of filtering incoming traffic using \ac{eBPF} programs was implemented.
+To remedy this shortcoming, Simplefail2ban was developed\cite{raatschen:ipc}.
+It was suspected that Fail2ban is losing performance by exclusively utilizing traditional file-based logging.
 The goal was to implement an \ac{IPS} that can prohibit malicious actors from sending traffic to the host system, similarly to Fail2ban, without having to rely on file-based logging.
 
 Simplefail2ban provides the option to use a shared memory section to receive log messages.
-This proved to be a faster method to transmit log messages from an application directly to Simplefail2ban.
-And whilst the method of acquisition of the log messages has changed drastically, the general requirements of banning a client have not.
+This significant change proved to be a faster method to transmit log messages from an application directly to Simplefail2ban.
+However, the general requirements for banning a client are unchanged.
 The \ac{IPS} still monitors incoming log messages for disallowed behavior.\footnote{Since Simplefail2ban is just a prototype, the distinction between allowed and disallowed behavior is based upon the payload of incoming traffic.}
 Each violation of the rules imposed by Simplefail2ban results in the clients \ac{IP} being logged in a hashtable.
 If the number of entries for one \ac{IP} address surpasses the defined ban limit, that client is banned via one of the banning threads of Simplefail2ban.
 This ban is facilitated by adding the \ac{IP} address to a list of banned clients with the current timestamp, and an \ac{eBPF} map.
-An \ac{eBPF} program developed by Florian Mikolajczak will check if incoming traffic should either be dropped or passed along to the kernel, depending on the \ac{eBPF} map entries.
-The list of banned clients is routinely checked by the unbanning thread, removing clients whose ban time has elapsed from the hashtable, ban list and \ac{eBPF} map.
-
-For more details, please refer to the work of Paul Raatschen\cite{raatschen:ipc}.
+An \ac{eBPF} program developed by Florian Mikolajczak will check if incoming traffic should either be dropped or passed along to the kernel, depending on the \ac{eBPF} map entries\cite{mikolajczak:ebpf}.
+The list of banned clients is routinely checked by the unbanning thread, removing clients whose ban time has elapsed from the hashtable, ban listn and \ac{eBPF} map, effectively re-allowing client interaction.\cite{raatschen:ipc}.
 
 \section{Inter-process communication}
-While a variety of methods for inter-process communication exist, the nature of this thesis only necessitates the detailed explanation of both the shared memory and socket approach.
-As an addendum\@: Development was conducted on a Linux based system which will be reflected when discussing technical details.
+While a variety of methods for inter-process communication exist, the nature of this thesis only necessitates the detailed comparison between the shared memory and socket approach.
+Therefore, understanding technical details of both \ac{IPC} types is vital to reach a conclusive verdict.
+Development was conducted on a Linux based system which will be reflected when discussing technical details.
 
 \subsection{Shared memory approach by Paul Raatschen}
-During the development of his thesis, Paul Raatschen initially wanted to implement multiple \ac{IPC} types.
-Shared memory, named pipes, sockets and message queues were all regarded as viable candidates.
-Ultimately, only the shared memory approach was implemented.
-It was considered most viable, because it did not require any involvement of the kernel during write or read operations.
-Hence, if the synchronization overhead for the communication processes could be kept to a minimum, the \ac{IPC} could almost operate at the speed of normal memory access.
-Without any precedent on how to implement \ac{IPC} based on shared memory, Paul Raatschen settled for an accumulation of independent segments.
+While Paul Raatschen initially considered multiple \ac{IPC} types, such as shared memory, named pipes, sockets and message queues, only the shared memory approach was implemented as the most viable option.
+This was because it did not require any involvement of the kernel during write or read operations, and thus no context-switches between kernel- and user-space.
+Hence, if the synchronization overhead for the communication processes could be kept to a minimum, the \ac{IPC} could operate almost at the speed of normal memory access.
+With no precursor on how to implement \ac{IPC} based on shared memory, Paul Raatschen settled for an accumulation of independent segments.
 Each segment consists of a single ring buffer.\cite{raatschen:ipc}
 
 Ring buffers are common array-like data structures.
 When saving data in a ring buffer, data is written in order into the buffer.
-Once the buffer is filled, the writing process loops back to the beginning of the array.
+For each data entry, the writer index position is incremented by one.
+Once the buffer is filled, the writer index loops back to the beginning of the array.
 Receiving data from a ring buffer works in a similar fashion.
 Once the end of the array is reached, the reader index is again set to the beginning of the ring buffer.
 Therefore, one can imagine the end of a ring buffer being connected with its first array element, resulting in a circular array.
 Overall, this results in data being read in a first-in first-out manner, with the index of the writing process preceding the index of the reading process.
 However, due to a multitude of reasons, the writer process might catch up to the index of the reader process.
-If this happens, there are two possible courses of action.
-Either wait for the reader index to move and then write new data into the ring buffer, or overwrite the entry not yet read by the reader process.
-While overwriting the entry in the ring buffer looses data, the writer process is not slowed down by the reader process.
-In the shared memory approach the desired approach can be defined by setting the option ``overwrite'' to accept data loses\cite{raatschen:ipc}.
+If this happens, there are two possible courses of action:
+Either wait for the reader index to move, and then write new data into the ring buffer; or overwrite the entry not yet read by the reader process.
+While overwriting the entry in the ring buffer leads to loss of data, the writer process is not slowed down by the reader process.
+Using shared memory, the desired approach can be defined by setting the option ``overwrite'' to accept data losses\cite{raatschen:ipc}.
 
 Segments are defined via a global header, dictating certain shared variables.
-This includes the number of ring buffers, the number of entries each ring buffer has and the size of each array element.
-While other components exist in the global header, they all serve to synchronize writers and readers in one way or another and are not vital in understanding the general design of the shared memory \ac{IPC} type.
-If the reader is interested in further, more technical, details on the matter, please refer to Paul Raatschens thesis\cite{raatschen:ipc}.
+This includes the number of ring buffers, the number of entries each ring buffer has and the size of each array element in byte.
+While other components exist in the global header, they all serve to synchronize writers and readers in one way or another and are not vital in understanding the general design of the shared memory \ac{IPC} type; for more details, refer to \cite{raatschen:ipc}.
 
 Once the shared memory section has been established, multiple reader processes can attach one reading thread to each segment.
 Yet, per design, only one writing thread attaches to each segment.
 This one-to-one mapping ensures no further synchronization between multiple writer threads is required.
-Sending and receiving data can now be performed by each thread individually according to the base principals of ring buffers outlined above.
+Sending and receiving data can now be performed by each thread individually according to the base principles of ring buffers outlined above.
 
 \subsection{Unix Domain Sockets}
 \label{cha:UnixDomainSockets}
 In order to explain what a unix domain socket is, one must understand regular internet sockets.
 On a Linux system, a socket is a file descriptor referring to an endpoint for communication\cite{man:sockets}.
 While a variety of socket types exist, the actual socket (or file descriptor representing a socket) does not change.
-Instead the way data is transmitted via a particular socket defines the socket type.
+Instead, the way data is transmitted via a particular socket defines the socket type.
 The most common types of sockets are stream and datagram sockets.
 
-Stream sockets provide a reliable-two way connection between communication partners.
-Not only do they guarantee that any data sent is transmitted without errors, but also preserve the order in which the data was sent.
+Stream sockets provide a reliable two-way connection between communication partners.
+Not only do they guarantee that any data sent is transmitted without errors, but they also do preserve the order in which the data was sent.
 This behavior is achieved by utilizing the \ac{TCP}.\cite{beej:sockets}
 
-The foundation of \ac{TCP} is the three-way handshake in which participants negotiate the parameters required for the data exchange.
+The foundation of \ac{TCP} is a three-way handshake in which participants negotiate the parameters required for the data exchange.
 Error checking is performed on all messages.
 If data is corrupted, the recipient can and will request retransmission of the same data.
-A number of additional factors contribute to the complexity and depth of \ac{TCP}.
+A number of additional factors contribute to the complexity of \ac{TCP}.
 However, for this thesis, the knowledge that \ac{TCP}'s reliability is achieved via the cooperation of all participating partners will suffice.
 
-In contrast to stream sockets, connectionless sockets, also called datagram sockets, are considered unreliable.
-Reason being, the usage of a different communication protocol\@: \ac{UDP}.
-Using \ac{UDP}, there is not guarantee that data will arrive at its destination.
-Consequently, the sequentiality of data is also not given, it may arrive in any order.
-The lack of an explicit connection between communication partners, instead using a best-effort service, results in lower latency during data exchange.\cite{beej:sockets}
+In contrast, datagram sockets, also called connectionless sockets, are considered unreliable, because it is based on the \ac{UDP}, not \ac{TCP}.
+\ac{UDP} does not guarantee that data will arrive at its destination.
+Consequently, the reception of data in correct sequence cannot be guaranteed either.
+The lack of a reliable connection between communication partners, instead using a best-effort service, results in lower latency during data exchange.\cite{beej:sockets}
 
 When a socket is only represented via a path name on a local system, it is called a unix domain socket (also known as AF\_UNIX).
-Unlike the previously discussed sockets, they are used for local only inter-process communication.
-Therefore, while they do inherit similar functionality as the internet sockets, they can shed slow communication protocols.
+Unlike stream or datagram sockets, unix domain sockets are used for local only inter-process communication.
+Therefore, while they do inherit similar functionality as the internet sockets, they can shed slow communication protocols and provide faster communication.
 Data is never sent beyond system boundaries and only handled by the kernel.
+TODO: unix -> UNIX with link to acro
 There are three socket types in the UNIX domain\cite{man:unixsockets}:
 \begin{itemize}
     \itemsep0em
-    \item SOCK\_STREAM\@: Is a stream-oriented socket (comparable to stream sockets), establishing connections and keeping them open until explicitly closed by one communication partner.
-    \item SOCK\_DGRAM\@: Is a datagram-oriented socket (comparable to datagram sockets), preserving message boundaries. Additionally, SOCK\_DGRAM is reliable and does not reorder sent data in most UNIX implementation.
-    \item SOCK\_SEQPACKET\@: Is a sequence-packet socket. It is connection-oriented, preserves message boundaries and retains the order in which data was sent.
+    \item SOCK\_STREAM\@: Stream-oriented socket (comparable to stream sockets), establishing connections and keeping them open until explicitly closed by one communication partner.
+    \item SOCK\_DGRAM\@: Datagram-oriented socket (comparable to datagram sockets), preserving message boundaries. In contrast to datagram sockets, SOCK\_DGRAM is reliable and does not reorder sent data in most UNIX implementations.
+    \item SOCK\_SEQPACKET\@: Sequence-packet socket, is connection-oriented, preserves message boundaries, and retains the order in which data was sent.
 \end{itemize}
 
-In conclusion, unix domain sockets retain the flexibility provided by traditional internet sockets with a decrease in latency at the cost of being bound to the local system.
+In conclusion, unix domain sockets retain the flexibility provided by traditional internet sockets allowing for decreased latency, but at the cost of being bound to the local system.
 
 \section{Packet generator: TRex}
 TRex is an open source traffic generator developed by Cisco Systems, capable of generating both stateless and stateful traffic\cite{trex}.
 
-TRex is based on the \ac{DPDK}, which is a framework promising to increase packet processing speeds for a limted number of \ac{CPU} architecture.
+TRex is based on the \ac{DPDK}, which is a framework designed to increase packet processing speeds for a limited number of \ac{CPU} architecture.
 The increase in performance is mainly attributed to the \ac{PMDs}, which bypass the kernel's network stack.\cite{dpdk}
 
 Providing the ability to use multiple cores to generate traffic, TRex can send up to 200Gb/sec with hardware supported by the \ac{DPDK} framework.
 Utilizing Scapy, a packet manipulation library written in Python\cite{scapy}, TRex is able to generate a customizable stream of traffic, allowing the user to modify any packet field.\cite{trex}
 
 This feature will be used to modify the source \ac{IP} of all generated packets, to simulate attacks involving a large number of clients.
-In the scope of this thesis, TRex is used to generate \ac{UDP} traffic only.
 
 The failure to achieve advertised traffic rates when using stateful traffic in certain scenarios was already observed by Paul Raatschen.
 When deploying Simplefail2ban, incoming traffic of banned clients is dropped by the \ac{IPS} before reaching the network stack of the kernel.
 Therefore, no application receives any packets, and consequently, no reply is sent.
 This results in a loss of performance for TRex, as it expects an \ac{ACK} packet when sending a \ac{TCP-SYN} packet.\cite{raatschen:ipc}
+
+Therefore, in the scope of this thesis, TRex is used to generate \ac{UDP} traffic only.
