@@ -18,34 +18,36 @@ Since the task at hand is to defend against \ac{DoS} attacks on the host system,
         A quick transfer of data to the \ac{IPS} facilitates faster banning of malicious attackers, before they can overwhelm the system.
         In general, low overhead is required to achieve these goals.
     \item \textbf{High bandwidth} \\
-        Considering that the host system is bombarded with millions of packets each second during an ongoing \ac{DoS} attack, high bandwidth is crucial.
+        Considering that the host system is bombarded with millions of packets each second during an ongoing \ac{DoS} attack, high bandwidth between processes using the \ac{IPC} is crucial.
         To avoid bottlenecks between the writer and the \ac{IPS}, large amounts of data need to be transmissible at once instead of requiring separate transmissions.
     \item \textbf{Reliability} \\
         Ensuring that no crucial log messages are lost due to unreliability is desirable.
         Repeatedly missing information about malicious clients delays the response time of the \ac{IPS}, risking uptime of the system and its services.
     \item \textbf{Scalability} \\
         Log messages can come from a multitude of sources and contain a variety of information.
-        Multiple applications should be able to submit log messages to the \ac{IPS} at once and retain the possibility of providing it to other applications.
+        Multiple applications should be able to submit log messages to the \ac{IPS} at once, and retain the possibility of providing it to other applications.
         Therefore, the option to have both multiple readers and writers should be present.
         While not necessary for the development of a host-based \ac{IPS}, the option to scale beyond the local filesystem is interesting.
     \item \textbf{Portability} \\
         Developing an \ac{IPS} requires it to actually be usable with already existing applications.
-        Whereas this thesis is not intended to be more than a demonstration of a proof of concept, potential future development still requires some flexibility.
-        A well defined \ac{API} that can realistically be integrated into any application, without the need for specific hard- and software, is a bare minimum.
+        Whereas this thesis aims at presenting a fully functioning proof of concept, potential future development may still require some flexibility.
+        A well defined \ac{API} that can realistically be integrated into any application, without the need for specific hard- and software, greatly facilitates portability.
 \end{itemize}
 
-Initially, the decision by Paul Raatschen to use shared memory as the \ac{IPC} method employed by Simplefail2ban was mainly based on the fact that the kernel was not involved in any write or read operations\cite{raatschen:ipc}.
+Initially, the decision by Paul Raatschen to utilize shared memory as the \ac{IPC}\cite{raatschen:ipc}.
 No other \ac{IPC} method was implemented.
 To ensure that the shared memory approach is the most viable, an alternative needed to be chosen to be measured against.
 
 The choice fell on unix domain sockets, due to the already existing write and read \ac{API} and its support in the Posix standard on all UNIX systems since at least 2007\cite{posix}.
-Additionally, the utilization of sockets provided a great deal of flexibility during usage of the \ac{IPC} which will be discussed in the next section.
+Additionally, the utilization of sockets provides a great deal of flexibility during usage of the \ac{IPC}.
+Since unix domain sockets are already an established mode of \ac{IPC}, it is suspected that they also provide the desired low latency and high bandwidth.
+Furthermore, they are reliable\cite{man:unixsockets} and theoretically provide the opportunity to replace them with traditional internet sockets to scale beyond the local system.
 
 \section{Design and abstractions}
 \label{sec:Design_and_abstractions}
 During the design process of the socket architecture it was decided that supporting attachment of multiple readers was essential, as already discussed in section \ref{cha:ReasoningUnixSockets}.
 Each reader should receive all log messages sent by any writers.
-These restrictions led to the design illustrated in \ref{fig:socket:architecture}.
+These restrictions led to the design illustrated in figure \ref{fig:socket:architecture}.
 
 \begin{figure}[h!]
     \centerline{\includegraphics[width=1.2\textwidth]{images/SocketArchitecture.pdf}}
@@ -54,14 +56,14 @@ These restrictions led to the design illustrated in \ref{fig:socket:architecture
 	\label{fig:socket:architecture}
 \end{figure}
 
-The figure displays the general data flow using the socket \ac{IPC} type.
+This figure displays the general data flow using the socket \ac{IPC} type.
 Each reader application creates its own unix domain socket.
 Sockets are bound to a filesystem pathname.
 Readers can receive data from their own socket without having to compete or synchronize with other readers for data thanks to the one-to-one mapping between socket and reader.
 Meanwhile, writers can also independently write data into sockets without having to communicate with other writer processes.
 In order to guarantee that readers receive all data being sent via the socket \ac{IPC} architecture, writers need to periodically recheck for newly opened sockets and always send their data to all available sockets.
 This results in the writers having a significant portion of the overhead, needing to resend identical data multiple times.
-Minimizing overhead on the reader side is important to maximize the limited computational time crucial services, such as the \ac{IPS} Simplefail2ban, have available to process incoming log messages.
+Minimizing overhead on the reader side is important to maximize the limited computational time that crucial services, such as the \ac{IPS} Simplefail2ban, have available to process incoming log messages.
 
 To preserve the integrity of log messages, the unix domain socket needs to retain message boundaries, ruling out the SOCK\_STREAM unix domain socket presented in section \ref{cha:UnixDomainSockets}.
 Without the absolute guarantee of reliable behavior in regard to reordering of messages - only present in most UNIX implementations, but not all\cite{man:unixsockets} - SOCK\_DGRAM is unappealing as well.

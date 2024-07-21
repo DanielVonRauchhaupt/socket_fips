@@ -10,7 +10,7 @@ All error codes are numeric and defined in the file \texttt{io\_ipc.h}.
 
 \section{Auxiliary functions and structures}
 When utilizing the socket \ac{IPC} type, some shared resources seen in \ref{alg:variables:shared} need to be set up.
-None of these are modified during runtime.
+None of these are modifiable during runtime.
 
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=18, lastline=22]{code/sock_comm.h}
@@ -30,7 +30,7 @@ The reader \ac{ID} is determined by claiming the first \ac{ID} not already in us
 Since the length of the reader \ac{ID} being appended to the \texttt{SOCKET\_NAME\_TEMPLATE} can vary, a length for this template is defined in \texttt{SOCKET\_TEMPLATE\_LENGTH}.
 It should be defined in such a manner, that both the appended reader \ac{ID} and a terminating null byte can be appended to \texttt{SOCKET\_NAME\_TEMPLATE}.
 
-Separating functions utilized by both readers and writers results in an unwieldy \ac{API}.
+Separating functions utilized by readers and writers results in an unwieldy \ac{API}.
 Shared usage of functions by both sides is achieved by supplying function calls with the role of the calling process, either \texttt{SOCK\_WRITER} or \texttt{SOCK\_READER}.
 
 \begin{algorithm}[h!]
@@ -39,7 +39,7 @@ Shared usage of functions by both sides is achieved by supplying function calls 
     \label{alg:sock:init}
 \end{algorithm}
 
-Therefore the function initializing communication between processes, \texttt{sock\_init} displayed in \ref{alg:sock:init} only requires a structure of parameters and the role of the calling process.
+Therefore the function initializing communication between processes, \texttt{sock\_init} as per \ref{alg:sock:init} only requires a structure of parameters and the role of the calling process.
 Defining a union containing both writer and reader structures, as seen in \ref{alg:sock:union}, allows the user of the \ac{API} to provide either one as a parameter for the same function.
 The actual purpose of \texttt{sock\_init} is to enable connection between writer and readers by initiating the associated structure passed in the parameter \texttt{sock\_args}.
 An explanation of both the \texttt{sock\_writer\_arg\_t} and \texttt{sock\_reader\_arg\_t} will follow in the next sections \ref{cha:WriteAPI} and \ref{cha:ReadAPI}.
@@ -62,7 +62,7 @@ In fact, \texttt{socket\_finalize} simply calls \texttt{socket\_cleanup} and was
 
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=125, lastline=125]{code/sock_comm.h}
-    \caption[Socket: Socket finalization]{Initializes cleanup of socket \ac{IPC}.}
+    \caption[Socket: Socket finalization]{Cleanup initialization function of socket \ac{IPC}.}
     \label{alg:sock:finalize}
 \end{algorithm}
 
@@ -74,22 +74,23 @@ In fact, \texttt{socket\_finalize} simply calls \texttt{socket\_cleanup} and was
 
 \section{Write \ac{API}}
 \label{cha:WriteAPI}
-The write \ac{API} consists out of a single, versatile function\@: \texttt{sock\_writev}.
-See \ref{alg:sock:write} for its definition.
+The write \ac{API} consists of a single, versatile function\@: \texttt{sock\_writev}.
+See algorithm \ref{alg:sock:write} for its definition.
 
 It requires four arguments:
 \begin{itemize}
     \item A pointer to an instance of the structure \texttt{sock\_writer\_arg\_t} which will be introduced shortly.
-    \item A pointer to an array of iovec structures.
-            Each iovec structure defines separate memory regions of a variable size, acting as a buffer.
+    \item A pointer to an array of \texttt{iovec} structures.
+            Each \texttt{iovec} structure defines separate memory regions of a variable size, acting as a buffer.
             An entire array of such structures represent a vector of memory regions\cite{man:iovec}.
-    \item The integer \texttt{invalid\_count} represents the number of log messages located in the iovec array.
+    \item The integer \texttt{invalid\_count} represents the number of log messages located in the \texttt{iovec} array.
+            Each entry represents an attempt to establish an unwanted connection request from a malicious client.  
     \item Finally, the maximum number of receiving sockets is given via the parameter \texttt{maxNumOfSocks} and is usually equal to \texttt{MAX\_AMOUNT\_OF\_SOCKETS}.
-            Setting \texttt{manNumOfSocks} to a value smaller than \texttt{MAX\_AMOUNT\_OF\_SOCKETS} results in that writer process only supplying a subset of sockets/readers with data.
+            Setting \texttt{maxNumOfSocks} to a value smaller than \texttt{MAX\_AMOUNT\_OF\_SOCKETS} results in that writer process only supplying a subset of sockets/readers with data.
 \end{itemize}
 
 \begin{algorithm}[h!]
-    \lstinputlisting[language=c, firstline=101, lastline=103]{code/sock_comm.h}
+    \lstinputlisting[language=c, firstline=101, lastline=104]{code/sock_comm.h}
     \caption[Socket: Write \ac{API}]{Write \ac{API} for the unix domain socket architecture}
     \label{alg:sock:write}
 \end{algorithm}
@@ -115,7 +116,7 @@ Lastly, \texttt{clientSockets} holds a collection of file descriptors referring 
 When calling \texttt{sock\_writev}, the first thing being performed is a check for newly available unix domain sockets.
 This can be considered analogous to checking for new readers because of the strict one-to-one mapping between sockets and readers.
 If new sockets were identified, a connection with that socket is established and saved for future calls of this function.
-Then, all sockets with an existing connection are sent the data located in the iovec structures using the blocking function \texttt{write}.
+Then, all sockets with an existing connection are sent the data located in the \texttt{iovec} structures using the blocking function \texttt{write}.
 On success, the function returns the number of sent messages via the socket \ac{IPC}.
 
 \section{Read \ac{API}}
@@ -129,7 +130,7 @@ As seen in \ref{alg:sock:read}, the function takes two arguments.
     \label{alg:sock:read}
 \end{algorithm}
 
-The parameter \texttt{iovecs} is a pointer to an array of iovec structures.
+The parameter \texttt{iovecs} is a pointer to an array of \texttt{iovec} structures.
 Any log messages received via the socket \ac{IPC} are stored here for the calling reader process to access later.
 A structure containing all relevant information regarding the specific unix domain socket associated with the reader process are stored in \texttt{sock\_args}.
 This structure, \texttt{sock\_reader\_arg\_t}, is defined in \ref{alg:sock:read:args}.
@@ -142,7 +143,8 @@ This structure, \texttt{sock\_reader\_arg\_t}, is defined in \ref{alg:sock:read:
 
 Analogous to \texttt{sock\_writer\_arg\_t}, the path of the socket assigned to the reader process is passed in \texttt{socketPathName}.
 Parameter \texttt{address} contains the structure \texttt{sockaddr\_un} representing that same unix domain socket.
-Not wanting to redetermine the static size of the \texttt{address} each function call, \texttt{sizeOfAddressStruct} is passed along containing that exact value.
+Not wanting to redetermine the static size of the \texttt{address} for each function call, \texttt{sizeOfAddressStruct} is passed along containing that exact value.
+Therefore, the size of \texttt{address} has to determined only once when initializing communication, saving computational time.
 The integer \texttt{readSocket} contains the file descriptor referring to the readers unix domain socket, as created by the function \texttt{socket}.
 Saving already established connections with writer processes for future function calls is done in the array \texttt{clientSockets}.
 
@@ -152,7 +154,7 @@ Calling \texttt{sock\_readv} creates a list of clients which the blocking functi
 A file descriptor is considered ready once a call of \texttt{read} or \texttt{write} will not block if performed.\cite{man:select}
 
 This stops the function \texttt{sock\_readv} having to either be stuck in a blocking call of \texttt{read}, or return from a non-blocking call of \texttt{read} with an error code.
-Having a blocking call of \texttt{select} instead of \texttt{read} is desireable because it allows \texttt{sock\_readv} to accept connections of new writer processes while waiting for data to arrive.
+Having a blocking call of \texttt{select} instead of \texttt{read} is desirable because it allows \texttt{sock\_readv} to accept connections of new writer processes while waiting for data to arrive.
 Once \texttt{select} returns, \texttt{sock\_readv} checks if new connections need to be accepted.
 If not, one of the already connected writer processes has sent data via the unix domain socket, which is ready to be read.
 All received data is then saved in the provided parameter \texttt{iovecs}, allowing the calling process of \texttt{sock\_readv} to access it.
