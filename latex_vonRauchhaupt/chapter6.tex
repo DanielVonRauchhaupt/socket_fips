@@ -5,30 +5,29 @@
 \chapter{Conclusion \& Outlook}
 In this thesis, the previously developed light-weight \ac{IPS} Simplefail2ban and its selection of \ac{IPC} was expanded to include unix domain sockets.
 With it being the first kernel-based \ac{IPC} available, thorough measurements were conducted to evaluate its performance to the already implemented shared memory and file-base \ac{IPC} modes.
-Expectations were that unix domain sockets would not beat out shared memory on performance, because of a constant need for context-switches between user- and kernel-space.
+Expectations were that unix domain sockets would not outperform shared memory, because of a constant need for context-switches between kernel- and userspace.
 This initial hypothesis turned out to be true.
-The socket \ac{IPC} type was beat in all analyzed metrics by the shared memory mode of Simplefail2ban.
-However, the actual performance of the unix domain socket mode was not necessarily bad.
-It remained competitive in most experiments utilizing only one process to receive data, only ever performing around 2 percent worse than its shared memory counterpart.
-During less intense traffic flow this gap in performance shrunk.
+The socket \ac{IPC} type was beat in all analyzed metrics (number of unwanted requests dropped, number of log messages sent and \ac{CPU} time) by the shared memory mode of Simplefail2ban.
+However, performance of the unix domain socket mode was still well up to the task.
+It remained competitive in experiments utilizing only one process to receive data, performing only around 2 percent worse than its shared memory counterpart.
+During less intense traffic flow, this small disadvantage in performance shrunk even further.
 Data indicates that latency in the socket \ac{IPC} type was at least on par with the shared memory mode.
-Rather, a lack of bandwidth and increased drain on system resources are the main culprits responsible for the observed decrease in performance.
-But unix domain socket did consistently outperformed the file-based \ac{IPC}.
-Unfortunately, this difference was rather small, regularly being less than a percentage point in relative drop rate.
-Nevertheless, the socket \ac{IPC} type was always able to block over 95,5 percent of all incoming traffic and defend against \ac{DoS} attacks successfully.
+Rather, a lack of bandwidth and increased drain on system resources are the main causes identified for the observed decrease in performance.
+Conversely, unix domain socket did consistently outperform the file-based \ac{IPC}, albeit by a small fraction: regularly being less than one percentage point in relative drop rate.
+Overall, the socket \ac{IPC} type was always able to block over 95,5 percent (and 98,5 percent on average) of all incoming traffic, therefore defending against \ac{DoS} attacks successfully.
 
-While never being an explicitly desired feature, the socket \ac{IPC} type does provide the option to attach, up to a pre-defined maximum, and detach a variable number of both writer and reader processes during runtime.
+While never being an explicitly desired feature, the socket \ac{IPC} type does provide the option to attach, up to a pre-defined maximum, and detach a varying number of both writer and reader processes during runtime.
 In contrast, the shared memory \ac{IPC} only provides the option to attach multiple reader processes.
-Regrettably, usage of unix domain sockets in scenarios with multiple reader processes is not recommended.
-The conducted experiments reveal that the lack of bandwidth results in the socket \ac{IPC} performing significantly worse than the shared memory \ac{IPC}.
+This allows for, in theory, flexible reusing of the socket \ac{IPC} architecture for other applications.
+Regrettably however, usage of unix domain sockets in scenarios with multiple reader processes is not recommended due to a lack of bandwidth, resulting in the socket \ac{IPC} performing significantly worse than the shared memory \ac{IPC}.
 At a rate of 20m invalid \ac{PPS}, defending against a \ac{DoS} attack in a single ban cycle was unfeasible when employing unix domain sockets.
 Yet, after multiple ban cycles, Simplefail2ban was able to recover and repel the incoming \ac{DoS} attack.
 With 30m invalid \ac{PPS}, a recovery became impossible.
-The shared memory \ac{IPC} type did not struggle supplying a second reader process, even when disabling the overwrite feature.
+The shared memory \ac{IPC} type was able to keep its performance up even when supplying a second reader process, and disabling the overwrite feature.
 
 Potential improvements of the socket \ac{IPC} should focus on increasing the bandwidth.
 This makes it possible to react more efficiently and effectively in the event of a sudden influx of messages, primarily occurring at the beginning of a ban cycle or \ac{DoS} attack.
 
-Overall, this thesis proved that the kernel-based unix domain sockets remain somewhat viable as \ac{IPC}, but being unable surpass the shared memory \ac{IPC} type.
+Overall, this thesis proved that the kernel-based unix domain sockets remain a viable option as \ac{IPC} coming reasonably close to, yet unable to surpass the higher performance of the shared memory \ac{IPC} type.
 Continued development could focus on the possibility of scaling the socket \ac{IPC} beyond the local system by employing internet sockets.
-Providing an improved high-level \ac{API} for easier integrability with established real-world applications, such as syslog or journald, is also required.
+Providing an improved high-level \ac{API} for easier integrability with established real-world applications, such as syslog or journald, is also worthwhile investigating.
