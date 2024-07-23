@@ -44,7 +44,7 @@ The second machine generated and sent traffic, consisting of both valid and inva
 \section{Experimental design}
 In his thesis\cite{raatschen:ipc}, Paul Raatschen showed that the shared memory mode of Simplefail2ban outperforms the traditional Fail2ban.
 However, it remains unclear if the implementation of this \ac{IPC} type is more performant than other alternatives.
-Specifically, the possibility of using Unix domain sockets as a mode of inter-process communication was not explored.
+Specifically, the possibility of using UNIX domain sockets as a mode of inter-process communication was not explored.
 The following experiments enable a direct comparison between the two \ac{IPC} types.
 
 \noindent
@@ -134,7 +134,7 @@ The factors, or variable parameters, during these experiments were the following
         \item Range used for 131068 clients: 10.4.0.1 to 10.5.255.252 resulting in clients stemming from 512 subnets (using offset\_fixup of 5 for IPv6 in TRex script).
         \item When using the IPv4/IPv6 \ac{IP} stack, the range for 65534 client is being used twice to generate both a IPv4 and IPv6 stream.
     \end{itemize}
-    \item Differing \ac{IPC} type\@: FILE (traditional file-based logging), SHM (using shared memeory), SOCK (using unix domain sockets)
+    \item Differing \ac{IPC} type\@: FILE (traditional file-based logging), SHM (using shared memeory), SOCK (using UNIX domain sockets)
     \item For shared memory specifically:
     \begin{itemize}
         \item No 2nd Reader/ Enabling 2nd Reader

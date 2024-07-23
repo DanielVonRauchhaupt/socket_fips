@@ -5,10 +5,10 @@
 \chapter{Design}
 \label{cha:design}
 The following chapter discusses the design of the socket \ac{IPC} for Simplefail2ban.
-While reasoning the choice of unix domain sockets, advantages and disadvantages are presented.
+While reasoning the choice of UNIX domain sockets, advantages and disadvantages are presented.
 
-\section{Reasoning for Unix Domain Sockets}
-\label{cha:ReasoningUnixSockets}
+\section{Reasoning for UNIX Domain Sockets}
+\label{cha:ReasoningUNIXSockets}
 In order to make an informed decision on which \ac{IPC} type is suited best, requirements need to be specified.
 Since the task at hand is to defend against \ac{DoS} attacks on the host system, the following aspects are considered\cite{raatschen:ipc}:
 
@@ -38,26 +38,26 @@ Initially, the decision by Paul Raatschen to utilize shared memory as the \ac{IP
 No other \ac{IPC} method was implemented.
 To ensure that the shared memory approach is the most viable, an alternative needed to be chosen to be measured against.
 
-The choice fell on unix domain sockets, due to the already existing write and read \ac{API} and its support in the Posix standard on all UNIX systems since at least 2007\cite{posix}.
+The choice fell on UNIX domain sockets, due to the already existing write and read \ac{API} and its support in the Posix standard on all UNIX systems since at least 2007\cite{posix}.
 Additionally, the utilization of sockets provides a great deal of flexibility during usage of the \ac{IPC}.
-Since unix domain sockets are already an established mode of \ac{IPC}, it is suspected that they also provide the desired low latency and high bandwidth.
+Since UNIX domain sockets are already an established mode of \ac{IPC}, it is suspected that they also provide the desired low latency and high bandwidth.
 Furthermore, they are reliable\cite{man:unixsockets} and theoretically provide the opportunity to replace them with traditional internet sockets to scale beyond the local system.
 
 \section{Design and abstractions}
 \label{sec:Design_and_abstractions}
-During the design process of the socket architecture it was decided that supporting attachment of multiple readers was essential, as already discussed in section \ref{cha:ReasoningUnixSockets}.
+During the design process of the socket architecture it was decided that supporting attachment of multiple readers was essential, as already discussed in section \ref{cha:ReasoningUNIXSockets}.
 Each reader should receive all log messages sent by any writers.
 These restrictions led to the design illustrated in figure \ref{fig:socket:architecture}.
 
 \begin{figure}[h!]
     \centerline{\includegraphics[width=1.2\textwidth]{images/SocketArchitecture.pdf}}
     \caption[General design of socket architecture]{
-        Architecture for a n-reader and m-writers scenario using unix domain sockets.}
+        Architecture for a n-reader and m-writers scenario using UNIX domain sockets.}
 	\label{fig:socket:architecture}
 \end{figure}
 
 This figure displays the general data flow using the socket \ac{IPC} type.
-Each reader application creates its own unix domain socket.
+Each reader application creates its own UNIX domain socket.
 Sockets are bound to a filesystem pathname.
 Readers can receive data from their own socket without having to compete or synchronize with other readers for data thanks to the one-to-one mapping between socket and reader.
 Meanwhile, writers can also independently write data into sockets without having to communicate with other writer processes.
@@ -65,6 +65,6 @@ In order to guarantee that readers receive all data being sent via the socket \a
 This results in the writers having a significant portion of the overhead, needing to resend identical data multiple times.
 Minimizing overhead on the reader side is important to maximize the limited computational time that crucial services, such as the \ac{IPS} Simplefail2ban, have available to process incoming log messages.
 
-To preserve the integrity of log messages, the unix domain socket needs to retain message boundaries, ruling out the SOCK\_STREAM unix domain socket presented in section \ref{cha:UnixDomainSockets}.
+To preserve the integrity of log messages, the UNIX domain socket needs to retain message boundaries, ruling out the SOCK\_STREAM UNIX domain socket presented in section \ref{cha:UNIXDomainSockets}.
 Without the absolute guarantee of reliable behavior in regard to reordering of messages - only present in most UNIX implementations, but not all\cite{man:unixsockets} - SOCK\_DGRAM is unappealing as well.
 Therefore, the socket type choice falls on SOCK\_SEQPACKET, a connection-oriented option that retains message-boundaries and sequence.

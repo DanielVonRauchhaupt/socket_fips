@@ -143,9 +143,9 @@ Yet, per design, only one writing thread attaches to each segment.
 This one-to-one mapping ensures no further synchronization between multiple writer threads is required.
 Sending and receiving data can now be performed by each thread individually according to the base principles of ring buffers outlined above.
 
-\subsection{Unix Domain Sockets}
-\label{cha:UnixDomainSockets}
-In order to explain what a unix domain socket is, one must understand regular internet sockets.
+\subsection{UNIX Domain Sockets}
+\label{cha:UNIXDomainSockets}
+In order to explain what a UNIX domain socket is, one must understand regular internet sockets.
 On a Linux system, a socket is a file descriptor referring to an endpoint for communication\cite{man:sockets}.
 While a variety of socket types exist, the actual socket (or file descriptor representing a socket) does not change.
 Instead, the way data is transmitted via a particular socket defines the socket type.
@@ -166,11 +166,10 @@ In contrast, datagram sockets, also called connectionless sockets, are considere
 Consequently, the reception of data in correct sequence cannot be guaranteed either.
 The lack of a reliable connection between communication partners, instead using a best-effort service, results in lower latency during data exchange.\cite{beej:sockets}
 
-When a socket is only represented via a path name on a local system, it is called a unix domain socket (also known as AF\_UNIX).
-Unlike stream or datagram sockets, unix domain sockets are used for local only inter-process communication.
+When a socket is only represented via a path name on a local system, it is called a UNIX domain socket (also known as AF\_UNIX).
+Unlike stream or datagram sockets, UNIX domain sockets are used for local only inter-process communication.
 Therefore, while they do inherit similar functionality as the internet sockets, they can shed slow communication protocols and provide faster communication.
 Data is never sent beyond system boundaries and only handled by the kernel.
-TODO: unix -> UNIX with link to acro
 There are three socket types in the UNIX domain\cite{man:unixsockets}:
 \begin{itemize}
     \itemsep0em
@@ -179,7 +178,7 @@ There are three socket types in the UNIX domain\cite{man:unixsockets}:
     \item SOCK\_SEQPACKET\@: Sequence-packet socket, is connection-oriented, preserves message boundaries, and retains the order in which data was sent.
 \end{itemize}
 
-In conclusion, unix domain sockets retain the flexibility provided by traditional internet sockets allowing for decreased latency, but at the cost of being bound to the local system.
+In conclusion, UNIX domain sockets retain the flexibility provided by traditional internet sockets allowing for decreased latency, but at the cost of being bound to the local system.
 
 \section{Packet generator: TRex}
 TRex is an open source traffic generator developed by Cisco Systems, capable of generating both stateless and stateful traffic\cite{trex}.

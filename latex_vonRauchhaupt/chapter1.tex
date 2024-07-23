@@ -32,13 +32,13 @@ While inheriting the basic functionality of Fail2ban, this application provides 
 During development, a shared memory \ac{IPC} type was implemented.
 This allowed Simplefail2ban to outperform Fail2ban effortlessly\cite{raatschen:ipc}, but if better alternatives exists remains unclear.
 
-The main goal of this thesis it to design and implement an \ac{IPC} mode based on unix domain sockets into Simplefail2ban in order to protect against \ac{DoS} attacks.
+The main goal of this thesis it to design and implement an \ac{IPC} mode based on UNIX domain sockets into Simplefail2ban in order to protect against \ac{DoS} attacks.
 This includes an easily usable \ac{API} and the option to attach multiple reader processes to the \ac{IPC} architecture.
 In order to evaluate the performance of this socket \ac{IPC}, a comparison with the already implemented shared memory and file \ac{IPC} types is conducted.
 
 Firstly, this thesis introduces background information regarding both Fail2ban and Simplefail2ban.
 An explanation of the basic concepts used for the \ac{IPC} is also included.
-Following that, a chapter is dedicated to introducing the design of the unix socket \ac{IPC} architecture.
+Following that, a chapter is dedicated to introducing the design of the UNIX socket \ac{IPC} architecture.
 A separate chapter will explain the intricacies of the implementation of said \ac{IPC} type.
 In addition, the design of all experiments will be explained.
 To determine the performance of the socket \ac{IPC}, an extensive evaluation of the conducted measurements is included in this thesis.

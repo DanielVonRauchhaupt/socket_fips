@@ -4,7 +4,7 @@
 
 \chapter{Implementation}
 \label{cha:implementation}
-In this chapter, the implementation of the previously discussed design (Reference\@: \ref{sec:Design_and_abstractions}) for the unix domain socket architecture in the programming language C is presented.
+In this chapter, the implementation of the previously discussed design (Reference\@: \ref{sec:Design_and_abstractions}) for the UNIX domain socket architecture in the programming language C is presented.
 This includes an explanation of the write and read \ac{API}.
 All error codes are numeric and defined in the file \texttt{io\_ipc.h}.
 
@@ -23,7 +23,7 @@ A special feature of the socket \ac{IPC} type is the possibility of attaching a 
 In fact, there is no actual limit for attaching new writer processes.
 Meanwhile, only up to \texttt{MAX\_AMOUNT\_OF\_SOCKETS} reader processes can exists because of the strict one-to-one mapping between readers and sockets. 
 
-All unix domain sockets were bound to the filesystem, resulting in a common path to the location of all sockets needing to be supplied to both readers and writers.
+All UNIX domain sockets were bound to the filesystem, resulting in a common path to the location of all sockets needing to be supplied to both readers and writers.
 However, this \texttt{SOCKET\_NAME\_TEMPLATE} is not the full path to each socket.
 During runtime, each reader process trying to attach will append this name template with their own reader \ac{ID}.
 The reader \ac{ID} is determined by claiming the first \ac{ID} not already in use.
@@ -43,8 +43,8 @@ Therefore the function initializing communication between processes, \texttt{soc
 Defining a union containing both writer and reader structures, as seen in \ref{alg:sock:union}, allows the user of the \ac{API} to provide either one as a parameter for the same function.
 The actual purpose of \texttt{sock\_init} is to enable connection between writer and readers by initiating the associated structure passed in the parameter \texttt{sock\_args}.
 An explanation of both the \texttt{sock\_writer\_arg\_t} and \texttt{sock\_reader\_arg\_t} will follow in the next sections \ref{cha:WriteAPI} and \ref{cha:ReadAPI}.
-Writers are provided with a list of possible locations of unix domain sockets belonging to reader processes.
-Meanwhile, readers are assigned a path, in which they create a unix domain socket.
+Writers are provided with a list of possible locations of UNIX domain sockets belonging to reader processes.
+Meanwhile, readers are assigned a path, in which they create a UNIX domain socket.
 This path has to conform with \texttt{SOCKET\_NAME\_TEMPLATE} as outlined above.
 All sockets are set to be of the type SOCK\_SEQPACKET.
 
@@ -55,8 +55,8 @@ All sockets are set to be of the type SOCK\_SEQPACKET.
 \end{algorithm}
 
 While other \ac{IPC} types such as shared memory required an orderly detachment of writers and readers, this is not necessary for the socket approach.
-Instead, when terminating a reader process, only closure of the corresponding unix domain socket is necessary.
-Currently, stopping a writer process results in deconstructing the entire unix domain socket architecture.
+Instead, when terminating a reader process, only closure of the corresponding UNIX domain socket is necessary.
+Currently, stopping a writer process results in deconstructing the entire UNIX domain socket architecture.
 This results in the functions \texttt{socket\_finalize} and \texttt{socket\_cleanup}, as shown in \ref{alg:sock:finalize} and \ref{alg:sock:cleanup} respectively, being identical in behavior.
 In fact, \texttt{socket\_finalize} simply calls \texttt{socket\_cleanup} and was only provided in the socket \ac{API} to make a seamless replacement of other finalize-style functions when switching \ac{IPC} types possible.
 
@@ -91,7 +91,7 @@ It requires four arguments:
 
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=101, lastline=104]{code/sock_comm.h}
-    \caption[Socket: Write \ac{API}]{Write \ac{API} for the unix domain socket architecture}
+    \caption[Socket: Write \ac{API}]{Write \ac{API} for the UNIX domain socket architecture}
     \label{alg:sock:write}
 \end{algorithm}
 
@@ -103,17 +103,17 @@ The structure \texttt{sock\_writer\_arg\_t} contains all information needed by t
     \label{alg:sock:write:args}
 \end{algorithm}
 
-The first parameter \texttt{socketPathNames} is an array containing all possible paths in which unix domain sockets could be located.
+The first parameter \texttt{socketPathNames} is an array containing all possible paths in which UNIX domain sockets could be located.
 Here, the necessity for defining the variables \texttt{MAX\_AMOUNT\_OF\_SOCKETS} and \texttt{SOCKET\_TEMPLATE\_LENGTH} becomes evident.
 The entirety of the socket \ac{IPC} is implemented as a static library.
 Consequently, arrays cannot be assigned a variable length during runtime.
 Another array, \texttt{socketConnections}, contains a collection of \texttt{sockaddr\_un} structures.
-Each of these represents a single unix domain socket and their address information.
+Each of these represents a single UNIX domain socket and their address information.
 The array \texttt{socketRecvs} stores integers displaying which sockets have already been connected to.
 Sockets can either be marked as not available (-1), available but not connected yet (0), or available and connected with the writer process (1).
 Lastly, \texttt{clientSockets} holds a collection of file descriptors referring to each connected socket, as created by the function \texttt{socket}.
 
-When calling \texttt{sock\_writev}, the first thing being performed is a check for newly available unix domain sockets.
+When calling \texttt{sock\_writev}, the first thing being performed is a check for newly available UNIX domain sockets.
 This can be considered analogous to checking for new readers because of the strict one-to-one mapping between sockets and readers.
 If new sockets were identified, a connection with that socket is established and saved for future calls of this function.
 Then, all sockets with an existing connection are sent the data located in the \texttt{iovec} structures using the blocking function \texttt{write}.
@@ -121,18 +121,18 @@ On success, the function returns the number of sent messages via the socket \ac{
 
 \section{Read \ac{API}}
 \label{cha:ReadAPI}
-The function \texttt{sock\_readv} is responsible for reading data out of the unix domain socket infrastructure.
+The function \texttt{sock\_readv} is responsible for reading data out of the UNIX domain socket infrastructure.
 As seen in \ref{alg:sock:read}, the function takes two arguments.
 
 \begin{algorithm}[h!]
     \lstinputlisting[language=c, firstline=114, lastline=115]{code/sock_comm.h}
-    \caption[Socket: Read \ac{API}]{Read \ac{API} for the unix domain socket architecture}
+    \caption[Socket: Read \ac{API}]{Read \ac{API} for the UNIX domain socket architecture}
     \label{alg:sock:read}
 \end{algorithm}
 
 The parameter \texttt{iovecs} is a pointer to an array of \texttt{iovec} structures.
 Any log messages received via the socket \ac{IPC} are stored here for the calling reader process to access later.
-A structure containing all relevant information regarding the specific unix domain socket associated with the reader process are stored in \texttt{sock\_args}.
+A structure containing all relevant information regarding the specific UNIX domain socket associated with the reader process are stored in \texttt{sock\_args}.
 This structure, \texttt{sock\_reader\_arg\_t}, is defined in \ref{alg:sock:read:args}.
 
 \begin{algorithm}[h!]
@@ -142,20 +142,20 @@ This structure, \texttt{sock\_reader\_arg\_t}, is defined in \ref{alg:sock:read:
 \end{algorithm}
 
 Analogous to \texttt{sock\_writer\_arg\_t}, the path of the socket assigned to the reader process is passed in \texttt{socketPathName}.
-Parameter \texttt{address} contains the structure \texttt{sockaddr\_un} representing that same unix domain socket.
+Parameter \texttt{address} contains the structure \texttt{sockaddr\_un} representing that same UNIX domain socket.
 Not wanting to redetermine the static size of the \texttt{address} for each function call, \texttt{sizeOfAddressStruct} is passed along containing that exact value.
 Therefore, the size of \texttt{address} has to determined only once when initializing communication, saving computational time.
-The integer \texttt{readSocket} contains the file descriptor referring to the readers unix domain socket, as created by the function \texttt{socket}.
+The integer \texttt{readSocket} contains the file descriptor referring to the readers UNIX domain socket, as created by the function \texttt{socket}.
 Saving already established connections with writer processes for future function calls is done in the array \texttt{clientSockets}.
 
 Calling \texttt{sock\_readv} creates a list of clients which the blocking function \texttt{select} will regularly poll.
 
-\texttt{select} waits for at least one file descriptor (analogous to: unix domain socket) to become ready for an I/O operation.
+\texttt{select} waits for at least one file descriptor (analogous to: UNIX domain socket) to become ready for an I/O operation.
 A file descriptor is considered ready once a call of \texttt{read} or \texttt{write} will not block if performed.\cite{man:select}
 
 This stops the function \texttt{sock\_readv} having to either be stuck in a blocking call of \texttt{read}, or return from a non-blocking call of \texttt{read} with an error code.
 Having a blocking call of \texttt{select} instead of \texttt{read} is desirable because it allows \texttt{sock\_readv} to accept connections of new writer processes while waiting for data to arrive.
 Once \texttt{select} returns, \texttt{sock\_readv} checks if new connections need to be accepted.
-If not, one of the already connected writer processes has sent data via the unix domain socket, which is ready to be read.
+If not, one of the already connected writer processes has sent data via the UNIX domain socket, which is ready to be read.
 All received data is then saved in the provided parameter \texttt{iovecs}, allowing the calling process of \texttt{sock\_readv} to access it.
 The function \texttt{sock\_readv} will then terminate and return the number of received messages.
