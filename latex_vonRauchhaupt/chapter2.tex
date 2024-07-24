@@ -47,7 +47,7 @@ In contrast to an intrusion detection system, an \ac{IPS}, such as Fail2ban, imm
 By default, Fail2ban scans a variety of commonly used log files using \ac{Regex}, also called filters, to identify threats.
 It is therefore able to parse and monitor log data of a variety of different applications.
 A client will be identified as a threat if it repeatedly fails a certain task, for example establishing a \ac{TCP} connection.
-Such a client is then banned by modifying the system firewall, addding its \ac{IP} address, to deny any further incoming traffic.\cite{git:fail2ban}
+Such a client is then banned by modifying the system firewall, adding its \ac{IP} address, to deny any further incoming traffic.\cite{git:fail2ban}
 
 In detail, Fail2ban creates so called jails.
 These jails are saved on persistent storage.
@@ -167,7 +167,7 @@ Consequently, the reception of data in correct sequence cannot be guaranteed eit
 The lack of a reliable connection between communication partners, instead using a best-effort service, results in lower latency during data exchange.\cite{beej:sockets}
 
 When a socket is only represented via a path name on a local system, it is called a UNIX domain socket (also known as AF\_UNIX).
-Unlike stream or datagram sockets, UNIX domain sockets are used for local only inter-process communication.
+Unlike stream or datagram sockets, UNIX domain sockets are used for local-only inter-process communication.
 Therefore, while they do inherit similar functionality as the internet sockets, they can shed slow communication protocols and provide faster communication.
 Data is never sent beyond system boundaries and only handled by the kernel.
 There are three socket types in the UNIX domain\cite{man:unixsockets}:

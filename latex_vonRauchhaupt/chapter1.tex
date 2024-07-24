@@ -14,8 +14,8 @@ Common attacks, such as a \ac{DoS} attack, can circumvent these measures by imit
 Draining system resources by sending illegitimate communication requests is simultaneously easy to do, and hard to protect against.
 
 Additional monitoring of incoming traffic is done by \ac{IDSs}.
-Interpreting a clients intent is done by analyzing by system logs, as well as system and network resources.
-To actually combat incoming attacks, a \ac{IPS} is required which actively defends system resources.
+Interpreting a clients intent is done by analyzing system logs, as well as system and network resources.
+To actually combat incoming attacks, an \ac{IPS} is required which actively defends system resources.
 A common industry standard for such an \ac{IPS} is Fail2ban\cite{git:fail2ban}.
 It scans a variety of information available on the host system, predominantly using log files as its source, technically making it a \ac{HIPS}.
 Clients deemed a threat to the host system are prohibited to interact with the host.
@@ -28,11 +28,11 @@ This inconsistent performance makes the system vulnerable against \ac{DoS} attac
 It was determined that the intrinsic file-based logging approach of Fail2ban does not provide the necessary bandwidth or low latency required to repel \ac{DoS} attacks successfully.
 
 To remedy this issue a light-weight alternative to Fail2ban was developed: Simplefail2ban\cite{raatschen:ipc}.
-While inheriting the basic functionality of Fail2ban, this application provides to option to replace slow file-based logging with alternative \ac{IPC}.
+While inheriting the basic functionality of Fail2ban, this application provides the option to replace slow file-based logging with alternative \ac{IPC}.
 During development, a shared memory \ac{IPC} type was implemented.
-This allowed Simplefail2ban to outperform Fail2ban effortlessly\cite{raatschen:ipc}, but if better alternatives exists remains unclear.
+This allowed Simplefail2ban to outperform Fail2ban effortlessly\cite{raatschen:ipc}, but if better alternatives exist remains unclear.
 
-The main goal of this thesis it to design and implement an \ac{IPC} mode based on UNIX domain sockets into Simplefail2ban in order to protect against \ac{DoS} attacks.
+The main goal of this thesis is to design and implement an \ac{IPC} mode based on UNIX domain sockets into Simplefail2ban in order to protect against \ac{DoS} attacks.
 This includes an easily usable \ac{API} and the option to attach multiple reader processes to the \ac{IPC} architecture.
 In order to evaluate the performance of this socket \ac{IPC}, a comparison with the already implemented shared memory and file \ac{IPC} types is conducted.
 

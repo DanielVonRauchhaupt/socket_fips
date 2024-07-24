@@ -27,6 +27,8 @@ The shared memory \ac{IPC} type was able to keep its performance up even when su
 
 Potential improvements of the socket \ac{IPC} should focus on increasing the bandwidth.
 This makes it possible to react more efficiently and effectively in the event of a sudden influx of messages, primarily occurring at the beginning of a ban cycle or \ac{DoS} attack.
+Furthermore, no explicit authorization of reader processes exists in the current implementation.
+As a result, any process can attach to the socket \ac{IPC} architecture, which may pose a security concern.
 
 Overall, this thesis proved that the kernel-based UNIX domain sockets remain a viable option as \ac{IPC} coming reasonably close to, yet unable to surpass the higher performance of the shared memory \ac{IPC} type.
 Continued development could focus on the possibility of scaling the socket \ac{IPC} beyond the local system by employing internet sockets.

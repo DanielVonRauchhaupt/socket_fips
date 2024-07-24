@@ -132,7 +132,7 @@ As seen in \ref{alg:sock:read}, the function takes two arguments.
 
 The parameter \texttt{iovecs} is a pointer to an array of \texttt{iovec} structures.
 Any log messages received via the socket \ac{IPC} are stored here for the calling reader process to access later.
-A structure containing all relevant information regarding the specific UNIX domain socket associated with the reader process are stored in \texttt{sock\_args}.
+A structure containing all relevant information regarding the specific UNIX domain socket associated with the reader process is stored in \texttt{sock\_args}.
 This structure, \texttt{sock\_reader\_arg\_t}, is defined in \ref{alg:sock:read:args}.
 
 \begin{algorithm}[h!]
@@ -144,7 +144,7 @@ This structure, \texttt{sock\_reader\_arg\_t}, is defined in \ref{alg:sock:read:
 Analogous to \texttt{sock\_writer\_arg\_t}, the path of the socket assigned to the reader process is passed in \texttt{socketPathName}.
 Parameter \texttt{address} contains the structure \texttt{sockaddr\_un} representing that same UNIX domain socket.
 Not wanting to redetermine the static size of the \texttt{address} for each function call, \texttt{sizeOfAddressStruct} is passed along containing that exact value.
-Therefore, the size of \texttt{address} has to determined only once when initializing communication, saving computational time.
+Therefore, the size of \texttt{address} has to be determined only once during initializing communication, saving computational time.
 The integer \texttt{readSocket} contains the file descriptor referring to the readers UNIX domain socket, as created by the function \texttt{socket}.
 Saving already established connections with writer processes for future function calls is done in the array \texttt{clientSockets}.
 

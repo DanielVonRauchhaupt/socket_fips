@@ -215,14 +215,14 @@ In total, 5 unique measurements were conducted for this experiment.
 
 \newpage
 \section{Evaluation of Experiments}
-The aforementioned experiments can be logically grouped in two categories\@: Baseline measurements and utilization of a second reader.
+The aforementioned experiments can be logically grouped into two categories\@: Baseline measurements and utilization of a second reader.
 Baseline measurements are conducted in experiments 1a, 1b and 2, second reader experiments in 3a and 3b.
 With 85 performed experiments, a thorough yet not unreasonably long evaluation of each measurement is impossible.
 Instead, only especially expressive data will be covered in this section, with any notable or diverging observations being explicitly mentioned.
 For full measurement data on all experiments, refer to the repository provided in the sources\cite{git:repoOfThesis}.
 
 \minisec{Meaning of data variables}
-In the following section, each graph will be accompanied with an additional table.
+In the following section, each graph will be accompanied by an additional table.
 This table contains data that is not explicitly expressed otherwise.
 A total of six lines are plotted, with two of them belonging to each \ac{IPC} type.
 For each \ac{IPC} type (File, Shm, Sock), the total number of packets dropped by the \ac{eBPF} program is denominated via \texttt{XDP\_DROP}.
@@ -247,11 +247,11 @@ The \texttt{relative drop} of the shared memory \ac{IPC} type is over 100\%.
 This happened a total of 21 times over separate measurements, but only when measuring traffic rates of 100k \ac{PPS}.
 It is suspected that TRex is unable to provide a reliable stream of packets, but only when starting each measurement call.
 Once a steady stream of packets at desired rates has been established, it does remain stable.
-Therefore, the number of packets that should be received are higher than the actual incoming traffic rate, resulting in slight inaccuracies when calculating the \texttt{relative drop}.
+Therefore, the number of packets that should be received is higher than the actual incoming traffic rate, resulting in slight inaccuracies when calculating the \texttt{relative drop}.
 While not directly apparent at 100k \ac{PPS} due to slight rounding, this discrepancy can be detected by totaling \texttt{XDP\_DROP} and \texttt{XDP\_PASS} up and comparing it to the number of packets that should have theoretically been received.
 Unfortunately, this issue is present in all data presented in this thesis and depicts a likely flaw in TRex - not the measurements.
 
-Of note is a stark difference in \ac{CPU} time, with a clearly discernible spike when using the socket \ac{IPC} type, likely cause by extensive context-switches between kernel- and userspace.
+Of note is a stark difference in \ac{CPU} time, with a clearly discernible spike when using the socket \ac{IPC} type, likely caused by extensive context-switches between kernel- and userspace.
 All \ac{IPC} types have sent the same number of log messages indicating that, at lower traffic rates, all clients can be banned with the first message they send surpassing the ban limit, regardless of \ac{IPC} type.
 This claim is supported by the fact that the log messages coincide with the formula:
 number of ban cycles $*$ ban limit $*$ number of malicious clients;
@@ -323,7 +323,7 @@ Even with 30m invalid \ac{PPS}, as seen in \ref{fig:data:ipv4:30m:65534}, all \a
 The fact that the file \ac{IPC} type outperforms the socket \ac{IPC} type in terms of \texttt{relative drop} rate is especially noteworthy.
 File mode also outperforms shared memory and socket mode on \ac{CPU} usage, which was not expected due to the traditionally high latency of file-based logging approaches.
 With the high rate of incoming traffic during a ban cycle, the application udp\_server has to wait on the \ac{IPC} to be able to submit more log messages to Simplefail2ban.
-This results in the system being unable to submit a substantial number of packets to udp\_server.
+This results in the system being unable to submit a substantial number of packets to the udp\_server application.
 While not explicitly documented in this thesis, these numbers are available in the repository\cite{git:repoOfThesis}.
 The difference in packets received by udp\_server and number of passed packets correlates exactly with this observation.
 Measuring the number of packets unable to be submitted to udp\_server was done by checking the file \texttt{/proc/net/udp6} on the \ac{DUT}.
@@ -433,7 +433,7 @@ Here, the socket \ac{IPC} type occupies the \ac{CPU} almost ten times longer tha
 
 At invalid traffic rates of 10m \ac{PPS}, displayed in figure \ref{fig:data:ipv4:10m:131068}, drastic changes are noticeable.
 Firstly, shared memory does outperform both the socket and file \ac{IPC} type in \texttt{relative drop} rate.
-Also, the latency of each \ac{IPC} type is clearly visible in the provided graph via their drasticly shifted spike of dropped packets each ban cycle.
+Also, the latency of each \ac{IPC} type is clearly visible in the provided graph via their drastically shifted spike of dropped packets each ban cycle.
 The shared memory \ac{IPC} type both starts and ends its ban cycles before the socket and file \ac{IPC} type.
 Unexpectedly, the socket \ac{IPC} type still outperforms the file \ac{IPC} type in \texttt{relative drop} rate.
 A general delay of each ban cycle is visible too.
@@ -572,7 +572,7 @@ But performance regarding their pure IPv6 counterpart is not definitive, the var
 Initially, data of 10 experiments have been analyzed for this section.
 At 100k invalid \ac{PPS}, performance of both the shared memory and socket \ac{IPC} types was almost identical.
 The only exception is the \ac{CPU} time in which the socket \ac{IPC} performed up to six times worse than shared memory.
-The results become interesting when increasing invalid traffic rate to 1m \ac{PPS}, a seen in figure \ref{fig:data:ipv4v6:1m:131068:2nd}.
+The results become interesting when increasing invalid traffic rate to 1m \ac{PPS}, as seen in figure \ref{fig:data:ipv4v6:1m:131068:2nd}.
 The graph displays a clear delay between the ban cycles of the shared memory and socket \ac{IPC} types.
 Still, both modes are able to supply both the \ac{IPS} Simplefail2ban and a slower reader process with data while defending against the \ac{DoS} attack.
 Again, \ac{CPU} time of the socket \ac{IPC} type is significantly higher than its shared memory counterpart.
@@ -605,7 +605,7 @@ The \texttt{relative drop} rate is also worse by about 2 percent (equal to 6,3M 
 Figure \ref{fig:data:ipv4v6:20m:131068:2nd} shows data measured with 20m invalid \ac{PPS}.
 The socket \ac{IPC} type struggles to supply both the \ac{IPS} and the second reader with \texttt{log messages}, having logged less data than the shared memory \ac{IPC} type.
 The graph also displays this inability to keep up with incoming traffic during the first two ban cycles.
-While shared memory was able to fully ban all malicious client in just one 30 second ban cycle, the socket mode is not.
+While shared memory was able to fully ban all malicious clients in just one 30 second ban cycle, the socket mode is not.
 Given enough time, the socket \ac{IPC} type is able to recover and successfully defend against the \ac{DoS} attack.
 
 \begin{figure}[!h]
@@ -634,7 +634,7 @@ Given enough time, the socket \ac{IPC} type is able to recover and successfully 
 
 That changes in figure \ref{fig:data:ipv4v6:30m:131068:2nd}.
 Now, the socket \ac{IPC} type is unable to defend against the \ac{DoS} attack, and the system is overwhelmed - failing to drop all invalid traffic.  
-The \texttt{relative drop} falls to approximately 54 percent, the number of messages passed to the kernel rise significantly and the application udp\_server is not able to handle the influx of incoming data.
+The \texttt{relative drop} falls to approximately 54 percent, the number of messages passed to the kernel rises significantly and the application udp\_server is not able to handle the influx of incoming data.
 Fewer log messages are sent to all readers and the \ac{CPU} time falls, likely due to the system not having any resources left for user space applications.
 Meanwhile, the shared memory \ac{IPC} type performs just as well as in figure \ref{fig:data:ipv4v6:30m:131068}, when no second reader was attached to the \ac{IPC} architecture.
 
