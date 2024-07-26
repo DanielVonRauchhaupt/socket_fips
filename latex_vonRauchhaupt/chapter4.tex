@@ -74,7 +74,7 @@ In fact, \texttt{socket\_finalize} simply calls \texttt{socket\_cleanup} and was
 
 \section{Write \ac{API}}
 \label{cha:WriteAPI}
-The write \ac{API} consists of a single, versatile function\@: \texttt{sock\_writev}.
+The write \ac{API} consists of a single, versatile function to transmit a variable number of messages\@: \texttt{sock\_writev}.
 See algorithm \ref{alg:sock:write} for its definition.
 
 It requires four arguments:
@@ -121,7 +121,7 @@ On success, the function returns the number of sent messages via the socket \ac{
 
 \section{Read \ac{API}}
 \label{cha:ReadAPI}
-The function \texttt{sock\_readv} is responsible for reading data out of the UNIX domain socket infrastructure.
+The function \texttt{sock\_readv} is responsible for reading all available data out of the UNIX domain socket infrastructure.
 As seen in \ref{alg:sock:read}, the function takes two arguments.
 
 \begin{algorithm}[h!]

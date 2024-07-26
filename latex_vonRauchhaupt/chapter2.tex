@@ -60,11 +60,11 @@ Further parameters define the time the action will be active (ban time) and how 
 In practice, if a client fails to adhere to what the filter of a jail defines as proper behavior, vital information of that client is deduced by the analyzed log messages.
 This includes the \ac{IP} address of the client.
 A ban will then be issued and a certain action, for example dropping all traffic with the source \ac{IP} of the banned client, would be performed.
-To issue such a ban, temporary changes to the system firewall, using iptables, are performed.
-iptables allows user space programs, such as Fail2ban, to modify, add and remove rules for packet filtering.
+To issue such a ban, temporary changes to the system firewall, using \texttt{iptables}, are performed.
+\texttt{iptables} allows user space programs, such as Fail2ban, to modify, add and remove rules for packet filtering.
 An incoming package has to pass each set of rules before reaching the destined application.
-Fail2ban creates a separate rule for each banned client via iptables.
-New incoming packets are checked against all rules defined by iptables, or until they infringe upon at least one rule.
+Fail2ban creates a separate rule for each banned client via \texttt{iptables}.
+New incoming packets are checked against all rules defined by \texttt{iptables}, or until they infringe upon at least one rule.
 Especially when many clients need to be banned this exerts an ever increasing load on the processing capabilities of the firewall, as each banned client corresponds to one additional rule future traffic has to be compared to.\cite{mikolajczak:ebpf}
 
 \subsection{Extended Berkeley Packet Filter}
@@ -87,7 +87,7 @@ In order to communicate with other programs or even store information, \ac{eBPF}
 These maps are a key-value store and provide persistent storage.
 However, the size of \ac{eBPF} maps needs to be defined before runtime, as it cannot be altered at a later stage.\cite{mikolajczak:ebpf}
 
-Using \ac{eBPF} programs provides a significant advantage over the iptables approach of filtering packets.
+Using \ac{eBPF} programs provides a significant advantage over the \texttt{iptables} approach of filtering packets.
 It is possible to drop unwanted packets before they reach the computation heavy kernel network stack, potentially saving resources on packets which ultimately would have been discarded anyway.
 And while \ac{eBPF} programs have a variety of useful other applications, for purposes of this thesis, they are only used to either accept packets and pass them to the kernel or drop them to lighten workload.
 
