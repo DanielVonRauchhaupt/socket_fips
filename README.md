@@ -94,7 +94,7 @@ The traffic can be stopped by writing `stop` to the console, or killing the TRex
 The number of clients can be adapted via changing the `IP_RANGE` constant at the top of the script.
 Source and destination IP addresses also may have to be adapted to the test environment.
 
-The DUT, machine 1,  needs to first start the application utilising the IPS services.
+The DUT, machine 1,  needs to first start the application utilizing the IPS services.
 Here, that would be `udp_server`.
 Afterwards, start the IPS service of choice.
 In this thesis, only `simplefail2ban` will be required for the experiments.
