@@ -1,6 +1,7 @@
 # Project Overview
-This repository is part of the bachelor thesis "Design and Implementation of a high performance IPC for IPS using Socket API" by Daniel von Rauchhaupt.
+This repository is part of the bachelor thesis "Design and Implementation of a high performance IPC for Intrusion Prevention using Socket API" by Daniel von Rauchhaupt.
 The purpose of this research is to determine which IPC type performs best when used by the intrusion prevention system `simplefail2ban`.
+The IPC types of interest are UNIX domain sockets and shared memory.
 For details, please refer to that thesis.
 
 
@@ -93,7 +94,7 @@ The traffic can be stopped by writing `stop` to the console, or killing the TRex
 The number of clients can be adapted via changing the `IP_RANGE` constant at the top of the script.
 Source and destination IP addresses also may have to be adapted to the test environment.
 
-The DUT, machine 1,  needs to first start the application utilising the IPS services.
+The DUT, machine 1,  needs to first start the application utilizing the IPS services.
 Here, that would be `udp_server`.
 Afterwards, start the IPS service of choice.
 In this thesis, only `simplefail2ban` will be required for the experiments.
@@ -107,8 +108,7 @@ To start a measurement call:
 
 The measurement can be terminated with `control+c` and the results will be written to a .csv file within the current directory.
 
-Unfortunately, the source code for `ebpf_cmdline` has been lost.
-However, the program is only a slightly adapted version of the `xdp_ddos01_blacklist_cmdline` program, from the master thesis of Florian Mikolajczak, which can be used instead.
+The program is a slightly adapted version of the `xdp_ddos01_blacklist_cmdline` program, from the master thesis of Florian Mikolajczak, modified by Paul Raatschen.
 
 
 # Known bugs
