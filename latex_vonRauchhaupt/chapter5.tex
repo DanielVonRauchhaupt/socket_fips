@@ -21,7 +21,7 @@ The second machine generated and sent traffic, consisting of both valid and inva
 
 \begin{table}[b!]
     \renewcommand{\arraystretch}{1.5}
-    \caption[Testbed specs]{Table of Hardware and Software parameters of the testbed.
+    \caption[Testbed specifications]{Table of Hardware and Software parameters of the testbed.
     The first machine serves as the \ac{DUT}.
 	The second machine generates traffic to be sent to the \ac{DUT} via TRex.}\label{tab:specs}
     \centering
@@ -152,7 +152,7 @@ These scripts provide the option to modify the sent traffic according to the fac
 During these measurements, adapted versions of Paul Raatschens\cite{raatschen:ipc} scripts were used.
 To measure most performance metrics, an adaptation of the xdp\_ddos01\_blacklist\_cmdline program was used.
 This application originally stems from Florian Mikolajczak master's thesis\cite{mikolajczak:ebpf} and routinely polls the number of dropped and passed packets from a specific \ac{eBPF} map.
-It was modified by Paul Raatschen to output values as a \ac{csv} file.
+It was modified by Paul Raatschen to output values as a comma-separated values (CSV) file.
 The polled \ac{eBPF} map is ultimately used by Simplefail2ban to ban clients.
 \ac{CPU} time was measured via the command top.
 

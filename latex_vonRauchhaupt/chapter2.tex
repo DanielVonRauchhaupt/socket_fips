@@ -65,7 +65,7 @@ To issue such a ban, temporary changes to the system firewall, using \texttt{ipt
 An incoming package has to pass each set of rules before reaching the destined application.
 Fail2ban creates a separate rule for each banned client via \texttt{iptables}.
 New incoming packets are checked against all rules defined by \texttt{iptables}, or until they infringe upon at least one rule.
-Especially when many clients need to be banned this exerts an ever increasing load on the processing capabilities of the firewall, as each banned client corresponds to one additional rule future traffic has to be compared to.\cite{mikolajczak:ebpf}
+Especially when many clients need to be banned this exerts an ever-increasing load on the processing capabilities of the firewall, as each banned client corresponds to one additional rule future traffic has to be compared to.\cite{mikolajczak:ebpf}
 
 \subsection{Extended Berkeley Packet Filter}
 The \ac{eBPF} provides the opportunity to run user-generated code in a privileged setting, such as the kernel.
