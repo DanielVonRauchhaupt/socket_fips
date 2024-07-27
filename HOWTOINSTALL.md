@@ -12,3 +12,5 @@ When building this project for the first time, load its submodules in the extern
 Use `git submodule update --init --recursive`.
 Once all external dependencies are satisfied, using `./cmake.sh` in the main directory will build the project.
 The binaries can be found in ‘build/’.
+
+For the applications Simplefail2ban, Fail2ban and udp_server to function correctly, please ensure that you have followed the required configuartion steps as outlined in `README.md`.
