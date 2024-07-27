@@ -106,7 +106,7 @@ Each violation of the rules imposed by Simplefail2ban results in the clients \ac
 If the number of entries for one \ac{IP} address surpasses the defined ban limit, that client is banned via one of the banning threads of Simplefail2ban.
 This ban is facilitated by adding the \ac{IP} address to a list of banned clients with the current timestamp, and an \ac{eBPF} map.
 An \ac{eBPF} program developed by Florian Mikolajczak will check if incoming traffic should either be dropped or passed along to the kernel, depending on the \ac{eBPF} map entries\cite{mikolajczak:ebpf}.
-The list of banned clients is routinely checked by the unbanning thread, removing clients whose ban time has elapsed from the hashtable, ban listn and \ac{eBPF} map, effectively re-allowing client interaction.\cite{raatschen:ipc}.
+The list of banned clients is routinely checked by the unbanning thread, removing clients whose ban time has elapsed from the hashtable, ban list and \ac{eBPF} map, effectively re-allowing client interaction.\cite{raatschen:ipc}.
 
 \section{Inter-process communication}
 While a variety of methods for inter-process communication exist, the nature of this thesis only necessitates the detailed comparison between the shared memory and socket approach.
