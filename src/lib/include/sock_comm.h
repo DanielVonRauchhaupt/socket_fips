@@ -42,7 +42,7 @@ struct sock_writer_arg_t
     // Temporarily fixed length of socket path
     // Issue: Varaible length arrays are not possible in a static context
     char socketPathNames[MAX_AMOUNT_OF_SOCKETS][SOCKET_TEMPLATE_LENGTH];
-    struct sockaddr_un socketConnections[SOCKET_TEMPLATE_LENGTH];
+    struct sockaddr_un socketConnections[MAX_AMOUNT_OF_SOCKETS];
     int socketRecvs[MAX_AMOUNT_OF_SOCKETS];
     int writeSockets[MAX_AMOUNT_OF_SOCKETS];
 };

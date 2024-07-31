@@ -43,7 +43,7 @@ enum sock_role_t{
 struct sock_writer_arg_t
 {
     char socketPathNames[MAX_AMOUNT_OF_SOCKETS][SOCKET_TEMPLATE_LENGTH];
-    struct sockaddr_un socketConnections[SOCKET_TEMPLATE_LENGTH];
+    struct sockaddr_un socketConnections[MAX_AMOUNT_OF_SOCKETS];
     int socketRecvs[MAX_AMOUNT_OF_SOCKETS];
     int writeSockets[MAX_AMOUNT_OF_SOCKETS];
 };
