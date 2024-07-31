@@ -8,8 +8,8 @@ TARGET_IPADDR="10.3.10.132"
 TARGET_IP6ADDR="2001:db8:db8::2"
 ping $TARGET_IPADDR -c 1 -q
 ping6 $TARGET_IP6ADDR -c 1 -q
-IP_PREFIX_VAL="10.3.11"
-IP_PREFIX_INVAL="192.168"
+IP_PREFIX_VAL="10.3"
+IP_PREFIX_INVAL="10.4"
 IP6_PREFIX="2001:db8:db8"
 INTERFACE=$(ip route | grep "$IP_PREFIX_VAL.*" | cut -d ' ' -f3)
 INTERFACEV6=$(ip -6 route | grep "$IP6_PREFIX:*" | cut -d ' ' -f3)
